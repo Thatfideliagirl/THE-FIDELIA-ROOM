@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import {
   Lock, CheckCircle2, Circle, ArrowRight, ArrowLeft, BookOpen, Users,
   MessageCircle, ListChecks, Settings, LogOut, Library, ChevronRight,
@@ -32,7 +33,7 @@ export function Spine({ course, enrollment, onOpen, compact }) {
             {i !== course.modules.length - 1 && <div className={`absolute rounded-full ${status === "complete" ? "node-line-done grow-line" : "node-line-locked"}`} style={{ left: compact ? 14 : 17, top: compact ? 30 : 34, width: 2.5, height: compact ? 20 : 30 }} />}
             <Node status={status} size={compact ? 30 : 34} />
             <Wrap onClick={clickable ? () => onOpen(m.id) : undefined} className="pt-1 text-left" style={clickable ? { cursor: "pointer" } : {}}>
-              <div className="f-code text-[11px] mb-0.5" style={{ color: status === "locked" ? "#A79B84" : "var(--accent)" }}>MODULE {String(m.id).padStart(2, "0")}</div>
+              <div className="f-code text-[11px] mb-0.5" style={{ color: status === "locked" ? "#A79B84" : "var(--accent)" }}>{m.testType === "milestone" ? "MILESTONE" : "MODULE"} {String(i + 1).padStart(2, "0")}</div>
               <div className={compact ? "text-[14px]" : "text-[17px]"} style={{ color: status === "locked" ? "#A79B84" : "#262019", fontWeight: status === "current" ? 700 : 600, maxWidth: 340 }}>{m.title}</div>
               {status === "current" && !compact && <div className="f-code text-[10px] mt-1.5 flex items-center gap-1" style={{ color: "#B8912E" }}><ArrowRight size={11} /> YOU ARE HERE</div>}
               {clickable && !compact && <div className="text-[12px] mt-1 flex items-center gap-1" style={{ color: "var(--accent)", fontWeight: 600 }}><PlayCircle size={13} /> {status === "complete" ? "Review lesson" : "Open lesson"}</div>}
@@ -58,19 +59,39 @@ export function ProgressBar({ pct }) { return <div className="progress-track" st
 // ---------------- Notification bell (shared shape) ----------------
 export function NotifBell({ items, seen, onMarkSeen }) {
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const btnRef = useRef(null);
   const unseen = items.filter((n) => !seen.includes(n.id));
-  function toggle() { setOpen((o) => !o); if (!open && unseen.length) onMarkSeen(items.map((n) => n.id)); }
+  const PANEL_WIDTH = 300;
+
+  function toggle() {
+    if (!open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      setPos({ top: r.bottom + 8, left: Math.max(12, Math.min(r.right - PANEL_WIDTH, window.innerWidth - PANEL_WIDTH - 12)) });
+    }
+    setOpen((o) => !o);
+    if (!open && unseen.length) onMarkSeen(items.map((n) => n.id));
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    function onDocClick(e) { if (btnRef.current && !btnRef.current.contains(e.target)) setOpen(false); }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [open]);
+
   return (
     <div className="relative">
-      <button onClick={toggle} className="rounded-full flex items-center justify-center relative" style={{ width: 42, height: 42, background: "#F0E7D6" }}>
+      <button ref={btnRef} onClick={toggle} className="rounded-full flex items-center justify-center relative" style={{ width: 42, height: 42, background: "#F0E7D6" }}>
         <Bell size={18} color="#4A4237" className={unseen.length ? "bell-ring" : ""} />
         {unseen.length > 0 && <span className="f-code rounded-full absolute flex items-center justify-center" style={{ width: 17, height: 17, background: "#B04A3A", color: "#fff", fontSize: 9, top: 3, right: 3 }}>{unseen.length}</span>}
       </button>
-      {open && (
-        <div className="card modal-in rounded-xl p-4 absolute top-12 right-0 z-30" style={{ width: 300 }}>
+      {open && createPortal(
+        <div className="card modal-in rounded-xl p-4 fixed z-[999]" style={{ width: PANEL_WIDTH, top: pos.top, left: pos.left, maxHeight: "70vh", overflowY: "auto" }}>
           <div className="f-label text-[11px] mb-3" style={{ color: "#71675A" }}>NOTIFICATIONS</div>
           {items.length === 0 ? <div className="text-[13px]" style={{ color: "#A79B84" }}>Nothing new.</div> : items.slice().reverse().map((n, i) => <div key={n.id} className="text-[13px] py-2.5" style={{ borderTop: i > 0 ? "1px solid #F0E7D6" : "none" }}>{n.t}</div>)}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -123,7 +144,7 @@ export function Landing({ courses, resources, testimonials, faqs, onSignIn, onSi
           {liveCourses.map((c, i) => (
             <Reveal key={c.id} delay={i * 90}>
               <button onClick={() => onViewCourseDetail(c.id)} className="card card-pop rounded-2xl overflow-hidden flex flex-col h-full w-full text-left">
-                <div style={{ height: 220, background: c.image ? "#FAF6EC" : "linear-gradient(135deg, color-mix(in srgb, var(--accent) 18%, white), #F0E7D6)" }} className="flex items-center justify-center">{c.image ? <img src={c.image} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : <GraduationCap size={34} color="var(--accent)" strokeWidth={1.4} />}</div>
+                <div style={{ height: 220, background: c.image ? "#FAF6EC" : "linear-gradient(135deg, color-mix(in srgb, var(--accent) 18%, white), #F0E7D6)" }} className="flex items-center justify-center">{c.image ? <img src={c.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <GraduationCap size={34} color="var(--accent)" strokeWidth={1.4} />}</div>
                 <div className="p-6 flex flex-col flex-1"><div className="f-display text-[20px] mb-2" style={{ fontWeight: 700 }}>{c.title}</div><div className="text-[14px] mb-4 flex-1" style={{ color: "#71675A" }}>{c.tagline}</div><span className="btn-soft rounded-full px-4 py-2 text-[12px] self-start" style={{ fontWeight: 700 }}>Apply →</span></div>
               </button>
             </Reveal>
@@ -207,7 +228,7 @@ export function CoursesIndex({ courses, onBack, onOpen }) {
       <BackBar onBack={onBack} />
       <header className="max-w-[900px] mx-auto px-8 text-center pt-8 pb-14"><div className="f-label text-[13px] mb-4 accent-text">ALL COURSES</div><h1 className="f-display text-[46px] mb-4" style={{ fontWeight: 800 }}>Find your course.</h1><p className="text-[16px]" style={{ color: "#71675A" }}>Every course in FJ Room is built to help you gain real skills, solve real problems, and stand out in the real world.</p></header>
       <div className="max-w-[1200px] mx-auto px-8 flex items-center gap-2 mb-10 flex-wrap">{["all", "Beginner", "Intermediate", "Advanced"].map((l) => <button key={l} onClick={() => setLevelFilter(l)} className="rounded-full px-4 py-2 text-[13px]" style={{ background: levelFilter === l ? "var(--accent)" : "#F0E7D6", color: levelFilter === l ? "#FAF6EC" : "#71675A", fontWeight: 700 }}>{l === "all" ? "All levels" : l}</button>)}</div>
-      <div className="max-w-[1200px] mx-auto px-8 pb-14 grid md:grid-cols-3 gap-6">{liveCourses.map((c, i) => <Reveal key={c.id} delay={i * 90}><button onClick={() => onOpen(c.id)} className="card card-pop rounded-2xl overflow-hidden w-full text-left flex flex-col h-full"><div style={{ height: 190, background: c.image ? "#FAF6EC" : "linear-gradient(135deg, color-mix(in srgb, var(--accent) 20%, white), #F0E7D6)" }} className="flex items-center justify-center">{c.image ? <img src={c.image} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : <GraduationCap size={34} color="var(--accent)" strokeWidth={1.3} />}</div><div className="p-6"><div className="f-display text-[20px] mb-2" style={{ fontWeight: 700 }}>{c.title}</div><div className="text-[14px]" style={{ color: "#71675A" }}>{c.tagline}</div></div></button></Reveal>)}</div>
+      <div className="max-w-[1200px] mx-auto px-8 pb-14 grid md:grid-cols-3 gap-6">{liveCourses.map((c, i) => <Reveal key={c.id} delay={i * 90}><button onClick={() => onOpen(c.id)} className="card card-pop rounded-2xl overflow-hidden w-full text-left flex flex-col h-full"><div style={{ height: 190, background: c.image ? "#FAF6EC" : "linear-gradient(135deg, color-mix(in srgb, var(--accent) 20%, white), #F0E7D6)" }} className="flex items-center justify-center">{c.image ? <img src={c.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <GraduationCap size={34} color="var(--accent)" strokeWidth={1.3} />}</div><div className="p-6"><div className="f-display text-[20px] mb-2" style={{ fontWeight: 700 }}>{c.title}</div><div className="text-[14px]" style={{ color: "#71675A" }}>{c.tagline}</div></div></button></Reveal>)}</div>
       <div className="max-w-[1200px] mx-auto px-8 pb-28 text-center text-[13px]" style={{ color: "#A79B84" }}>More courses are on the way.</div>
     </div>
   );
@@ -218,7 +239,7 @@ export function CourseDetail({ course, testimonials, onBack, onApply }) {
     <div className="min-h-screen">
       <BackBar onBack={onBack} />
       <div className="max-w-[1000px] mx-auto px-8 pb-28">
-        <Reveal><div className="rounded-2xl overflow-hidden mb-10" style={{ height: 360, background: course.image ? "#FAF6EC" : "linear-gradient(145deg, color-mix(in srgb, var(--accent) 20%, white), #F0E7D6)" }}>{course.image ? <img src={course.image} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : <div className="w-full h-full flex items-center justify-center"><GraduationCap size={60} color="var(--accent)" strokeWidth={1.2} /></div>}</div></Reveal>
+        <Reveal><div className="rounded-2xl overflow-hidden mb-10" style={{ height: 360, background: course.image ? "#FAF6EC" : "linear-gradient(145deg, color-mix(in srgb, var(--accent) 20%, white), #F0E7D6)" }}>{course.image ? <img src={course.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div className="w-full h-full flex items-center justify-center"><GraduationCap size={60} color="var(--accent)" strokeWidth={1.2} /></div>}</div></Reveal>
         <Reveal delay={80}><div className="f-code text-[13px] mb-3 accent-text">{course.level?.toUpperCase()} · {course.durationWeeks} WEEKS · {course.modules.length} MODULES</div><h1 className="f-display text-[42px] mb-3" style={{ fontWeight: 800 }}>{course.title}</h1><p className="f-display text-[20px] mb-6" style={{ fontStyle: "italic", color: "var(--accent)" }}>{course.tagline}</p><p className="text-[16px] leading-relaxed mb-10" style={{ color: "#4A4237", maxWidth: 640 }}>{course.description}</p></Reveal>
         {course.outcomes?.length > 0 && <Reveal delay={140}><div className="card rounded-2xl p-8 mb-8"><div className="f-display text-[20px] mb-5" style={{ fontWeight: 700 }}>What you'll learn</div><div className="grid md:grid-cols-2 gap-3">{course.outcomes.map((o, i) => <div key={i} className="flex items-start gap-2.5 text-[15px]" style={{ color: "#4A4237" }}><CheckCircle2 size={16} color="var(--accent)" className="mt-0.5 shrink-0" /> {o}</div>)}</div></div></Reveal>}
         {related.length > 0 && <Reveal delay={180}><div className="mb-10"><div className="f-label text-[12px] mb-4" style={{ color: "#71675A" }}>WHAT STUDENTS SAY</div><div className="grid md:grid-cols-2 gap-4">{related.map((t) => <div key={t.id} className="card rounded-xl p-5"><div className="text-[14px] mb-2" style={{ fontStyle: "italic", color: "#4A4237" }}>"{t.quote}"</div><div className="text-[13px] accent-text" style={{ fontWeight: 700 }}>{t.name}</div></div>)}</div></div></Reveal>}
@@ -263,7 +284,8 @@ export function ApplicationForm({ courses, cohorts, presetCourseId, existingUser
   const questions = course?.applicationQuestions || [];
   const [answers, setAnswers] = useState(questions.map(() => ""));
   useEffect(() => { setAnswers(questions.map(() => "")); }, [courseId]);
-  const liveCourses = courses.filter((c) => c.status === "live" && !(existingUser?.enrollments || []).some((e) => e.courseId === c.id));
+  const userCohort = existingUser ? cohorts.find((co) => co.id === existingUser.cohortId) : null;
+  const liveCourses = courses.filter((c) => c.status === "live" && !(existingUser?.enrollments || []).some((e) => e.courseId === c.id) && (!userCohort || userCohort.courseIds.includes(c.id)));
   const steps = existingUser ? ["Choose a course", "A few questions", "Review"] : ["Your details", "Choose a course", "A few questions", "Review"];
   const stepOffset = existingUser ? 1 : 0;
   return (

@@ -88,35 +88,63 @@ export function ModuleEditor({ course, module, setCourses, onBack }) {
   const [notes, setNotes] = useState(module.notes || ""); const [videoUrl, setVideoUrl] = useState(module.videoUrl || ""); const [slideUrl, setSlideUrl] = useState(module.slideUrl || "");
   const [testType, setTestType] = useState(module.testType); const [passPct, setPassPct] = useState(module.passPct || 70);
   const [proofType, setProofType] = useState(module.proofType || "text"); const [markingGuide, setMarkingGuide] = useState(module.markingGuide || "");
+  const [questionPrompt, setQuestionPrompt] = useState(module.questionPrompt || "");
   const [quiz, setQuiz] = useState(module.quiz || []);
+  const [meetings, setMeetings] = useState(module.meetings || []);
   function addQuestion() { setQuiz((q) => [...q, { q: "", options: ["", "", ""], correct: 0 }]); }
   function updateQ(i, field, value) { setQuiz((q) => q.map((item, idx) => idx !== i ? item : { ...item, [field]: value })); }
   function updateOpt(qi, oi, value) { setQuiz((q) => q.map((item, idx) => idx !== qi ? item : { ...item, options: item.options.map((o, oidx) => oidx === oi ? value : o) })); }
   function removeQ(i) { setQuiz((q) => q.filter((_, idx) => idx !== i)); }
-  function save() { setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, modules: c.modules.map((m) => m.id !== module.id ? m : { ...m, title, brief, notes, videoUrl, slideUrl, testType, passPct: Number(passPct), proofType, markingGuide, quiz }) })); onBack(); }
+  function addMeeting() { setMeetings((m) => [...m, { id: "mt" + Date.now(), label: `Class ${m.length + 1}`, date: "", link: "" }]); }
+  function updateMeeting(i, field, value) { setMeetings((m) => m.map((item, idx) => idx !== i ? item : { ...item, [field]: value })); }
+  function removeMeeting(i) { setMeetings((m) => m.filter((_, idx) => idx !== i)); }
+  function save() { setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, modules: c.modules.map((m) => m.id !== module.id ? m : { ...m, title, brief, notes, videoUrl, slideUrl, testType, passPct: Number(passPct), proofType, markingGuide, questionPrompt, quiz, meetings }) })); onBack(); }
   return (
     <div>
       <button onClick={onBack} className="flex items-center gap-1.5 text-[13px] mb-6" style={{ color: "#71675A" }}><ArrowLeft size={14} /> Back to {course.title}</button>
-      <div className="card rounded-2xl p-7 flex flex-col gap-4">
+      <div className="card rounded-2xl p-7 flex flex-col gap-4 mb-6">
+        <div className="f-label text-[11px]" style={{ color: "#71675A" }}>LECTURE CONTENT</div>
         <Field label="Module title" value={title} onChange={(e) => setTitle(e.target.value)} />
         <Field label="Short brief (shown in course path)" value={brief} onChange={(e) => setBrief(e.target.value)} />
         <TextArea label="Lecture notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
         <div className="grid grid-cols-2 gap-3"><Field label="Video link (max ~50MB if uploading elsewhere)" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://…" /><Field label="Slide deck link" value={slideUrl} onChange={(e) => setSlideUrl(e.target.value)} placeholder="https://…" /></div>
-        <SelectF label="Check type" value={testType} onChange={(e) => setTestType(e.target.value)} options={[{ value: "multiple-choice", label: "Multiple choice (auto-graded)" }, { value: "written", label: "Short written answer (you review)" }, { value: "file-upload", label: "File / assignment upload (you review)" }, { value: "checklist", label: "Self-check (no review needed)" }]} />
+      </div>
+
+      <div className="card rounded-2xl p-7 flex flex-col gap-4 mb-6">
+        <div className="f-label text-[11px]" style={{ color: "#71675A" }}>QUICK CHECK</div>
+        <SelectF label="Check type" value={testType} onChange={(e) => setTestType(e.target.value)} options={[{ value: "multiple-choice", label: "Multiple choice (auto-graded)" }, { value: "written", label: "Short written answer (you review)" }, { value: "file-upload", label: "File / assignment upload (you review)" }, { value: "checklist", label: "Self-check (no review needed)" }, { value: "milestone", label: "Milestone project (bigger checkpoint, you review)" }]} />
         {testType === "multiple-choice" && (
           <div>
             <Field label="Pass score to unlock next (%)" type="number" value={passPct} onChange={(e) => setPassPct(e.target.value)} />
             <div className="mt-4 flex flex-col gap-4">{quiz.map((q, qi) => <div key={qi} className="rounded-xl p-4" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}><div className="flex items-center justify-between mb-2"><div className="f-label text-[11px]" style={{ color: "#71675A" }}>QUESTION {qi + 1}</div><button onClick={() => removeQ(qi)}><Trash2 size={14} color="#B04A3A" /></button></div><Field label="Question" value={q.q} onChange={(e) => updateQ(qi, "q", e.target.value)} /><div className="mt-3 flex flex-col gap-2">{q.options.map((o, oi) => <div key={oi} className="flex items-center gap-2"><input type="radio" checked={q.correct === oi} onChange={() => updateQ(qi, "correct", oi)} /><input className="input-field rounded-lg px-3 py-2 text-[13px]" placeholder={`Option ${oi + 1}`} value={o} onChange={(e) => updateOpt(qi, oi, e.target.value)} /></div>)}</div></div>)}<button onClick={addQuestion} className="text-[13px] accent-text flex items-center gap-1.5 self-start" style={{ fontWeight: 700 }}><Plus size={14} /> Add question</button></div>
           </div>
         )}
-        {(testType === "written" || testType === "file-upload") && (
+        {(testType === "written" || testType === "file-upload" || testType === "milestone") && (
           <>
-            {testType === "file-upload" && <SelectF label="Required proof type" value={proofType} onChange={(e) => setProofType(e.target.value)} options={[{ value: "document", label: "Document upload" }, { value: "link", label: "Link" }, { value: "image", label: "Image / screenshot link" }]} />}
-            <TextArea label="Marking guide (for your review — what a good answer looks like)" value={markingGuide} onChange={(e) => setMarkingGuide(e.target.value)} />
+            {(testType === "file-upload" || testType === "milestone") && <SelectF label="Required proof type" value={proofType} onChange={(e) => setProofType(e.target.value)} options={[{ value: "document", label: "Document upload" }, { value: "link", label: "Link" }, { value: "image", label: "Image / screenshot link" }]} />}
+            <TextArea label={testType === "written" ? "The question students will answer" : testType === "milestone" ? "Milestone project brief (what they need to build and submit)" : "What students need to submit"} value={questionPrompt} onChange={(e) => setQuestionPrompt(e.target.value)} placeholder={testType === "written" ? "e.g. Write a 3-sentence pitch for your ideal client." : testType === "milestone" ? "e.g. Build a complete mock client onboarding pack and submit it as a shared link." : "e.g. Upload your completed workbook as a PDF."} />
+            <TextArea label="Marking guide (for your review — what a good submission looks like, not shown to students)" value={markingGuide} onChange={(e) => setMarkingGuide(e.target.value)} />
           </>
         )}
-        <button onClick={save} className="btn-primary rounded-lg px-6 py-3 text-[14px] self-start mt-2">Save module</button>
       </div>
+
+      <div className="card rounded-2xl p-7 flex flex-col gap-4 mb-6">
+        <div className="flex items-center justify-between">
+          <div className="f-label text-[11px]" style={{ color: "#71675A" }}>VIRTUAL MEETINGS</div>
+          <button onClick={addMeeting} className="text-[13px] accent-text flex items-center gap-1.5" style={{ fontWeight: 700 }}><Plus size={14} /> Add meeting</button>
+        </div>
+        {meetings.length === 0 && <div className="text-[13px]" style={{ color: "#A79B84" }}>No classes scheduled for this module yet.</div>}
+        {meetings.map((mt, i) => (
+          <div key={mt.id} className="rounded-xl p-4 grid grid-cols-[1fr_1fr_2fr_auto] gap-3 items-end" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
+            <Field label="Label" value={mt.label} onChange={(e) => updateMeeting(i, "label", e.target.value)} placeholder="e.g. Tuesday class" />
+            <Field label="Date & time" type="datetime-local" value={mt.date} onChange={(e) => updateMeeting(i, "date", e.target.value)} />
+            <Field label="Meeting link" value={mt.link} onChange={(e) => updateMeeting(i, "link", e.target.value)} placeholder="https://…" />
+            <button onClick={() => removeMeeting(i)} className="mb-2.5"><Trash2 size={16} color="#B04A3A" /></button>
+          </div>
+        ))}
+      </div>
+
+      <button onClick={save} className="btn-primary rounded-lg px-6 py-3 text-[14px] self-start">Save module</button>
     </div>
   );
 }
@@ -131,6 +159,16 @@ export function CourseManager({ course, testimonials, setCourses, onBack }) {
   function saveDetails() { setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, title, tagline, audience, description, durationWeeks: Number(durationWeeks), level, image, testimonialIds })); setEditingDetails(false); }
   function saveQuestions() { setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, applicationQuestions: questions })); setEditingQuestions(false); }
   function addModule() { if (!newModTitle) return; setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, modules: [...c.modules, { id: Date.now(), title: newModTitle, brief: "", notes: "", videoUrl: "", slideUrl: "", testType: "checklist" }] })); setNewModTitle(""); setAddingModule(false); }
+  function moveModule(index, dir) {
+    setCourses((prev) => prev.map((c) => {
+      if (c.id !== course.id) return c;
+      const modules = [...c.modules];
+      const target = index + dir;
+      if (target < 0 || target >= modules.length) return c;
+      [modules[index], modules[target]] = [modules[target], modules[index]];
+      return { ...c, modules };
+    }));
+  }
   function togglePublish() { setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, status: c.status === "live" ? "draft" : "live" })); }
   function toggleTestimonial(id) { setTestimonialIds((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]); }
   const openModule = openModuleId ? course.modules.find((m) => m.id === openModuleId) : null;
@@ -163,7 +201,20 @@ export function CourseManager({ course, testimonials, setCourses, onBack }) {
         </div>
       )}
       <div className="f-label text-[12px] mb-4" style={{ color: "#71675A" }}>MODULES</div>
-      <div className="grid md:grid-cols-2 gap-4 mb-6">{course.modules.map((m) => <button key={m.id} onClick={() => setOpenModuleId(m.id)} className="card card-pop rounded-2xl p-5 text-left book-tab"><div className="f-code text-[11px] mb-1 accent-text">MODULE {String(m.id).padStart(2, "0")}</div><div className="text-[16px] mb-1" style={{ fontWeight: 700 }}>{m.title}</div><div className="text-[13px] mb-3" style={{ color: "#71675A" }}>{m.brief || "No brief yet."}</div><div className="flex items-center gap-1.5 text-[12px] accent-text" style={{ fontWeight: 700 }}><Pencil size={12} /> Edit module</div></button>)}</div>
+      <div className="grid md:grid-cols-2 gap-4 mb-6">{course.modules.map((m, i) => (
+        <div key={m.id} className="card card-pop rounded-2xl p-5 text-left book-tab relative">
+          <div className="flex items-center gap-1 absolute top-3 right-3">
+            <button onClick={(e) => { e.stopPropagation(); moveModule(i, -1); }} disabled={i === 0} className="rounded-full flex items-center justify-center" style={{ width: 24, height: 24, background: "#F0E7D6", opacity: i === 0 ? 0.4 : 1 }}><ChevronRight size={12} color="#71675A" style={{ transform: "rotate(-90deg)" }} /></button>
+            <button onClick={(e) => { e.stopPropagation(); moveModule(i, 1); }} disabled={i === course.modules.length - 1} className="rounded-full flex items-center justify-center" style={{ width: 24, height: 24, background: "#F0E7D6", opacity: i === course.modules.length - 1 ? 0.4 : 1 }}><ChevronRight size={12} color="#71675A" style={{ transform: "rotate(90deg)" }} /></button>
+          </div>
+          <button onClick={() => setOpenModuleId(m.id)} className="text-left w-full">
+            <div className="f-code text-[11px] mb-1 accent-text">{m.testType === "milestone" ? "MILESTONE" : "MODULE"} {String(i + 1).padStart(2, "0")}</div>
+            <div className="text-[16px] mb-1 pr-14" style={{ fontWeight: 700 }}>{m.title}</div>
+            <div className="text-[13px] mb-3" style={{ color: "#71675A" }}>{m.brief || "No brief yet."}</div>
+            <div className="flex items-center gap-1.5 text-[12px] accent-text" style={{ fontWeight: 700 }}><Pencil size={12} /> Edit module</div>
+          </button>
+        </div>
+      ))}</div>
       {addingModule ? <div className="flex items-center gap-3"><input className="input-field rounded-lg px-3.5 py-2" placeholder="New module title" value={newModTitle} onChange={(e) => setNewModTitle(e.target.value)} /><button onClick={addModule} className="btn-primary rounded-lg px-4 py-2 text-[13px] shrink-0">Add</button><button onClick={() => setAddingModule(false)}><X size={16} color="#A79B84" /></button></div> : <button onClick={() => setAddingModule(true)} className="btn-soft rounded-full px-5 py-2.5 text-[13px] flex items-center gap-1.5" style={{ fontWeight: 700 }}><Plus size={15} /> Add module</button>}
     </div>
   );
@@ -201,6 +252,21 @@ export function StudentDetail({ student, applicant, setStudents, courses, cohort
   function saveStatus(v) { setStatus(v); setStudents((prev) => prev.map((s) => s.id === student.id ? { ...s, accountStatus: v } : s)); }
   function saveCohort(v) { setCohortId(v); setStudents((prev) => prev.map((s) => s.id === student.id ? { ...s, cohortId: v } : s)); }
   function reissue(enrollmentId) { const code = genCode(); setStudents((prev) => prev.map((s) => s.id !== student.id ? s : { ...s, enrollments: s.enrollments.map((e) => e.id === enrollmentId ? { ...e, code } : e) })); }
+  function decideReview(enrollmentId, approve) {
+    setStudents((prev) => prev.map((s) => s.id !== student.id ? s : {
+      ...s,
+      enrollments: s.enrollments.map((e) => {
+        if (e.id !== enrollmentId || !e.pendingReview) return e;
+        const moduleId = e.pendingReview.moduleId;
+        return {
+          ...e,
+          pendingReview: null,
+          completedModuleIds: approve ? [...new Set([...e.completedModuleIds, moduleId])] : e.completedModuleIds,
+        };
+      }),
+    }));
+  }
+  const pendingReviews = student.enrollments.filter((e) => e.pendingReview);
   return (
     <div className="card rounded-2xl p-7 mb-6">
       <div className="flex items-center justify-between mb-5"><div><div className="f-display text-[21px]" style={{ fontWeight: 800 }}>{student.name}</div><div className="text-[14px]" style={{ color: "#71675A" }}>{student.email}</div></div><button onClick={onClose}><X size={18} color="#A79B84" /></button></div>
@@ -209,6 +275,23 @@ export function StudentDetail({ student, applicant, setStudents, courses, cohort
         <div className="flex-1"><SelectF label="Cohort" value={cohortId} onChange={(e) => saveCohort(e.target.value)} options={cohorts.map((c) => ({ value: c.id, label: c.name }))} /></div>
       </div>
       <div className="mb-5"><SelectF label="Account status" value={status} onChange={(e) => saveStatus(e.target.value)} options={[{ value: "active", label: "Active" }, { value: "inactive", label: "Inactive" }, { value: "suspended", label: "Suspended" }]} /></div>
+      {pendingReviews.length > 0 && (
+        <div className="mb-5 pb-5" style={{ borderBottom: "1px solid #F0E7D6" }}>
+          <div className="f-label text-[11px] mb-3" style={{ color: "#B04A3A" }}>AWAITING YOUR REVIEW</div>
+          <div className="flex flex-col gap-3">{pendingReviews.map((e) => {
+            const course = courses.find((c) => c.id === e.courseId);
+            const module = course?.modules.find((m) => m.id === e.pendingReview.moduleId);
+            return (
+              <div key={e.id} className="rounded-xl p-4" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
+                <div className="text-[13px] mb-1" style={{ fontWeight: 700 }}>{course?.title} — {module?.title}</div>
+                {module?.questionPrompt && <div className="text-[12px] mb-2" style={{ color: "#71675A" }}>{module.questionPrompt}</div>}
+                <div className="text-[14px] mb-3 rounded-lg px-3 py-2.5" style={{ background: "#fff", border: "1px solid #E7DEC9" }}>{e.pendingReview.proof}</div>
+                <div className="flex items-center gap-2"><button onClick={() => decideReview(e.id, true)} className="btn-primary rounded-lg px-4 py-2 text-[12px]">Approve — unlock next module</button><button onClick={() => decideReview(e.id, false)} className="text-[12px]" style={{ color: "#B04A3A" }}>Send back</button></div>
+              </div>
+            );
+          })}</div>
+        </div>
+      )}
       <div className="f-label text-[11px] mb-3" style={{ color: "#71675A" }}>ENROLLMENTS</div>
       <div className="flex flex-col gap-2 mb-5">{student.enrollments.map((e) => <div key={e.id} className="flex items-center justify-between px-4 py-3 rounded-lg" style={{ background: "#FAF6EC" }}><div><div className="text-[14px]" style={{ fontWeight: 700 }}>{courses.find((c) => c.id === e.courseId)?.title}</div><div className="f-code text-[10px]" style={{ color: "#71675A" }}>{e.status.toUpperCase()} · {e.completedModuleIds.length}/{courses.find((c) => c.id === e.courseId)?.modules.length || 8} modules</div></div><div className="flex items-center gap-2"><span className="f-code text-[13px]">{e.code}</span><button onClick={() => reissue(e.id)} className="f-label text-[10px] accent-text">REISSUE</button></div></div>)}</div>
       {applicant && <div className="pt-5" style={{ borderTop: "1px solid #F0E7D6" }}><div className="f-label text-[11px] mb-3" style={{ color: "#71675A" }}>LATEST APPLICATION ANSWERS</div>{applicant.answers.map((ans, i) => <div key={i} className="mb-2 text-[13px]">{ans}</div>)}</div>}
@@ -409,28 +492,44 @@ export function BrandingTab({ brand, setBrand }) {
     </>
   );
 }
-export function GradebookTab({ students, courses }) {
-  const rows = students.flatMap((s) => s.enrollments.map((e) => { const c = courses.find((x) => x.id === e.courseId); const pct = c ? Math.round((e.completedModuleIds.length / c.modules.length) * 100) : 0; return { student: s.name, course: c?.title, pct, eligible: pct >= 90 }; }));
+export function GradebookTab({ students, courses, cohorts }) {
+  const [cohortFilter, setCohortFilter] = useState("all");
+  const scopedStudents = cohortFilter === "all" ? students : students.filter((s) => s.cohortId === cohortFilter);
+  const rows = scopedStudents.flatMap((s) => s.enrollments.map((e) => { const c = courses.find((x) => x.id === e.courseId); const pct = c ? Math.round((e.completedModuleIds.length / c.modules.length) * 100) : 0; return { student: s.name, course: c?.title, pct, eligible: pct >= 90 }; }));
   return (
     <>
       <SectionHeader eyebrow="ACCUMULATED SCORES" title="Gradebook" />
+      <div className="flex items-center gap-2 mb-6 flex-wrap">
+        <button onClick={() => setCohortFilter("all")} className="f-label text-[11px] px-3.5 py-1.5 rounded-full" style={{ background: cohortFilter === "all" ? "var(--accent)" : "#F0E7D6", color: cohortFilter === "all" ? "#FAF6EC" : "#71675A" }}>All cohorts</button>
+        {cohorts.map((co) => <button key={co.id} onClick={() => setCohortFilter(co.id)} className="f-label text-[11px] px-3.5 py-1.5 rounded-full" style={{ background: cohortFilter === co.id ? "var(--accent)" : "#F0E7D6", color: cohortFilter === co.id ? "#FAF6EC" : "#71675A" }}>{co.name}</button>)}
+      </div>
       <div className="card rounded-2xl overflow-hidden">
         <div className="grid grid-cols-4 px-6 py-3 f-label text-[11px]" style={{ background: "#F0E7D6", color: "#71675A" }}><div>STUDENT</div><div>COURSE</div><div>PROGRESS</div><div>CERTIFICATE ELIGIBLE (90%+)</div></div>
         {rows.map((r, i) => <div key={i} className="grid grid-cols-4 px-6 py-4 items-center text-[14px]" style={{ borderTop: "1px solid #F0E7D6" }}><div style={{ fontWeight: 700 }}>{r.student}</div><div>{r.course}</div><div>{r.pct}%</div><div>{r.eligible ? <span className="f-code text-[10px] tint-badge px-2 py-1 rounded-full">YES</span> : <span className="f-code text-[10px]" style={{ color: "#A79B84" }}>NOT YET</span>}</div></div>)}
+        {rows.length === 0 && <div className="px-6 py-8 text-[13px]" style={{ color: "#A79B84" }}>No enrollments in this cohort yet.</div>}
       </div>
     </>
   );
 }
-export function OverviewTab({ courses, students, applicants, tasks, setTab }) {
-  const pendingApplicants = applicants.filter((a) => a.status === "pending").length;
-  const activeEnrollments = students.reduce((n, s) => n + s.enrollments.filter((e) => e.status === "active").length, 0);
-  const inReview = tasks.reduce((n, t) => n + Object.values(t.submissions).filter((s) => s.status === "in review").length, 0);
-  const completedTasks = tasks.reduce((n, t) => n + Object.values(t.submissions).filter((s) => s.status === "approved").length, 0);
-  const progressData = students.flatMap((s) => s.enrollments.map((e) => ({ name: s.name.split(" ")[0], modules: e.completedModuleIds.length })));
-  const recent = [...applicants.filter((a) => a.status === "pending").map((a) => ({ t: `${a.name} applied for a course` })), ...tasks.flatMap((t) => Object.entries(t.submissions).filter(([, v]) => v.status === "in review").map(([sid]) => ({ t: `A submission for "${t.title}" is awaiting review` })))].slice(0, 6);
+export function OverviewTab({ courses, students, applicants, tasks, cohorts, setTab }) {
+  const [cohortFilter, setCohortFilter] = useState("all");
+  const scopedStudents = cohortFilter === "all" ? students : students.filter((s) => s.cohortId === cohortFilter);
+  const scopedStudentIds = new Set(scopedStudents.map((s) => s.id));
+  const scopedApplicants = cohortFilter === "all" ? applicants : applicants.filter((a) => a.cohortId === cohortFilter);
+
+  const pendingApplicants = scopedApplicants.filter((a) => a.status === "pending").length;
+  const activeEnrollments = scopedStudents.reduce((n, s) => n + s.enrollments.filter((e) => e.status === "active").length, 0);
+  const inReview = tasks.reduce((n, t) => n + Object.entries(t.submissions).filter(([sid, v]) => scopedStudentIds.has(sid) && v.status === "in review").length, 0);
+  const completedTasks = tasks.reduce((n, t) => n + Object.entries(t.submissions).filter(([sid, v]) => scopedStudentIds.has(sid) && v.status === "approved").length, 0);
+  const progressData = scopedStudents.flatMap((s) => s.enrollments.map((e) => ({ name: s.name.split(" ")[0], modules: e.completedModuleIds.length })));
+  const recent = [...scopedApplicants.filter((a) => a.status === "pending").map((a) => ({ t: `${a.name} applied for a course` })), ...tasks.flatMap((t) => Object.entries(t.submissions).filter(([sid, v]) => scopedStudentIds.has(sid) && v.status === "in review").map(([sid]) => ({ t: `A submission for "${t.title}" is awaiting review` })))].slice(0, 6);
   return (
     <>
       <SectionHeader eyebrow="ADMIN OVERVIEW" title="Everything you're running." />
+      <div className="flex items-center gap-2 mb-6 flex-wrap">
+        <button onClick={() => setCohortFilter("all")} className="f-label text-[11px] px-3.5 py-1.5 rounded-full" style={{ background: cohortFilter === "all" ? "var(--accent)" : "#F0E7D6", color: cohortFilter === "all" ? "#FAF6EC" : "#71675A" }}>All cohorts</button>
+        {cohorts.map((co) => <button key={co.id} onClick={() => setCohortFilter(co.id)} className="f-label text-[11px] px-3.5 py-1.5 rounded-full" style={{ background: cohortFilter === co.id ? "var(--accent)" : "#F0E7D6", color: cohortFilter === co.id ? "#FAF6EC" : "#71675A" }}>{co.name}</button>)}
+      </div>
       <div className="grid grid-cols-5 gap-4 mb-8">{[{ label: "PENDING APPLICANTS", value: pendingApplicants }, { label: "ACTIVE ENROLLMENTS", value: activeEnrollments }, { label: "TASKS IN REVIEW", value: inReview }, { label: "TASKS COMPLETED", value: completedTasks }, { label: "COURSES LIVE", value: courses.filter((c) => c.status === "live").length }].map((s, i) => <div key={i} className="card rounded-2xl p-5"><div className="f-label text-[10px] mb-2" style={{ color: "#A79B84" }}>{s.label}</div><div className="f-display text-[26px] accent-text" style={{ fontWeight: 800 }}>{s.value}</div></div>)}</div>
       <div className="grid md:grid-cols-3 gap-5 mb-8">
         <div className="card rounded-2xl p-6 md:col-span-2"><div className="f-label text-[12px] mb-4" style={{ color: "#71675A" }}>MODULES COMPLETED PER ENROLLMENT</div><div style={{ height: 220 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={progressData}><XAxis dataKey="name" tick={{ fontSize: 12, fill: "#71675A" }} axisLine={{ stroke: "#E7DEC9" }} tickLine={false} /><YAxis tick={{ fontSize: 12, fill: "#71675A" }} axisLine={false} tickLine={false} domain={[0, 8]} /><Tooltip cursor={{ fill: "#F0E7D6" }} contentStyle={{ borderRadius: 10, border: "1px solid #E7DEC9", fontSize: 13 }} /><Bar dataKey="modules" radius={[6, 6, 0, 0]}>{progressData.map((_, i) => <Cell key={i} fill="var(--accent)" />)}</Bar></BarChart></ResponsiveContainer></div></div>
@@ -463,12 +562,12 @@ export function AdminDashboard({ courses, setCourses, students, setStudents, app
         <button onClick={onExit} className="flex items-center gap-2 px-4 py-2.5 text-[14px] mt-4" style={{ color: "#A79B84", fontWeight: 600 }}><LogOut size={16} /> Sign out</button>
       </aside>
       <main className="flex-1 px-10 md:px-16 py-12 max-w-[1040px]">
-        {tab === "overview" && <OverviewTab courses={courses} students={students} applicants={applicants} tasks={tasks} setTab={setTab} />}
+        {tab === "overview" && <OverviewTab courses={courses} students={students} applicants={applicants} tasks={tasks} cohorts={cohorts} setTab={setTab} />}
         {tab === "applicants" && <ApplicantsTab applicants={applicants} setApplicants={setApplicants} students={students} setStudents={setStudents} courses={courses} cohorts={cohorts} />}
         {tab === "cohorts" && <CohortsTab cohorts={cohorts} setCohorts={setCohorts} courses={courses} students={students} />}
         {tab === "courses" && <CoursesTab courses={courses} setCourses={setCourses} testimonials={testimonials} />}
         {tab === "students" && <StudentsTab students={students} setStudents={setStudents} applicants={applicants} courses={courses} cohorts={cohorts} />}
-        {tab === "gradebook" && <GradebookTab students={students} courses={courses} />}
+        {tab === "gradebook" && <GradebookTab students={students} courses={courses} cohorts={cohorts} />}
         {tab === "tasks" && <TasksTab tasks={tasks} setTasks={setTasks} students={students} courses={courses} />}
         {tab === "library" && <LibraryTab resources={resources} setResources={setResources} courses={courses} />}
         {tab === "certificates" && <CertificatesTab students={students} setStudents={setStudents} courses={courses} />}

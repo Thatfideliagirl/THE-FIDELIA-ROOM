@@ -11,40 +11,88 @@ import { pairKey, moduleStatus } from "./lib/data.js";
 import { SectionHeader, NotifBell, WelcomeTour, SidebarLink, LogoMark, Spine, TextArea, ProgressBar } from "./components.jsx";
 
 export function LessonView({ course, enrollment, updateEnrollment, onBack, onNext }) {
+  const [view, setView] = useState("lecture"); // "lecture" | "check" | "meetings"
   const [answers, setAnswers] = useState({}); const [result, setResult] = useState(null); const [proof, setProof] = useState("");
-  const idx = course.modules.findIndex((m) => moduleStatus(course, enrollment, m.id) === "current" || moduleStatus(course, enrollment, m.id) === "complete" ? m.id === (course.modules[enrollment.completedModuleIds.length] || course.modules[course.modules.length - 1]).id : false);
-  const module = course.modules[Math.min(enrollment.completedModuleIds.length, course.modules.length - 1)];
+  const moduleIndex = Math.min(enrollment.completedModuleIds.length, course.modules.length - 1);
+  const module = course.modules[moduleIndex];
   const status = moduleStatus(course, enrollment, module.id);
   const [justPassed, setJustPassed] = useState(false);
   const hasNext = enrollment.completedModuleIds.length < course.modules.length;
+  const pendingHere = enrollment.pendingReview?.moduleId === module.id;
+
+  useEffect(() => { setView("lecture"); setAnswers({}); setResult(null); setProof(""); }, [module.id]);
+
   function completeModule() { updateEnrollment({ completedModuleIds: [...new Set([...enrollment.completedModuleIds, module.id])] }); setJustPassed(true); }
   function submitQuiz() { let correct = 0; module.quiz.forEach((q, i) => { if (answers[i] === q.correct) correct++; }); const pct = Math.round((correct / module.quiz.length) * 100); setResult(pct); if (pct >= (module.passPct || 70)) completeModule(); }
-  function submitOther() { if (proof.trim()) completeModule(); }
+  function submitForReview() { if (!proof.trim()) return; updateEnrollment({ pendingReview: { moduleId: module.id, proof, submittedAt: Date.now() } }); }
   if (justPassed) return (
     <div className="min-h-screen px-10 md:px-16 py-12 max-w-[600px] mx-auto flex flex-col items-center text-center justify-center" style={{ minHeight: "70vh" }}>
       <CheckCircle2 size={48} color="var(--accent)" className="mb-5" />
       <div className="f-display text-[28px] mb-3" style={{ fontWeight: 800 }}>Well done — you passed!</div>
       <div className="text-[15px] mb-8" style={{ color: "#71675A" }}>{hasNext ? "The next module is unlocked." : "That was the last module — nicely done."}</div>
-      <div className="flex gap-3">{hasNext && <button onClick={() => { setJustPassed(false); setResult(null); setAnswers({}); setProof(""); }} className="btn-primary rounded-full px-7 py-3.5 text-[15px]" style={{ fontWeight: 700 }}>Continue to next module</button>}<button onClick={onBack} className="btn-ghost rounded-full px-7 py-3.5 text-[15px]">Back to your path</button></div>
+      <div className="flex gap-3">{hasNext && <button onClick={() => setJustPassed(false)} className="btn-primary rounded-full px-7 py-3.5 text-[15px]" style={{ fontWeight: 700 }}>Continue to next module</button>}<button onClick={onBack} className="btn-ghost rounded-full px-7 py-3.5 text-[15px]">Back to your path</button></div>
     </div>
   );
+  const tabs = [
+    { id: "lecture", label: "Lecture" },
+    { id: "check", label: module.testType === "milestone" ? "Milestone Project" : "Quick Check" },
+    { id: "meetings", label: `Virtual Meetings${module.meetings?.length ? ` (${module.meetings.length})` : ""}` },
+  ];
   return (
     <div className="min-h-screen px-10 md:px-16 py-12 max-w-[760px] mx-auto">
       <button onClick={onBack} className="flex items-center gap-1.5 text-[13px] mb-8" style={{ color: "#71675A" }}><ArrowLeft size={14} /> Back to your path</button>
-      <div className="f-code text-[12px] mb-2 accent-text">MODULE {String(module.id).padStart(2, "0")}</div>
+      <div className="f-code text-[12px] mb-2 accent-text">{module.testType === "milestone" ? "MILESTONE" : "MODULE"} {String(moduleIndex + 1).padStart(2, "0")}</div>
       <h1 className="f-display text-[30px] mb-6" style={{ fontWeight: 800 }}>{module.title}</h1>
-      <div className="card rounded-2xl p-8 mb-6"><div className="f-label text-[11px] mb-3" style={{ color: "#A79B84" }}>LECTURE NOTES</div><p className="text-[15px] leading-relaxed" style={{ color: "#4A4237" }}>{module.notes || "Lecture content coming soon."}</p></div>
-      {status === "complete" && <div className="card rounded-2xl p-6 flex items-center gap-3" style={{ background: "color-mix(in srgb, var(--accent) 8%, white)" }}><CheckCircle2 size={20} color="var(--accent)" /><span className="text-[14px]" style={{ fontWeight: 700 }}>You've completed this module.</span></div>}
-      {status === "current" && module.testType === "multiple-choice" && (
+      <div className="flex items-center gap-2 mb-6 flex-wrap">{tabs.map((t) => <button key={t.id} onClick={() => setView(t.id)} className="f-label text-[12px] px-4 py-2 rounded-full" style={{ background: view === t.id ? "var(--accent)" : "#F0E7D6", color: view === t.id ? "#FAF6EC" : "#71675A" }}>{t.label}</button>)}</div>
+
+      {view === "lecture" && (
         <div className="card rounded-2xl p-8">
-          <div className="f-display text-[19px] mb-5" style={{ fontWeight: 700 }}>Quick check — {module.passPct}% to pass</div>
-          {module.quiz.map((q, qi) => <div key={qi} className="mb-6"><div className="text-[15px] mb-3" style={{ fontWeight: 600 }}>{q.q}</div><div className="flex flex-col gap-2">{q.options.map((o, oi) => <label key={oi} className="flex items-center gap-2.5 text-[14px] rounded-lg px-4 py-2.5" style={{ background: answers[qi] === oi ? "color-mix(in srgb, var(--accent) 10%, white)" : "#FAF6EC", border: answers[qi] === oi ? "1.5px solid var(--accent)" : "1px solid #E7DEC9" }}><input type="radio" name={`q${qi}`} checked={answers[qi] === oi} onChange={() => setAnswers((a) => ({ ...a, [qi]: oi }))} /> {o}</label>)}</div></div>)}
-          {result != null && result < (module.passPct || 70) && <div className="text-[14px] mb-4" style={{ color: "#B04A3A", fontWeight: 700 }}>Scored {result}% — try again to unlock the next module.</div>}
-          <button onClick={submitQuiz} className="btn-primary rounded-lg px-6 py-3 text-[14px]">Submit answers</button>
+          <div className="f-label text-[11px] mb-3" style={{ color: "#A79B84" }}>{module.testType === "milestone" ? "PROJECT OVERVIEW" : "LECTURE NOTES"}</div>
+          <p className="text-[15px] leading-relaxed mb-5" style={{ color: "#4A4237" }}>{module.notes || "Lecture content coming soon."}</p>
+          <div className="flex items-center gap-3 mb-2">
+            {module.videoUrl && <a href={module.videoUrl} target="_blank" rel="noreferrer" className="btn-soft rounded-full px-4 py-2 text-[13px] flex items-center gap-1.5" style={{ fontWeight: 700 }}><PlayCircle size={14} /> Watch lecture</a>}
+            {module.slideUrl && <a href={module.slideUrl} target="_blank" rel="noreferrer" className="btn-soft rounded-full px-4 py-2 text-[13px] flex items-center gap-1.5" style={{ fontWeight: 700 }}><FileText size={14} /> View slides</a>}
+          </div>
+          <div className="flex justify-end mt-6"><button onClick={() => setView("check")} className="btn-primary rounded-lg px-6 py-3 text-[14px] flex items-center gap-2">Next: {module.testType === "milestone" ? "Milestone Project" : "Quick Check"} <ArrowRight size={15} /></button></div>
         </div>
       )}
-      {status === "current" && module.testType === "checklist" && <div className="card rounded-2xl p-8"><div className="f-display text-[19px] mb-3" style={{ fontWeight: 700 }}>Self-check</div><button onClick={completeModule} className="btn-primary rounded-lg px-6 py-3 text-[14px]">I've completed this module</button></div>}
-      {status === "current" && (module.testType === "written" || module.testType === "file-upload") && <div className="card rounded-2xl p-8"><div className="f-display text-[19px] mb-3" style={{ fontWeight: 700 }}>{module.testType === "written" ? "Written response" : `Upload your work${module.proofType === "document" ? " (document)" : ""}`}</div><TextArea label={module.testType === "written" ? "Your answer" : "Link to your file"} value={proof} onChange={(e) => setProof(e.target.value)} /><button onClick={submitOther} className="btn-primary rounded-lg px-6 py-3 text-[14px] mt-4">Submit for review</button></div>}
+
+      {view === "meetings" && (
+        <div className="card rounded-2xl p-8">
+          <div className="f-display text-[19px] mb-5" style={{ fontWeight: 700 }}>Virtual meetings for this module</div>
+          {(!module.meetings || module.meetings.length === 0) && <div className="text-[14px]" style={{ color: "#A79B84" }}>No classes scheduled yet — check back soon.</div>}
+          <div className="flex flex-col gap-2">{(module.meetings || []).map((mt) => (
+            <div key={mt.id} className="flex items-center justify-between rounded-lg px-4 py-3.5" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
+              <div><div className="text-[14px]" style={{ fontWeight: 700 }}>{mt.label}</div><div className="text-[12px] flex items-center gap-1.5 mt-0.5" style={{ color: "#71675A" }}><Clock size={12} /> {mt.date ? new Date(mt.date).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "Date to be confirmed"}</div></div>
+              {mt.link ? <a href={mt.link} target="_blank" rel="noreferrer" className="btn-primary rounded-full px-4 py-2 text-[13px]">Join class</a> : <span className="text-[12px]" style={{ color: "#A79B84" }}>Link coming soon</span>}
+            </div>
+          ))}</div>
+        </div>
+      )}
+
+      {view === "check" && (
+        <div className="card rounded-2xl p-8">
+          {status === "complete" && <div className="flex items-center gap-3" style={{ color: "var(--accent)" }}><CheckCircle2 size={20} /><span className="text-[14px]" style={{ fontWeight: 700 }}>You've completed this module's quick check.</span></div>}
+          {status !== "complete" && pendingHere && <div className="flex items-center gap-3" style={{ color: "#71675A" }}><Clock size={20} /><span className="text-[14px]" style={{ fontWeight: 700 }}>Submitted — awaiting review. You'll be notified once it's graded.</span></div>}
+          {status === "current" && !pendingHere && module.testType === "multiple-choice" && (
+            <>
+              <div className="f-display text-[19px] mb-5" style={{ fontWeight: 700 }}>Quick check — {module.passPct}% to pass</div>
+              {module.quiz.map((q, qi) => <div key={qi} className="mb-6"><div className="text-[15px] mb-3" style={{ fontWeight: 600 }}>{q.q}</div><div className="flex flex-col gap-2">{q.options.map((o, oi) => <label key={oi} className="flex items-center gap-2.5 text-[14px] rounded-lg px-4 py-2.5" style={{ background: answers[qi] === oi ? "color-mix(in srgb, var(--accent) 10%, white)" : "#FAF6EC", border: answers[qi] === oi ? "1.5px solid var(--accent)" : "1px solid #E7DEC9" }}><input type="radio" name={`q${qi}`} checked={answers[qi] === oi} onChange={() => setAnswers((a) => ({ ...a, [qi]: oi }))} /> {o}</label>)}</div></div>)}
+              {result != null && result < (module.passPct || 70) && <div className="text-[14px] mb-4" style={{ color: "#B04A3A", fontWeight: 700 }}>Scored {result}% — try again to unlock the next module.</div>}
+              <button onClick={submitQuiz} className="btn-primary rounded-lg px-6 py-3 text-[14px]">Submit answers</button>
+            </>
+          )}
+          {status === "current" && !pendingHere && module.testType === "checklist" && <><div className="f-display text-[19px] mb-3" style={{ fontWeight: 700 }}>Self-check</div><button onClick={completeModule} className="btn-primary rounded-lg px-6 py-3 text-[14px]">I've completed this module</button></>}
+          {status === "current" && !pendingHere && (module.testType === "written" || module.testType === "file-upload" || module.testType === "milestone") && (
+            <>
+              <div className="f-display text-[19px] mb-3" style={{ fontWeight: 700 }}>{module.testType === "written" ? "Written response" : module.testType === "milestone" ? "Milestone project" : `Upload your work${module.proofType === "document" ? " (document)" : ""}`}</div>
+              {module.questionPrompt && <p className="text-[14px] mb-4" style={{ color: "#4A4237" }}>{module.questionPrompt}</p>}
+              <TextArea label={module.testType === "written" ? "Your answer" : "Link to your file"} value={proof} onChange={(e) => setProof(e.target.value)} />
+              <button onClick={submitForReview} className="btn-primary rounded-lg px-6 py-3 text-[14px] mt-4">Submit for review</button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -175,15 +223,14 @@ export function CommunityPost({ post, onLike, onComment }) {
 }
 
 export function MyCourses({ student, setStudents, courses, cohorts, tasks, setTasks, resources, community, setCommunity, notices, directThreads, setDirectThreads, allStudents, onExit, onApplyMore, notifItems, notifSeen, onMarkSeen }) {
+  const [tab, setTab] = useState("courses"); // "courses" | "profile"
   const [openEnrollmentId, setOpenEnrollmentId] = useState(null);
-  const [photo, setPhoto] = useState(student.photo);
   const [showTour, setShowTour] = useState(!student.seenTour);
   const cohort = cohorts.find((c) => c.id === student.cohortId);
   const openEnrollment = openEnrollmentId ? student.enrollments.find((e) => e.id === openEnrollmentId) : null;
   const openCourse = openEnrollment ? courses.find((c) => c.id === openEnrollment.courseId) : null;
 
   function dismissTour() { setShowTour(false); setStudents((prev) => prev.map((s) => s.id === student.id ? { ...s, seenTour: true } : s)); }
-  function onPhotoPick(e) { const f = e.target.files?.[0]; if (f) setPhoto(URL.createObjectURL(f)); }
 
   if (openEnrollment && openCourse) return <EnrollmentDashboard student={student} setStudents={setStudents} course={openCourse} enrollment={openEnrollment} tasks={tasks} setTasks={setTasks} resources={resources} community={community} setCommunity={setCommunity} notices={notices} directThreads={directThreads} setDirectThreads={setDirectThreads} allStudents={allStudents} onBack={() => setOpenEnrollmentId(null)} notifItems={notifItems} notifSeen={notifSeen} onMarkSeen={onMarkSeen} />;
 
@@ -193,38 +240,62 @@ export function MyCourses({ student, setStudents, courses, cohorts, tasks, setTa
       <aside className="w-[250px] shrink-0 px-5 py-6 flex flex-col" style={{ borderRight: "1px solid #E7DEC9" }}>
         <div className="flex items-center justify-between mb-8 px-2"><LogoMark height={40} /><button onClick={onExit} title="Sign out"><LogOut size={17} color="#A79B84" /></button></div>
         <div className="flex flex-col gap-1 flex-1">
-          <SidebarLink icon={BookOpen} label="My courses" active onClick={() => {}} />
-          <SidebarLink icon={UserCircle} label="Profile" active={false} onClick={() => {}} />
+          <SidebarLink icon={BookOpen} label="My courses" active={tab === "courses"} onClick={() => setTab("courses")} />
+          <SidebarLink icon={UserCircle} label="Profile" active={tab === "profile"} onClick={() => setTab("profile")} />
           <button onClick={onApplyMore} className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-[14px] w-full text-left mt-2" style={{ color: "var(--accent)", fontWeight: 700, border: "1.5px dashed color-mix(in srgb, var(--accent) 50%, transparent)" }}><Plus size={16} /> Apply for a New Course</button>
         </div>
         <button onClick={onExit} className="flex items-center gap-2 px-4 py-2.5 text-[14px]" style={{ color: "#A79B84", fontWeight: 600 }}><LogOut size={16} /> Sign out</button>
       </aside>
       <main className="flex-1 px-10 md:px-16 py-10 max-w-[880px]">
         <div className="flex justify-end mb-4"><NotifBell items={notifItems} seen={notifSeen} onMarkSeen={onMarkSeen} /></div>
-        <div className="mb-10"><div className="f-label text-[12px] mb-2 accent-text">WELCOME BACK</div><h1 className="f-display text-[34px] mb-2" style={{ fontWeight: 800 }}>{student.name.split(" ")[0]}.</h1>{cohort && <p className="text-[16px]" style={{ color: "#71675A" }}>Your Cohort: {cohort.name}</p>}</div>
-        <div className="f-label text-[12px] mb-5" style={{ color: "#71675A" }}>MY COURSES</div>
-        <div className="grid md:grid-cols-2 gap-5 mb-10">
-          {student.enrollments.map((e) => {
-            const c = courses.find((x) => x.id === e.courseId);
-            if (!c) return null;
-            const pct = Math.round((e.completedModuleIds.length / c.modules.length) * 100);
-            return (
-              <button key={e.id} onClick={() => setOpenEnrollmentId(e.id)} disabled={e.status === "awaiting-code"} className="card card-pop rounded-2xl p-6 text-left" style={{ opacity: e.status === "awaiting-code" ? 0.6 : 1 }}>
-                <div className="flex items-center justify-between mb-3"><div className="f-display text-[18px]" style={{ fontWeight: 700 }}>{c.title}</div>{e.status === "awaiting-code" && <span className="f-code text-[9px] px-2 py-1 rounded-full tint-badge">CODE PENDING</span>}</div>
-                {e.status !== "awaiting-code" && <>
-                  <ProgressBar pct={pct} />
-                  <div className="flex items-center justify-between mt-2"><span className="text-[13px]" style={{ color: "#71675A" }}>{pct}% complete</span><span className="text-[13px] accent-text" style={{ fontWeight: 700 }}>{c.modules[Math.min(e.completedModuleIds.length, c.modules.length - 1)]?.title}</span></div>
-                </>}
-              </button>
-            );
-          })}
-        </div>
-        <div className="card rounded-2xl p-8 max-w-[440px]">
-          <div className="f-label text-[12px] mb-4" style={{ color: "#71675A" }}>PROFILE</div>
-          <div className="flex items-center gap-5 mb-6"><div className="rounded-full overflow-hidden flex items-center justify-center shrink-0" style={{ width: 68, height: 68, background: "color-mix(in srgb, var(--accent) 14%, white)" }}>{photo ? <img src={photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <UserCircle size={32} color="var(--accent)" />}</div><label className="btn-soft rounded-full px-4 py-2 text-[13px] cursor-pointer" style={{ fontWeight: 600 }}>Change photo<input type="file" accept="image/*" onChange={onPhotoPick} style={{ display: "none" }} /></label></div>
-          <div className="f-code text-[11px]" style={{ color: "#A79B84" }}>STUDENT ID: {student.studentId}</div>
-        </div>
+        {tab === "courses" && (
+          <>
+            <div className="mb-10"><div className="f-label text-[12px] mb-2 accent-text">WELCOME BACK</div><h1 className="f-display text-[34px] mb-2" style={{ fontWeight: 800 }}>{student.name.split(" ")[0]}.</h1>{cohort && <p className="text-[16px]" style={{ color: "#71675A" }}>Your Cohort: {cohort.name}</p>}</div>
+            <div className="f-label text-[12px] mb-5" style={{ color: "#71675A" }}>MY COURSES</div>
+            <div className="grid md:grid-cols-2 gap-5 mb-10">
+              {student.enrollments.map((e) => {
+                const c = courses.find((x) => x.id === e.courseId);
+                if (!c) return null;
+                const pct = Math.round((e.completedModuleIds.length / c.modules.length) * 100);
+                return (
+                  <button key={e.id} onClick={() => setOpenEnrollmentId(e.id)} disabled={e.status === "awaiting-code"} className="card card-pop rounded-2xl p-6 text-left" style={{ opacity: e.status === "awaiting-code" ? 0.6 : 1 }}>
+                    <div className="flex items-center justify-between mb-3"><div className="f-display text-[18px]" style={{ fontWeight: 700 }}>{c.title}</div>{e.status === "awaiting-code" && <span className="f-code text-[9px] px-2 py-1 rounded-full tint-badge">CODE PENDING</span>}</div>
+                    {e.status !== "awaiting-code" && <>
+                      <ProgressBar pct={pct} />
+                      <div className="flex items-center justify-between mt-2"><span className="text-[13px]" style={{ color: "#71675A" }}>{pct}% complete</span><span className="text-[13px] accent-text" style={{ fontWeight: 700 }}>{c.modules[Math.min(e.completedModuleIds.length, c.modules.length - 1)]?.title}</span></div>
+                    </>}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+        {tab === "profile" && <ProfilePage student={student} setStudents={setStudents} cohort={cohort} />}
       </main>
+    </div>
+  );
+}
+
+function ProfilePage({ student, setStudents, cohort }) {
+  const [photo, setPhoto] = useState(student.photo);
+  const [bio, setBio] = useState(student.bio || "");
+  const [saved, setSaved] = useState(false);
+  function onPhotoPick(e) { const f = e.target.files?.[0]; if (f) setPhoto(URL.createObjectURL(f)); }
+  function save() { setStudents((prev) => prev.map((s) => s.id === student.id ? { ...s, photo, bio } : s)); setSaved(true); setTimeout(() => setSaved(false), 2000); }
+  return (
+    <div className="max-w-[520px]">
+      <div className="mb-8"><div className="f-label text-[12px] mb-2 accent-text">YOUR PROFILE</div><h1 className="f-display text-[30px]" style={{ fontWeight: 800 }}>Profile details.</h1></div>
+      <div className="card rounded-2xl p-8">
+        <div className="flex items-center gap-5 mb-6"><div className="rounded-full overflow-hidden flex items-center justify-center shrink-0" style={{ width: 76, height: 76, background: "color-mix(in srgb, var(--accent) 14%, white)" }}>{photo ? <img src={photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <UserCircle size={34} color="var(--accent)" />}</div><label className="btn-soft rounded-full px-4 py-2 text-[13px] cursor-pointer" style={{ fontWeight: 600 }}>Change photo<input type="file" accept="image/*" onChange={onPhotoPick} style={{ display: "none" }} /></label></div>
+        <div className="grid grid-cols-2 gap-4 mb-5">
+          <div><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>NAME</div><div className="text-[14px]" style={{ fontWeight: 600 }}>{student.name}</div></div>
+          <div><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>STUDENT ID</div><div className="text-[14px] f-code">{student.studentId}</div></div>
+          <div><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>EMAIL</div><div className="text-[14px]" style={{ fontWeight: 600 }}>{student.email}</div></div>
+          <div><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>COHORT</div><div className="text-[14px]" style={{ fontWeight: 600 }}>{cohort?.name || "—"}</div></div>
+        </div>
+        <TextArea label="Bio" value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Tell the Room a bit about yourself…" />
+        <div className="flex items-center gap-3 mt-4"><button onClick={save} className="btn-primary rounded-lg px-6 py-2.5 text-[14px]">Save profile</button>{saved && <span className="text-[13px] accent-text" style={{ fontWeight: 700 }}>Saved.</span>}</div>
+      </div>
     </div>
   );
 }
