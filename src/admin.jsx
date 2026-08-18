@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from "recharts";
 import { genCode, nextStudentId, pairKey } from "./lib/data.js";
-import { Field, SectionHeader, NotifBell, SidebarLink, LogoMark, TextArea, SelectF, ImgField } from "./components.jsx";
+import { Field, SectionHeader, NotifBell, SidebarLink, LogoMark, TextArea, SelectF, ImgField, FileField } from "./components.jsx";
 import { CommunityPanel } from "./student.jsx";
 
 export function ApplicantsTab({ applicants, setApplicants, students, setStudents, courses, cohorts }) {
@@ -43,11 +43,14 @@ export function ApplicantsTab({ applicants, setApplicants, students, setStudents
 }
 
 export function CohortsTab({ cohorts, setCohorts, courses, students }) {
-  const [showAdd, setShowAdd] = useState(false); const [openId, setOpenId] = useState(null);
+  const [showAdd, setShowAdd] = useState(false); const [openId, setOpenId] = useState(null); const [editingId, setEditingId] = useState(null);
   const [name, setName] = useState(""); const [startDate, setStartDate] = useState(""); const [endDate, setEndDate] = useState(""); const [courseIds, setCourseIds] = useState([]);
   function toggleCourse(id) { setCourseIds((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]); }
-  function add() { if (!name) return; setCohorts((prev) => [...prev, { id: "co" + Date.now(), name, startDate, endDate, status: "active", courseIds }]); setName(""); setStartDate(""); setEndDate(""); setCourseIds([]); setShowAdd(false); }
+  function add() { if (!name) return; setCohorts((prev) => [...prev, { id: "co" + Date.now(), name, startDate, endDate, status: "active", courseIds, unlockedCourseIds: [] }]); setName(""); setStartDate(""); setEndDate(""); setCourseIds([]); setShowAdd(false); }
   function remove(id) { setCohorts((prev) => prev.filter((c) => c.id !== id)); }
+  function startEdit(co) { setEditingId(co.id); setName(co.name); setStartDate(co.startDate); setEndDate(co.endDate); setCourseIds(co.courseIds); }
+  function saveEdit() { setCohorts((prev) => prev.map((c) => c.id !== editingId ? c : { ...c, name, startDate, endDate, courseIds })); setEditingId(null); }
+  function toggleUnlock(cohortId, courseId) { setCohorts((prev) => prev.map((c) => { if (c.id !== cohortId) return c; const u = c.unlockedCourseIds || []; return { ...c, unlockedCourseIds: u.includes(courseId) ? u.filter((x) => x !== courseId) : [...u, courseId] }; })); }
   return (
     <>
       <SectionHeader eyebrow="MANAGE" title="Cohorts" action={<button onClick={() => setShowAdd((s) => !s)} className="btn-primary rounded-full px-5 py-2.5 text-[14px] flex items-center gap-1.5"><Plus size={16} /> New cohort</button>} />
@@ -61,19 +64,28 @@ export function CohortsTab({ cohorts, setCohorts, courses, students }) {
       )}
       <div className="flex flex-col gap-4">{cohorts.map((co) => {
         const members = students.filter((s) => s.cohortId === co.id);
+        const isEditing = editingId === co.id;
         return (
           <div key={co.id} className="card rounded-2xl p-6">
             <button className="w-full flex items-center justify-between" onClick={() => setOpenId(openId === co.id ? null : co.id)}>
               <div className="text-left"><div className="f-display text-[19px]" style={{ fontWeight: 700 }}>{co.name}</div><div className="text-[13px] mt-1" style={{ color: "#71675A" }}>{members.length} students · {co.courseIds.length} courses · {co.startDate} to {co.endDate}</div></div>
               <div className="flex items-center gap-3"><span className="f-code text-[10px] px-2.5 py-1 rounded-full tint-badge">{co.status.toUpperCase()}</span><ChevronDown size={18} color="#A79B84" style={{ transform: openId === co.id ? "rotate(180deg)" : "none" }} /></div>
             </button>
-            {openId === co.id && (
+            {openId === co.id && !isEditing && (
               <div className="mt-6 pt-6" style={{ borderTop: "1px solid #F0E7D6" }}>
-                <div className="f-label text-[11px] mb-3" style={{ color: "#71675A" }}>COURSES</div>
-                <div className="flex flex-wrap gap-2 mb-6">{co.courseIds.map((cid) => <span key={cid} className="f-label text-[11px] px-3 py-1.5 rounded-full tint-badge">{courses.find((c) => c.id === cid)?.title}</span>)}</div>
+                <div className="f-label text-[11px] mb-3" style={{ color: "#71675A" }}>COURSES — CLICK TO LOCK/UNLOCK LECTURES</div>
+                <div className="flex flex-wrap gap-2 mb-6">{co.courseIds.map((cid) => { const unlocked = (co.unlockedCourseIds || []).includes(cid); return <button key={cid} onClick={() => toggleUnlock(co.id, cid)} className="f-label text-[11px] px-3 py-1.5 rounded-full flex items-center gap-1.5" style={{ background: unlocked ? "var(--accent)" : "#F0E7D6", color: unlocked ? "#FAF6EC" : "#71675A" }}>{unlocked ? <Eye size={11} /> : <Lock size={11} />} {courses.find((c) => c.id === cid)?.title}</button>; })}</div>
                 <div className="f-label text-[11px] mb-3" style={{ color: "#71675A" }}>CALL SHEET — MEMBERS</div>
                 <div className="flex flex-col gap-2 mb-4">{members.map((s) => <div key={s.id} className="flex items-center justify-between px-4 py-2.5 rounded-lg text-[13px]" style={{ background: "#FAF6EC" }}><span style={{ fontWeight: 600 }}>{s.name}</span><span className="f-code text-[11px]" style={{ color: "#71675A" }}>{s.enrollments.length} enrollment{s.enrollments.length !== 1 ? "s" : ""}</span></div>)}{members.length === 0 && <div className="text-[13px]" style={{ color: "#A79B84" }}>No members yet.</div>}</div>
-                <button onClick={() => remove(co.id)} className="text-[12px]" style={{ color: "#B04A3A" }}>Delete cohort</button>
+                <div className="flex items-center gap-4"><button onClick={() => startEdit(co)} className="text-[12px] accent-text flex items-center gap-1.5" style={{ fontWeight: 700 }}><Pencil size={12} /> Edit cohort</button><button onClick={() => remove(co.id)} className="text-[12px]" style={{ color: "#B04A3A" }}>Delete cohort</button></div>
+              </div>
+            )}
+            {isEditing && (
+              <div className="mt-6 pt-6 flex flex-col gap-3" style={{ borderTop: "1px solid #F0E7D6" }}>
+                <Field label="Cohort name" value={name} onChange={(e) => setName(e.target.value)} />
+                <div className="grid grid-cols-2 gap-3"><Field label="Start date" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} /><Field label="End date" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} /></div>
+                <div><div className="f-label text-[11px] mb-2" style={{ color: "#71675A" }}>COURSES AVAILABLE IN THIS COHORT</div><div className="flex flex-wrap gap-2">{courses.map((c) => <button key={c.id} onClick={() => toggleCourse(c.id)} className="f-label text-[11px] px-3 py-1.5 rounded-full" style={{ background: courseIds.includes(c.id) ? "var(--accent)" : "#F0E7D6", color: courseIds.includes(c.id) ? "#FAF6EC" : "#71675A" }}>{c.title}</button>)}</div></div>
+                <div className="flex items-center gap-3"><button onClick={saveEdit} className="btn-primary rounded-lg px-5 py-2.5 text-[14px]">Save changes</button><button onClick={() => setEditingId(null)} className="text-[13px]" style={{ color: "#A79B84" }}>Cancel</button></div>
               </div>
             )}
           </div>
@@ -86,6 +98,7 @@ export function CohortsTab({ cohorts, setCohorts, courses, students }) {
 export function ModuleEditor({ course, module, setCourses, onBack }) {
   const [title, setTitle] = useState(module.title); const [brief, setBrief] = useState(module.brief || "");
   const [notes, setNotes] = useState(module.notes || ""); const [videoUrl, setVideoUrl] = useState(module.videoUrl || ""); const [slideUrl, setSlideUrl] = useState(module.slideUrl || "");
+  const [slideFile, setSlideFile] = useState(module.slideFile || null);
   const [testType, setTestType] = useState(module.testType); const [passPct, setPassPct] = useState(module.passPct || 70);
   const [proofType, setProofType] = useState(module.proofType || "text"); const [markingGuide, setMarkingGuide] = useState(module.markingGuide || "");
   const [questionPrompt, setQuestionPrompt] = useState(module.questionPrompt || "");
@@ -95,19 +108,20 @@ export function ModuleEditor({ course, module, setCourses, onBack }) {
   function updateQ(i, field, value) { setQuiz((q) => q.map((item, idx) => idx !== i ? item : { ...item, [field]: value })); }
   function updateOpt(qi, oi, value) { setQuiz((q) => q.map((item, idx) => idx !== qi ? item : { ...item, options: item.options.map((o, oidx) => oidx === oi ? value : o) })); }
   function removeQ(i) { setQuiz((q) => q.filter((_, idx) => idx !== i)); }
-  function addMeeting() { setMeetings((m) => [...m, { id: "mt" + Date.now(), label: `Class ${m.length + 1}`, date: "", link: "" }]); }
+  function addMeeting() { setMeetings((m) => [...m, { id: "mt" + Date.now(), label: `Class ${m.length + 1}`, date: "", link: "", recordingLink: "", recordingFile: null }]); }
   function updateMeeting(i, field, value) { setMeetings((m) => m.map((item, idx) => idx !== i ? item : { ...item, [field]: value })); }
   function removeMeeting(i) { setMeetings((m) => m.filter((_, idx) => idx !== i)); }
-  function save() { setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, modules: c.modules.map((m) => m.id !== module.id ? m : { ...m, title, brief, notes, videoUrl, slideUrl, testType, passPct: Number(passPct), proofType, markingGuide, questionPrompt, quiz, meetings }) })); onBack(); }
+  function save() { setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, modules: c.modules.map((m) => m.id !== module.id ? m : { ...m, title, brief, notes, videoUrl, slideUrl, slideFile, testType, passPct: Number(passPct), proofType, markingGuide, questionPrompt, quiz, meetings }) })); onBack(); }
   return (
     <div>
       <button onClick={onBack} className="flex items-center gap-1.5 text-[13px] mb-6" style={{ color: "#71675A" }}><ArrowLeft size={14} /> Back to {course.title}</button>
       <div className="card rounded-2xl p-7 flex flex-col gap-4 mb-6">
         <div className="f-label text-[11px]" style={{ color: "#71675A" }}>LECTURE CONTENT</div>
         <Field label="Module title" value={title} onChange={(e) => setTitle(e.target.value)} />
-        <Field label="Short brief (shown in course path)" value={brief} onChange={(e) => setBrief(e.target.value)} />
-        <TextArea label="Lecture notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
-        <div className="grid grid-cols-2 gap-3"><Field label="Video link (max ~50MB if uploading elsewhere)" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://…" /><Field label="Slide deck link" value={slideUrl} onChange={(e) => setSlideUrl(e.target.value)} placeholder="https://…" /></div>
+        <TextArea label="Short brief (shown in course path)" value={brief} onChange={(e) => setBrief(e.target.value)} rows={2} />
+        <TextArea label="Lecture notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={14} />
+        <div className="grid grid-cols-2 gap-3"><Field label="Video link (max ~50MB if uploading elsewhere)" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://…" /><Field label="Slide deck link (optional if uploading a file below)" value={slideUrl} onChange={(e) => setSlideUrl(e.target.value)} placeholder="https://…" /></div>
+        <FileField label="Or upload a slide deck file (PDF, PPT, etc.)" value={slideFile} onChange={setSlideFile} accept=".pdf,.ppt,.pptx,.key" />
       </div>
 
       <div className="card rounded-2xl p-7 flex flex-col gap-4 mb-6">
@@ -122,8 +136,8 @@ export function ModuleEditor({ course, module, setCourses, onBack }) {
         {(testType === "written" || testType === "file-upload" || testType === "milestone") && (
           <>
             {(testType === "file-upload" || testType === "milestone") && <SelectF label="Required proof type" value={proofType} onChange={(e) => setProofType(e.target.value)} options={[{ value: "document", label: "Document upload" }, { value: "link", label: "Link" }, { value: "image", label: "Image / screenshot link" }]} />}
-            <TextArea label={testType === "written" ? "The question students will answer" : testType === "milestone" ? "Milestone project brief (what they need to build and submit)" : "What students need to submit"} value={questionPrompt} onChange={(e) => setQuestionPrompt(e.target.value)} placeholder={testType === "written" ? "e.g. Write a 3-sentence pitch for your ideal client." : testType === "milestone" ? "e.g. Build a complete mock client onboarding pack and submit it as a shared link." : "e.g. Upload your completed workbook as a PDF."} />
-            <TextArea label="Marking guide (for your review — what a good submission looks like, not shown to students)" value={markingGuide} onChange={(e) => setMarkingGuide(e.target.value)} />
+            <TextArea label={testType === "written" ? "The question students will answer" : testType === "milestone" ? "Milestone project brief (what they need to build and submit)" : "What students need to submit"} value={questionPrompt} onChange={(e) => setQuestionPrompt(e.target.value)} placeholder={testType === "written" ? "e.g. Write a 3-sentence pitch for your ideal client." : testType === "milestone" ? "e.g. Build a complete mock client onboarding pack and submit it as a shared link." : "e.g. Upload your completed workbook as a PDF."} rows={5} />
+            <TextArea label="Marking guide — list the key points a good submission should cover, one per idea (used both for your review and for auto-checking matches)" value={markingGuide} onChange={(e) => setMarkingGuide(e.target.value)} rows={6} />
           </>
         )}
       </div>
@@ -135,11 +149,20 @@ export function ModuleEditor({ course, module, setCourses, onBack }) {
         </div>
         {meetings.length === 0 && <div className="text-[13px]" style={{ color: "#A79B84" }}>No classes scheduled for this module yet.</div>}
         {meetings.map((mt, i) => (
-          <div key={mt.id} className="rounded-xl p-4 grid grid-cols-[1fr_1fr_2fr_auto] gap-3 items-end" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
-            <Field label="Label" value={mt.label} onChange={(e) => updateMeeting(i, "label", e.target.value)} placeholder="e.g. Tuesday class" />
-            <Field label="Date & time" type="datetime-local" value={mt.date} onChange={(e) => updateMeeting(i, "date", e.target.value)} />
-            <Field label="Meeting link" value={mt.link} onChange={(e) => updateMeeting(i, "link", e.target.value)} placeholder="https://…" />
-            <button onClick={() => removeMeeting(i)} className="mb-2.5"><Trash2 size={16} color="#B04A3A" /></button>
+          <div key={mt.id} className="rounded-xl p-4 flex flex-col gap-3" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
+            <div className="grid grid-cols-[1fr_1fr_2fr_auto] gap-3 items-end">
+              <Field label="Label" value={mt.label} onChange={(e) => updateMeeting(i, "label", e.target.value)} placeholder="e.g. Tuesday class" />
+              <Field label="Date & time" type="datetime-local" value={mt.date} onChange={(e) => updateMeeting(i, "date", e.target.value)} />
+              <Field label="Meeting link" value={mt.link} onChange={(e) => updateMeeting(i, "link", e.target.value)} placeholder="https://…" />
+              <button onClick={() => removeMeeting(i)} className="mb-2.5"><Trash2 size={16} color="#B04A3A" /></button>
+            </div>
+            <div className="pt-3" style={{ borderTop: "1px dashed #E7DEC9" }}>
+              <div className="f-label text-[10px] mb-2" style={{ color: "#A79B84" }}>VIRTUAL RECORDING (after class, if there is one)</div>
+              <div className="grid grid-cols-2 gap-3 items-end">
+                <Field label="Recording link" value={mt.recordingLink || ""} onChange={(e) => updateMeeting(i, "recordingLink", e.target.value)} placeholder="https://…" />
+                <FileField label="Or upload a document (minutes, transcript)" value={mt.recordingFile || null} onChange={(v) => updateMeeting(i, "recordingFile", v)} accept=".pdf,.doc,.docx,.txt" />
+              </div>
+            </div>
           </div>
         ))}
       </div>
@@ -283,7 +306,7 @@ export function StudentDetail({ student, applicant, setStudents, courses, cohort
             const module = course?.modules.find((m) => m.id === e.pendingReview.moduleId);
             return (
               <div key={e.id} className="rounded-xl p-4" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
-                <div className="text-[13px] mb-1" style={{ fontWeight: 700 }}>{course?.title} — {module?.title}</div>
+                <div className="flex items-center justify-between mb-1"><div className="text-[13px]" style={{ fontWeight: 700 }}>{course?.title} — {module?.title}</div>{typeof e.pendingReview.autoScore === "number" && <span className="f-code text-[10px] px-2 py-0.5 rounded-full" style={{ background: "#F0E7D6", color: "#71675A" }}>AUTO-CHECK: {e.pendingReview.autoScore}% match</span>}</div>
                 {module?.questionPrompt && <div className="text-[12px] mb-2" style={{ color: "#71675A" }}>{module.questionPrompt}</div>}
                 <div className="text-[14px] mb-3 rounded-lg px-3 py-2.5" style={{ background: "#fff", border: "1px solid #E7DEC9" }}>{e.pendingReview.proof}</div>
                 <div className="flex items-center gap-2"><button onClick={() => decideReview(e.id, true)} className="btn-primary rounded-lg px-4 py-2 text-[12px]">Approve — unlock next module</button><button onClick={() => decideReview(e.id, false)} className="text-[12px]" style={{ color: "#B04A3A" }}>Send back</button></div>
@@ -373,8 +396,9 @@ export function TasksTab({ tasks, setTasks, students, courses }) {
 }
 
 export function ResourceForm({ courses, initial, onSave, onClose }) {
-  const [category, setCategory] = useState(initial?.category || "module"); const [folder, setFolder] = useState(initial?.folder || ""); const [title, setTitle] = useState(initial?.title || ""); const [description, setDescription] = useState(initial?.description || ""); const [type, setType] = useState(initial?.type || "Doc"); const [url, setUrl] = useState(initial?.url || ""); const [kind, setKind] = useState(initial?.kind || "link"); const [visibility, setVisibility] = useState(initial?.visibility || "course"); const [courseId, setCourseId] = useState(initial?.courseId || courses[0]?.id);
+  const [category, setCategory] = useState(initial?.category || "module"); const [folder, setFolder] = useState(initial?.folder || ""); const [title, setTitle] = useState(initial?.title || ""); const [description, setDescription] = useState(initial?.description || ""); const [type, setType] = useState(initial?.type || "Doc"); const [url, setUrl] = useState(initial?.url || ""); const [file, setFile] = useState(initial?.file || null); const [kind, setKind] = useState(initial?.kind || "link"); const [visibility, setVisibility] = useState(initial?.visibility || "course"); const [courseId, setCourseId] = useState(initial?.courseId || courses[0]?.id);
   const isPublic = category === "free";
+  const canSave = folder && title && (kind === "file" ? file : url);
   return (
     <div className="card rounded-xl p-6 mb-6 flex flex-col gap-3">
       <SelectF label="Category" value={category} onChange={(e) => setCategory(e.target.value)} options={[{ value: "module", label: "Module resource (for enrolled students)" }, { value: "free", label: "Free download (public)" }]} />
@@ -382,11 +406,11 @@ export function ResourceForm({ courses, initial, onSave, onClose }) {
       <SelectF label="Course" value={courseId} onChange={(e) => setCourseId(e.target.value)} options={courses.map((c) => ({ value: c.id, label: c.title }))} />
       <Field label="Folder name" value={folder} onChange={(e) => setFolder(e.target.value)} placeholder="e.g. Module 1 resources" />
       <Field label="Resource title" value={title} onChange={(e) => setTitle(e.target.value)} />
-      <TextArea label="Full description (what it's for, who it's for, how it helps)" value={description} onChange={(e) => setDescription(e.target.value)} />
-      <Field label="Link" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" />
-      <SelectF label="Output" value={kind} onChange={(e) => setKind(e.target.value)} options={[{ value: "file", label: "Document — shows Download" }, { value: "link", label: "Link — shows View" }]} />
+      <TextArea label="Full description (what it's for, who it's for, how it helps) — shown when someone clicks View" value={description} onChange={(e) => setDescription(e.target.value)} rows={4} />
+      <SelectF label="Output" value={kind} onChange={(e) => setKind(e.target.value)} options={[{ value: "link", label: "Link — Download opens the link" }, { value: "file", label: "Uploaded file — Download serves the file" }]} />
+      {kind === "link" ? <Field label="Link" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" /> : <FileField label="File (PDF, slides, image, document)" value={file} onChange={setFile} />}
       <SelectF label="Format" value={type} onChange={(e) => setType(e.target.value)} options={[{ value: "Doc", label: "Doc" }, { value: "Sheet", label: "Sheet" }, { value: "Slides", label: "Slides" }, { value: "Link", label: "Link" }]} />
-      <div className="flex gap-3"><button onClick={() => { if (folder && title && url) onSave({ courseId, folder, title, description, type, url, kind, visibility: category === "free" ? "all" : visibility, isPublic }); }} className="btn-primary rounded-lg px-5 py-2.5 text-[14px]">Save resource</button><button onClick={onClose} className="text-[14px]" style={{ color: "#A79B84" }}>Cancel</button></div>
+      <div className="flex gap-3"><button onClick={() => { if (canSave) onSave({ courseId, folder, title, description, type, url, file, kind, visibility: category === "free" ? "all" : visibility, isPublic }); }} className="btn-primary rounded-lg px-5 py-2.5 text-[14px]">Save resource</button><button onClick={onClose} className="text-[14px]" style={{ color: "#A79B84" }}>Cancel</button></div>
     </div>
   );
 }
@@ -469,16 +493,32 @@ export function AdminChatTab({ students, directThreads, setDirectThreads }) {
 export function AdminCommunityTab({ community, setCommunity, students }) {
   return <CommunityPanel community={community} setCommunity={setCommunity} authorName="Fidelia" allStudents={students} />;
 }
-export function AdminNoticeTab({ notices, setNotices, cohorts }) {
-  const [noticeMsg, setNoticeMsg] = useState(""); const [cohortId, setCohortId] = useState("all");
-  function post() { if (!noticeMsg.trim()) return; setNotices((p) => [...p, { text: noticeMsg, cohortId }]); setNoticeMsg(""); }
+export function AdminNoticeTab({ notices, setNotices, cohorts, students }) {
+  const [noticeMsg, setNoticeMsg] = useState(""); const [cohortId, setCohortId] = useState("all"); const [openSeenId, setOpenSeenId] = useState(null);
+  function post() { if (!noticeMsg.trim()) return; setNotices((p) => [...p, { id: "n" + Date.now(), text: noticeMsg, cohortId, seenBy: [] }]); setNoticeMsg(""); }
   return (
     <>
       <SectionHeader eyebrow="ONE-WAY BROADCAST" title="Notice Board" />
       <div className="card rounded-2xl p-6">
         <div className="flex gap-2 mb-3"><SelectF value={cohortId} onChange={(e) => setCohortId(e.target.value)} options={[{ value: "all", label: "All cohorts" }, ...cohorts.map((c) => ({ value: c.id, label: c.name }))]} /></div>
         <div className="flex gap-2 mb-5"><input className="input-field rounded-lg px-4 py-2.5" placeholder="Post to the whole cohort…" value={noticeMsg} onChange={(e) => setNoticeMsg(e.target.value)} /><button onClick={post} className="btn-primary rounded-lg px-5 text-[14px] shrink-0">Post</button></div>
-        <div className="flex flex-col gap-3">{[...notices].reverse().map((a, i) => <div key={i} className="rounded-xl p-4 text-[15px]" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>{a.text}<div className="f-code text-[9px] mt-1" style={{ color: "#A79B84" }}>{a.cohortId === "all" ? "ALL COHORTS" : cohorts.find((c) => c.id === a.cohortId)?.name.toUpperCase()}</div></div>)}</div>
+        <div className="flex flex-col gap-3">{[...notices].reverse().map((a) => {
+          const seenStudents = (a.seenBy || []).map((sid) => students.find((s) => s.id === sid)).filter(Boolean);
+          return (
+            <div key={a.id} className="rounded-xl p-4 text-[15px]" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
+              {a.text}
+              <div className="flex items-center justify-between mt-2">
+                <div className="f-code text-[9px]" style={{ color: "#A79B84" }}>{a.cohortId === "all" ? "ALL COHORTS" : cohorts.find((c) => c.id === a.cohortId)?.name.toUpperCase()}</div>
+                <button onClick={() => setOpenSeenId(openSeenId === a.id ? null : a.id)} className="f-label text-[10px] accent-text flex items-center gap-1"><Eye size={11} /> {seenStudents.length} seen</button>
+              </div>
+              {openSeenId === a.id && (
+                <div className="mt-3 pt-3 flex flex-wrap gap-2" style={{ borderTop: "1px dashed #E7DEC9" }}>
+                  {seenStudents.length === 0 ? <span className="text-[12px]" style={{ color: "#A79B84" }}>No one yet.</span> : seenStudents.map((s) => <span key={s.id} className="f-code text-[10px] px-2 py-1 rounded-full tint-badge">{s.name}</span>)}
+                </div>
+              )}
+            </div>
+          );
+        })}</div>
       </div>
     </>
   );
@@ -489,6 +529,23 @@ export function BrandingTab({ brand, setBrand }) {
     <>
       <SectionHeader eyebrow="WHITE-LABEL" title="Branding" />
       <div className="card rounded-2xl p-8 max-w-[560px]"><Field label="Platform name" value={brand.name} onChange={(e) => setBrand((b) => ({ ...b, name: e.target.value }))} /><div className="mt-6"><div className="f-label text-[12px] mb-3" style={{ color: "#71675A" }}>ACCENT COLOR</div><div className="flex items-center gap-3 flex-wrap">{swatches.map((s) => <button key={s.v} title={s.n} onClick={() => setBrand((b) => ({ ...b, accent: s.v }))} className="rounded-full flex items-center justify-center" style={{ width: 40, height: 40, background: s.v, border: brand.accent === s.v ? "3px solid #262019" : "3px solid transparent" }}>{brand.accent === s.v && <Check size={16} color="#FAF6EC" />}</button>)}<input type="color" value={brand.accent} onChange={(e) => setBrand((b) => ({ ...b, accent: e.target.value }))} style={{ width: 40, height: 40, border: "none", background: "none", cursor: "pointer" }} /></div></div></div>
+    </>
+  );
+}
+export function AdminProfileTab({ adminProfile, setAdminProfile }) {
+  const [name, setName] = useState(adminProfile.name); const [photo, setPhoto] = useState(adminProfile.photo); const [bio, setBio] = useState(adminProfile.bio || "");
+  const [saved, setSaved] = useState(false);
+  function onPhotoPick(e) { const f = e.target.files?.[0]; if (f) { const r = new FileReader(); r.onload = () => setPhoto(r.result); r.readAsDataURL(f); } }
+  function save() { setAdminProfile((p) => ({ ...p, name, photo, bio })); setSaved(true); setTimeout(() => setSaved(false), 2000); }
+  return (
+    <>
+      <SectionHeader eyebrow="YOUR PROFILE" title="My Profile" />
+      <div className="card rounded-2xl p-8 max-w-[520px]">
+        <div className="flex items-center gap-5 mb-6"><div className="rounded-full overflow-hidden flex items-center justify-center shrink-0" style={{ width: 76, height: 76, background: "color-mix(in srgb, var(--accent) 14%, white)" }}>{photo ? <img src={photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <UserCircle size={34} color="var(--accent)" />}</div><label className="btn-soft rounded-full px-4 py-2 text-[13px] cursor-pointer" style={{ fontWeight: 600 }}>Change photo<input type="file" accept="image/*" onChange={onPhotoPick} style={{ display: "none" }} /></label></div>
+        <Field label="Name" value={name} onChange={(e) => setName(e.target.value)} />
+        <div className="mt-4"><TextArea label="Bio (shown on your landing page)" value={bio} onChange={(e) => setBio(e.target.value)} /></div>
+        <div className="flex items-center gap-3 mt-4"><button onClick={save} className="btn-primary rounded-lg px-6 py-2.5 text-[14px]">Save profile</button>{saved && <span className="text-[13px] accent-text" style={{ fontWeight: 700 }}>Saved.</span>}</div>
+      </div>
     </>
   );
 }
@@ -540,10 +597,10 @@ export function OverviewTab({ courses, students, applicants, tasks, cohorts, set
   );
 }
 
-export function AdminDashboard({ courses, setCourses, students, setStudents, applicants, setApplicants, cohorts, setCohorts, tasks, setTasks, resources, setResources, community, setCommunity, notices, setNotices, directThreads, setDirectThreads, testimonials, setTestimonials, faqs, setFaqs, brand, setBrand, onExit, notifItems, notifSeen, onMarkSeen }) {
+export function AdminDashboard({ courses, setCourses, students, setStudents, applicants, setApplicants, cohorts, setCohorts, tasks, setTasks, resources, setResources, community, setCommunity, notices, setNotices, directThreads, setDirectThreads, testimonials, setTestimonials, faqs, setFaqs, brand, setBrand, adminProfile, setAdminProfile, onExit, notifItems, notifSeen, onMarkSeen }) {
   const [tab, setTab] = useState("overview");
   const navItems = [
-    { id: "overview", icon: Sparkles, label: "Overview" }, { id: "applicants", icon: ClipboardCheck, label: "Applicants" },
+    { id: "overview", icon: Sparkles, label: "Overview" }, { id: "profile", icon: UserCircle, label: "My Profile" }, { id: "applicants", icon: ClipboardCheck, label: "Applicants" },
     { id: "cohorts", icon: Layers, label: "Cohorts" }, { id: "courses", icon: BookOpen, label: "Courses" },
     { id: "students", icon: Users, label: "Students" }, { id: "gradebook", icon: FileText, label: "Gradebook" },
     { id: "tasks", icon: ListChecks, label: "Tasks" }, { id: "library", icon: Library, label: "Library" },
@@ -563,6 +620,7 @@ export function AdminDashboard({ courses, setCourses, students, setStudents, app
       </aside>
       <main className="flex-1 px-10 md:px-16 py-12 max-w-[1040px]">
         {tab === "overview" && <OverviewTab courses={courses} students={students} applicants={applicants} tasks={tasks} cohorts={cohorts} setTab={setTab} />}
+        {tab === "profile" && <AdminProfileTab adminProfile={adminProfile} setAdminProfile={setAdminProfile} />}
         {tab === "applicants" && <ApplicantsTab applicants={applicants} setApplicants={setApplicants} students={students} setStudents={setStudents} courses={courses} cohorts={cohorts} />}
         {tab === "cohorts" && <CohortsTab cohorts={cohorts} setCohorts={setCohorts} courses={courses} students={students} />}
         {tab === "courses" && <CoursesTab courses={courses} setCourses={setCourses} testimonials={testimonials} />}
@@ -575,7 +633,7 @@ export function AdminDashboard({ courses, setCourses, students, setStudents, app
         {tab === "faq" && <FaqTab faqs={faqs} setFaqs={setFaqs} />}
         {tab === "chat" && <AdminChatTab students={students} directThreads={directThreads} setDirectThreads={setDirectThreads} />}
         {tab === "community" && <AdminCommunityTab community={community} setCommunity={setCommunity} students={students} />}
-        {tab === "notice" && <AdminNoticeTab notices={notices} setNotices={setNotices} cohorts={cohorts} />}
+        {tab === "notice" && <AdminNoticeTab notices={notices} setNotices={setNotices} cohorts={cohorts} students={students} />}
         {tab === "branding" && <BrandingTab brand={brand} setBrand={setBrand} />}
       </main>
     </div>

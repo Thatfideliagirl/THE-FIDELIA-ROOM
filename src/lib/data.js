@@ -67,7 +67,7 @@ export const seedCourses = [
 ];
 
 export const seedCohorts = [
-  { id: "diamond", name: "Diamond Cohort", startDate: "2026-01-06", endDate: "2026-06-30", status: "active", courseIds: ["va", "cs"] },
+  { id: "diamond", name: "Diamond Cohort", startDate: "2026-01-06", endDate: "2026-06-30", status: "active", courseIds: ["va", "cs"], unlockedCourseIds: ["va"] },
 ];
 
 export const seedApplicants = [
@@ -78,14 +78,14 @@ export const seedStudents = [
   { id: "s1", studentId: "FJ/2026/001", name: "Amara Chukwu", email: "amara@example.com", cohortId: "diamond", photo: null, seenTour: true, accountStatus: "active",
     enrollments: [{ id: "e1", courseId: "va", code: "FJ-4KD9M", status: "active", completedModuleIds: [1, 2, 3], certificateReady: false, certificateFile: null }] },
   { id: "s2", studentId: "FJ/2026/002", name: "Tobi Fashola", email: "tobi@example.com", cohortId: "diamond", photo: null, seenTour: true, accountStatus: "active",
-    enrollments: [{ id: "e2", courseId: "va", code: "FJ-7RN2Q", status: "active", completedModuleIds: [1], certificateReady: false, certificateFile: null, pendingReview: { moduleId: 2, proof: "My top 3 skills are calendar management, inbox triage, and light bookkeeping. My honest gap is I haven't used a CRM before. Next step: complete a free HubSpot CRM crash course this week.", submittedAt: Date.now() } }] },
+    enrollments: [{ id: "e2", courseId: "va", code: "FJ-7RN2Q", status: "active", completedModuleIds: [1], certificateReady: false, certificateFile: null, pendingReview: { moduleId: 2, proof: "I think I'm decent at organizing things and I've done some admin work before, so I'm feeling good about this course.", submittedAt: Date.now(), autoScore: 13 } }] },
   { id: "s3", studentId: "FJ/2026/003", name: "Ngozi Eze", email: "ngozi@example.com", cohortId: "diamond", photo: null, seenTour: false, accountStatus: "active",
     enrollments: [{ id: "e3", courseId: "va", code: "FJ-9WZ5T", status: "awaiting-code", completedModuleIds: [], certificateReady: false, certificateFile: null }] },
 ];
 
 export const seedResources = [
-  { id: "r1", courseId: "va", folder: "Module 1 resources", title: "VA industry overview", description: "A quick map of common VA niches — what each involves and who it suits.", type: "Doc", url: "https://docs.google.com", kind: "link", visibility: "course", isPublic: false },
-  { id: "r3", courseId: "va", folder: "Free downloads", title: "Weekly Planning Template", description: "Plan your working week in one page, built for VA workloads.", type: "Doc", url: "https://docs.google.com", kind: "file", visibility: "all", isPublic: true },
+  { id: "r1", courseId: "va", folder: "Module 1 resources", title: "VA industry overview", description: "A quick map of common VA niches — what each involves and who it suits.", type: "Doc", url: "https://docs.google.com", file: null, kind: "link", visibility: "course", isPublic: false },
+  { id: "r3", courseId: "va", folder: "Free downloads", title: "Weekly Planning Template", description: "Plan your working week in one page, built for VA workloads.", type: "Doc", url: "https://docs.google.com", file: null, kind: "link", visibility: "all", isPublic: true },
 ];
 
 export const seedTasks = [
@@ -105,6 +105,18 @@ export const seedFaqs = [
   { id: "f5", q: "Will I get a certificate?", a: "Yes, once you complete every module." },
 ];
 
+export const AUTO_APPROVE_THRESHOLD = 60;
+const GRADING_STOPWORDS = new Set(["the", "a", "an", "and", "or", "of", "to", "in", "on", "for", "with", "that", "this", "is", "are", "was", "were", "be", "at", "as", "it", "your", "you", "from", "by", "their", "them", "will", "should", "look", "accept", "only", "not", "least"]);
+// Crude keyword-overlap heuristic scoring a free-text submission against the admin's marking guide.
+// Not real understanding-based grading — used to auto-approve clear matches and route the rest to manual review.
+export function scoreSubmission(text, markingGuide) {
+  const guideWords = [...new Set(((markingGuide || "").toLowerCase().match(/[a-z][a-z'-]{3,}/g)) || [])].filter((w) => !GRADING_STOPWORDS.has(w));
+  if (guideWords.length === 0) return { pct: 0, matched: [], missed: [], total: 0 };
+  const lowerText = (text || "").toLowerCase();
+  const matched = guideWords.filter((w) => lowerText.includes(w));
+  const missed = guideWords.filter((w) => !lowerText.includes(w));
+  return { pct: Math.round((matched.length / guideWords.length) * 100), matched, missed, total: guideWords.length };
+}
 export function genCode() { const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; let out = "FJ-"; for (let i = 0; i < 5; i++) out += chars[Math.floor(Math.random() * chars.length)]; return out; }
 export function nextStudentId(students) { return `FJ/2026/${String(students.length + 1).padStart(3, "0")}`; }
 export function moduleStatus(course, enrollment, moduleId) {

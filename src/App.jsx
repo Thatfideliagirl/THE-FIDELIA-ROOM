@@ -24,9 +24,10 @@ export default function App() {
   const [testimonials, setTestimonials] = useState(seedTestimonials);
   const [faqs, setFaqs] = useState(seedFaqs);
   const [community, setCommunity] = useState([{ id: 1, author: "Amara Chukwu", text: "Anyone else on module 4 yet? The inbox triage section was so useful.", image: null, likes: 2, liked: false, comments: [] }]);
-  const [notices, setNotices] = useState([{ text: "Welcome to Virtual Assistant Foundations, cohort!", cohortId: "all" }]);
+  const [notices, setNotices] = useState([{ id: "n0", text: "Welcome to Virtual Assistant Foundations, cohort!", cohortId: "all", seenBy: [] }]);
   const [directThreads, setDirectThreads] = useState({});
   const [brand, setBrand] = useState({ name: "FJ Room", accent: "#1C6FA0" });
+  const [adminProfile, setAdminProfile] = useState({ name: "Fidelia Joseph", photo: null, bio: "" });
   const [activeStudent, setActiveStudent] = useState(null);
   const [activeApplicant, setActiveApplicant] = useState(null);
   const [adminNotifSeen, setAdminNotifSeen] = useState([]);
@@ -67,10 +68,10 @@ export default function App() {
       {page === "inReview" && liveApplicant && <InReviewScreen applicant={liveApplicant} onExit={() => setPage("landing")} />}
       {page === "studentDash" && liveStudent && pendingEnrollment && <CodeRedeemScreen student={liveStudent} enrollment={pendingEnrollment} onRedeem={() => redeemCode(pendingEnrollment.id)} onExit={() => setPage("landing")} />}
       {page === "studentDash" && liveStudent && !pendingEnrollment && (
-        <MyCourses student={liveStudent} setStudents={setStudents} courses={courses} cohorts={cohorts} tasks={tasks} setTasks={setTasks} resources={resources} community={community} setCommunity={setCommunity} notices={notices.filter((n) => n.cohortId === "all" || n.cohortId === liveStudent.cohortId)} directThreads={directThreads} setDirectThreads={setDirectThreads} allStudents={students} onExit={() => setPage("landing")} onApplyMore={() => { setApplyingAsExisting(liveStudent); setPresetCourseId(null); setPage("signup"); }} notifItems={studentNotifItems} notifSeen={studentNotifSeen} onMarkSeen={setStudentNotifSeen} />
+        <MyCourses student={liveStudent} setStudents={setStudents} courses={courses} cohorts={cohorts} applicants={applicants} tasks={tasks} setTasks={setTasks} resources={resources} community={community} setCommunity={setCommunity} notices={notices.filter((n) => n.cohortId === "all" || n.cohortId === liveStudent.cohortId)} setNotices={setNotices} directThreads={directThreads} setDirectThreads={setDirectThreads} allStudents={students} onExit={() => setPage("landing")} onApplyMore={(courseId) => { setApplyingAsExisting(liveStudent); setPresetCourseId(courseId || null); setPage("signup"); }} notifItems={studentNotifItems} notifSeen={studentNotifSeen} onMarkSeen={setStudentNotifSeen} />
       )}
       {page === "adminDash" && (
-        <AdminDashboard courses={courses} setCourses={setCourses} students={students} setStudents={setStudents} applicants={applicants} setApplicants={setApplicants} cohorts={cohorts} setCohorts={setCohorts} tasks={tasks} setTasks={setTasks} resources={resources} setResources={setResources} community={community} setCommunity={setCommunity} notices={notices} setNotices={setNotices} directThreads={directThreads} setDirectThreads={setDirectThreads} testimonials={testimonials} setTestimonials={setTestimonials} faqs={faqs} setFaqs={setFaqs} brand={brand} setBrand={setBrand} onExit={() => setPage("landing")} notifItems={adminNotifItems} notifSeen={adminNotifSeen} onMarkSeen={setAdminNotifSeen} />
+        <AdminDashboard courses={courses} setCourses={setCourses} students={students} setStudents={setStudents} applicants={applicants} setApplicants={setApplicants} cohorts={cohorts} setCohorts={setCohorts} tasks={tasks} setTasks={setTasks} resources={resources} setResources={setResources} community={community} setCommunity={setCommunity} notices={notices} setNotices={setNotices} directThreads={directThreads} setDirectThreads={setDirectThreads} testimonials={testimonials} setTestimonials={setTestimonials} faqs={faqs} setFaqs={setFaqs} brand={brand} setBrand={setBrand} adminProfile={adminProfile} setAdminProfile={setAdminProfile} onExit={() => setPage("landing")} notifItems={adminNotifItems} notifSeen={adminNotifSeen} onMarkSeen={setAdminNotifSeen} />
       )}
     </div>
   );

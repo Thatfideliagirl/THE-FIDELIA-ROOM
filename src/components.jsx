@@ -45,8 +45,36 @@ export function Spine({ course, enrollment, onOpen, compact }) {
   );
 }
 export function LogoMark({ height = 72 }) { return <img src={LOGO_SRC} alt="FJ Room" style={{ height, width: "auto", display: "block" }} />; }
+// Shows the full image, uncropped, with a soft blurred fill behind it so there's no dead space — a nicer, more balanced frame than a tall letterboxed strip.
+export function CourseImage({ src, ratio = "16/9", radius = 20, icon: Icon = GraduationCap, iconSize = 34 }) {
+  return (
+    <div className="relative overflow-hidden" style={{ aspectRatio: ratio, borderRadius: radius, background: src ? "#EDE4CF" : "linear-gradient(135deg, color-mix(in srgb, var(--accent) 18%, white), #F0E7D6)" }}>
+      {src ? (
+        <>
+          <img src={src} alt="" aria-hidden="true" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: "blur(24px) saturate(1.1) brightness(.85)", transform: "scale(1.2)" }} />
+          <img src={src} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" }} />
+        </>
+      ) : (
+        <div className="w-full h-full flex items-center justify-center"><Icon size={iconSize} color="var(--accent)" strokeWidth={1.3} /></div>
+      )}
+    </div>
+  );
+}
 export function Field({ label, ...props }) { return <label className="block">{label && <div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>{label}</div>}<input className="input-field rounded-lg px-3.5 py-2.5" {...props} /></label>; }
-export function TextArea({ label, ...props }) { return <label className="block">{label && <div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>{label}</div>}<textarea className="input-field rounded-lg px-3.5 py-2.5" rows={3} {...props} /></label>; }
+// Generic file upload (PDF, slides, documents, images) — stored as { name, dataUrl }. In-browser only until Supabase is wired up.
+export function FileField({ label, value, onChange, accept }) {
+  function pick(e) { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = () => onChange({ name: f.name, dataUrl: r.result }); r.readAsDataURL(f); }
+  return (
+    <div>
+      {label && <div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>{label}</div>}
+      <div className="flex items-center gap-3 flex-wrap">
+        {value && <div className="flex items-center gap-2 text-[13px] rounded-lg px-3 py-2" style={{ background: "#F0E7D6" }}><FileText size={14} color="#71675A" /> {value.name}<button onClick={() => onChange(null)}><X size={13} color="#A79B84" /></button></div>}
+        <label className="btn-soft rounded-full px-4 py-2 text-[13px] cursor-pointer" style={{ fontWeight: 600 }}>{value ? "Replace file" : "Upload file"}<input type="file" accept={accept} onChange={pick} style={{ display: "none" }} /></label>
+      </div>
+    </div>
+  );
+}
+export function TextArea({ label, ...props }) { return <label className="block">{label && <div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>{label}</div>}<textarea className="input-field rounded-lg px-3.5 py-2.5 resize-y leading-relaxed" rows={3} {...props} /></label>; }
 export function SelectF({ label, options, ...props }) { return <label className="block">{label && <div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>{label}</div>}<select className="input-field rounded-lg px-3.5 py-2.5" {...props}>{options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>; }
 export function ImgField({ label, value, onChange }) {
   function pick(e) { const f = e.target.files?.[0]; if (f) { const r = new FileReader(); r.onload = () => onChange(r.result); r.readAsDataURL(f); } }
@@ -144,7 +172,7 @@ export function Landing({ courses, resources, testimonials, faqs, onSignIn, onSi
           {liveCourses.map((c, i) => (
             <Reveal key={c.id} delay={i * 90}>
               <button onClick={() => onViewCourseDetail(c.id)} className="card card-pop rounded-2xl overflow-hidden flex flex-col h-full w-full text-left">
-                <div style={{ height: 220, background: c.image ? "#FAF6EC" : "linear-gradient(135deg, color-mix(in srgb, var(--accent) 18%, white), #F0E7D6)" }} className="flex items-center justify-center">{c.image ? <img src={c.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <GraduationCap size={34} color="var(--accent)" strokeWidth={1.4} />}</div>
+                <CourseImage src={c.image} radius={0} />
                 <div className="p-6 flex flex-col flex-1"><div className="f-display text-[20px] mb-2" style={{ fontWeight: 700 }}>{c.title}</div><div className="text-[14px] mb-4 flex-1" style={{ color: "#71675A" }}>{c.tagline}</div><span className="btn-soft rounded-full px-4 py-2 text-[12px] self-start" style={{ fontWeight: 700 }}>Apply →</span></div>
               </button>
             </Reveal>
@@ -228,7 +256,7 @@ export function CoursesIndex({ courses, onBack, onOpen }) {
       <BackBar onBack={onBack} />
       <header className="max-w-[900px] mx-auto px-8 text-center pt-8 pb-14"><div className="f-label text-[13px] mb-4 accent-text">ALL COURSES</div><h1 className="f-display text-[46px] mb-4" style={{ fontWeight: 800 }}>Find your course.</h1><p className="text-[16px]" style={{ color: "#71675A" }}>Every course in FJ Room is built to help you gain real skills, solve real problems, and stand out in the real world.</p></header>
       <div className="max-w-[1200px] mx-auto px-8 flex items-center gap-2 mb-10 flex-wrap">{["all", "Beginner", "Intermediate", "Advanced"].map((l) => <button key={l} onClick={() => setLevelFilter(l)} className="rounded-full px-4 py-2 text-[13px]" style={{ background: levelFilter === l ? "var(--accent)" : "#F0E7D6", color: levelFilter === l ? "#FAF6EC" : "#71675A", fontWeight: 700 }}>{l === "all" ? "All levels" : l}</button>)}</div>
-      <div className="max-w-[1200px] mx-auto px-8 pb-14 grid md:grid-cols-3 gap-6">{liveCourses.map((c, i) => <Reveal key={c.id} delay={i * 90}><button onClick={() => onOpen(c.id)} className="card card-pop rounded-2xl overflow-hidden w-full text-left flex flex-col h-full"><div style={{ height: 190, background: c.image ? "#FAF6EC" : "linear-gradient(135deg, color-mix(in srgb, var(--accent) 20%, white), #F0E7D6)" }} className="flex items-center justify-center">{c.image ? <img src={c.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <GraduationCap size={34} color="var(--accent)" strokeWidth={1.3} />}</div><div className="p-6"><div className="f-display text-[20px] mb-2" style={{ fontWeight: 700 }}>{c.title}</div><div className="text-[14px]" style={{ color: "#71675A" }}>{c.tagline}</div></div></button></Reveal>)}</div>
+      <div className="max-w-[1200px] mx-auto px-8 pb-14 grid md:grid-cols-3 gap-6">{liveCourses.map((c, i) => <Reveal key={c.id} delay={i * 90}><button onClick={() => onOpen(c.id)} className="card card-pop rounded-2xl overflow-hidden w-full text-left flex flex-col h-full"><CourseImage src={c.image} radius={0} /><div className="p-6"><div className="f-display text-[20px] mb-2" style={{ fontWeight: 700 }}>{c.title}</div><div className="text-[14px]" style={{ color: "#71675A" }}>{c.tagline}</div></div></button></Reveal>)}</div>
       <div className="max-w-[1200px] mx-auto px-8 pb-28 text-center text-[13px]" style={{ color: "#A79B84" }}>More courses are on the way.</div>
     </div>
   );
@@ -239,7 +267,7 @@ export function CourseDetail({ course, testimonials, onBack, onApply }) {
     <div className="min-h-screen">
       <BackBar onBack={onBack} />
       <div className="max-w-[1000px] mx-auto px-8 pb-28">
-        <Reveal><div className="rounded-2xl overflow-hidden mb-10" style={{ height: 360, background: course.image ? "#FAF6EC" : "linear-gradient(145deg, color-mix(in srgb, var(--accent) 20%, white), #F0E7D6)" }}>{course.image ? <img src={course.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div className="w-full h-full flex items-center justify-center"><GraduationCap size={60} color="var(--accent)" strokeWidth={1.2} /></div>}</div></Reveal>
+        <Reveal><div className="mb-10"><CourseImage src={course.image} ratio="21/9" iconSize={60} /></div></Reveal>
         <Reveal delay={80}><div className="f-code text-[13px] mb-3 accent-text">{course.level?.toUpperCase()} · {course.durationWeeks} WEEKS · {course.modules.length} MODULES</div><h1 className="f-display text-[42px] mb-3" style={{ fontWeight: 800 }}>{course.title}</h1><p className="f-display text-[20px] mb-6" style={{ fontStyle: "italic", color: "var(--accent)" }}>{course.tagline}</p><p className="text-[16px] leading-relaxed mb-10" style={{ color: "#4A4237", maxWidth: 640 }}>{course.description}</p></Reveal>
         {course.outcomes?.length > 0 && <Reveal delay={140}><div className="card rounded-2xl p-8 mb-8"><div className="f-display text-[20px] mb-5" style={{ fontWeight: 700 }}>What you'll learn</div><div className="grid md:grid-cols-2 gap-3">{course.outcomes.map((o, i) => <div key={i} className="flex items-start gap-2.5 text-[15px]" style={{ color: "#4A4237" }}><CheckCircle2 size={16} color="var(--accent)" className="mt-0.5 shrink-0" /> {o}</div>)}</div></div></Reveal>}
         {related.length > 0 && <Reveal delay={180}><div className="mb-10"><div className="f-label text-[12px] mb-4" style={{ color: "#71675A" }}>WHAT STUDENTS SAY</div><div className="grid md:grid-cols-2 gap-4">{related.map((t) => <div key={t.id} className="card rounded-xl p-5"><div className="text-[14px] mb-2" style={{ fontStyle: "italic", color: "#4A4237" }}>"{t.quote}"</div><div className="text-[13px] accent-text" style={{ fontWeight: 700 }}>{t.name}</div></div>)}</div></div></Reveal>}
@@ -248,10 +276,29 @@ export function CourseDetail({ course, testimonials, onBack, onApply }) {
     </div>
   );
 }
+// Shown when a student clicks "View" on a resource — full details before deciding to download.
+export function ResourceDetail({ resource, onClose }) {
+  return (
+    <div className="fixed inset-0 flex items-center justify-center p-6" style={{ background: "rgba(38,32,25,.5)", zIndex: 999 }} onClick={onClose}>
+      <div className="card modal-in rounded-2xl p-8 max-w-[520px] w-full" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-5"><div className="rounded-full flex items-center justify-center" style={{ width: 44, height: 44, background: "color-mix(in srgb, var(--accent) 14%, white)" }}><FileText size={20} color="var(--accent)" /></div><button onClick={onClose}><X size={18} color="#A79B84" /></button></div>
+        <div className="f-display text-[22px] mb-2" style={{ fontWeight: 800 }}>{resource.title}</div>
+        <div className="f-label text-[11px] mb-5" style={{ color: "#A79B84" }}>{(resource.type || "RESOURCE").toUpperCase()} · {resource.folder}</div>
+        <p className="text-[14px] leading-relaxed mb-7" style={{ color: "#4A4237" }}>{resource.description}</p>
+        {resource.kind === "file" && resource.file ? (
+          <a href={resource.file.dataUrl} download={resource.file.name} className="btn-primary rounded-full px-6 py-3 text-[14px] inline-flex items-center gap-2"><Download size={15} /> Download {resource.file.name}</a>
+        ) : (
+          <a href={resource.url} target="_blank" rel="noreferrer" className="btn-primary rounded-full px-6 py-3 text-[14px] inline-flex items-center gap-2"><Download size={15} /> Go to link</a>
+        )}
+      </div>
+    </div>
+  );
+}
 export function ResourcesPage({ resources, onBack }) {
   const [viewing, setViewing] = useState(null);
   const publicResources = resources.filter((r) => r.isPublic);
   const categories = [...new Set(publicResources.map((r) => r.folder))];
+  const viewingResource = viewing ? resources.find((r) => r.id === viewing) : null;
   return (
     <div className="min-h-screen">
       <BackBar onBack={onBack} />
@@ -261,14 +308,12 @@ export function ResourcesPage({ resources, onBack }) {
           <div className="card card-pop rounded-xl p-5 flex flex-col h-full">
             <FileText size={20} color="var(--accent)" className="mb-3" />
             <div className="text-[15px] mb-1.5" style={{ fontWeight: 700 }}>{r.title}</div>
-            {viewing === r.id ? <div className="text-[13px] mb-4 flex-1" style={{ color: "#4A4237" }}>{r.description}</div> : <div className="text-[13px] mb-4 flex-1" style={{ color: "#71675A" }}>{r.description.slice(0, 60)}{r.description.length > 60 ? "…" : ""}</div>}
-            <div className="flex gap-2">
-              <button onClick={() => setViewing(viewing === r.id ? null : r.id)} className="btn-ghost rounded-full px-3 py-2 text-[11px] flex items-center gap-1" style={{ fontWeight: 700 }}><Eye size={12} /> View</button>
-              <a href={r.url} target="_blank" rel="noreferrer" download={r.kind === "file" ? true : undefined} className="btn-soft rounded-full px-3 py-2 text-[11px] flex items-center gap-1" style={{ fontWeight: 700 }}><Download size={12} /> {r.kind === "file" ? "Download" : "Go to link"}</a>
-            </div>
+            <div className="text-[13px] mb-4 flex-1" style={{ color: "#71675A" }}>{r.description.slice(0, 70)}{r.description.length > 70 ? "…" : ""}</div>
+            <button onClick={() => setViewing(r.id)} className="btn-soft rounded-full px-3 py-2 text-[11px] flex items-center gap-1 self-start" style={{ fontWeight: 700 }}><Eye size={12} /> View details</button>
           </div>
         </Reveal>
       ))}</div></div>)}</div>
+      {viewingResource && <ResourceDetail resource={viewingResource} onClose={() => setViewing(null)} />}
     </div>
   );
 }
@@ -340,18 +385,55 @@ export function CodeRedeemScreen({ student, enrollment, onRedeem, onExit }) {
     </div>
   );
 }
+const TOUR_STEPS = [
+  { target: null, t: "Welcome to the Room.", d: "Quick tour of where everything actually lives — 30 seconds." },
+  { target: "nav-courses", t: "My Courses", d: "Every course you're enrolled in. Click one to resume right where you left off." },
+  { target: "nav-explore", t: "Explore More Courses", d: "Apply for another course here, up to two per cohort." },
+  { target: "nav-profile", t: "Profile", d: "Your photo, bio, and details — edit them any time." },
+  { target: "notif-bell", t: "Notifications", d: "Grading updates, replies, and anything else that needs your attention shows up here." },
+];
+// A real spotlight tour: dims the page and cuts a highlighted hole around the actual sidebar element for each step,
+// with a tooltip anchored next to it — rather than a generic centered "Next, Next, Next" modal.
 export function WelcomeTour({ onDone }) {
   const [step, setStep] = useState(0);
-  const steps = [{ t: "Welcome to the Room.", d: "Here's a 30-second look before you dive in." }, { t: "My Courses", d: "Every course you're enrolled in, all in one place." }, { t: "Tasks & Library", d: "Real assignments to submit, and resources whenever you need them." }, { t: "Chat & Community", d: "Message your tutor directly, or join the open community." }, { t: "You're ready.", d: "Let's get started." }];
+  const [rect, setRect] = useState(null);
+  const s = TOUR_STEPS[step];
+
+  useEffect(() => {
+    function measure() {
+      if (!s.target) { setRect(null); return; }
+      const el = document.querySelector(`[data-tour="${s.target}"]`);
+      if (el) setRect(el.getBoundingClientRect());
+    }
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [step]);
+
+  const pad = 8;
+  const spotStyle = rect ? { position: "fixed", top: rect.top - pad, left: rect.left - pad, width: rect.width + pad * 2, height: rect.height + pad * 2, borderRadius: 14, boxShadow: "0 0 0 9999px rgba(38,32,25,.65)", zIndex: 100, pointerEvents: "none", transition: "all .25s cubic-bezier(.22,1,.36,1)" } : { position: "fixed", inset: 0, background: "rgba(38,32,25,.65)", zIndex: 100 };
+
+  const cardTop = rect ? Math.min(rect.bottom + 16, window.innerHeight - 220) : null;
+  const cardLeft = rect ? Math.min(rect.left, window.innerWidth - 360) : null;
+  const cardStyle = rect
+    ? { position: "fixed", top: cardTop, left: cardLeft, zIndex: 101, maxWidth: 340 }
+    : { position: "fixed", inset: 0, zIndex: 101, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 24px" };
+
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(38,32,25,.55)", zIndex: 100 }} className="flex items-center justify-center px-6">
-      <div className="card modal-in rounded-2xl p-9 text-center" style={{ maxWidth: 420 }}>
-        <div className="f-label text-[12px] mb-4 accent-text">STEP {step + 1} OF {steps.length}</div>
-        <div className="f-display text-[24px] mb-3" style={{ fontWeight: 800 }}>{steps[step].t}</div><div className="text-[14px] mb-8" style={{ color: "#71675A" }}>{steps[step].d}</div>
-        <div className="flex items-center justify-center gap-2 mb-6">{steps.map((_, i) => <div key={i} className="rounded-full" style={{ width: i === step ? 20 : 7, height: 7, background: i === step ? "var(--accent)" : "#E7DEC9", transition: "all .2s" }} />)}</div>
-        <button onClick={() => step < steps.length - 1 ? setStep(step + 1) : onDone()} className="btn-primary rounded-full px-8 py-3 text-[14px]" style={{ fontWeight: 700 }}>{step < steps.length - 1 ? "Next" : "Let's go"}</button>
+    <>
+      <div style={spotStyle} />
+      <div style={cardStyle}>
+        <div className="card modal-in rounded-2xl p-7" style={{ maxWidth: 340 }}>
+          <div className="f-label text-[11px] mb-3 accent-text">STEP {step + 1} OF {TOUR_STEPS.length}</div>
+          <div className="f-display text-[21px] mb-2" style={{ fontWeight: 800 }}>{s.t}</div>
+          <div className="text-[14px] mb-6" style={{ color: "#71675A" }}>{s.d}</div>
+          <div className="flex items-center justify-between">
+            <button onClick={onDone} className="text-[13px]" style={{ color: "#A79B84" }}>Skip tour</button>
+            <button onClick={() => step < TOUR_STEPS.length - 1 ? setStep(step + 1) : onDone()} className="btn-primary rounded-full px-6 py-2.5 text-[14px]" style={{ fontWeight: 700 }}>{step < TOUR_STEPS.length - 1 ? "Next" : "Let's go"}</button>
+          </div>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
