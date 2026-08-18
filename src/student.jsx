@@ -10,12 +10,15 @@ import {
 import { pairKey, moduleStatus, scoreSubmission, AUTO_APPROVE_THRESHOLD } from "./lib/data.js";
 import { SectionHeader, NotifBell, WelcomeTour, SidebarLink, LogoMark, Spine, TextArea, ProgressBar, ResourceDetail } from "./components.jsx";
 
-export function LessonView({ course, enrollment, updateEnrollment, onBack, onNext }) {
+export function LessonView({ course, enrollment, updateEnrollment, onBack, onNext, moduleId }) {
   const [view, setView] = useState("lecture"); // "lecture" | "check" | "meetings"
   const [lectureStep, setLectureStep] = useState("brief"); // "brief" | "content"
   const [answers, setAnswers] = useState({}); const [result, setResult] = useState(null); const [proof, setProof] = useState("");
-  const moduleIndex = Math.min(enrollment.completedModuleIds.length, course.modules.length - 1);
+  const currentIndex = Math.min(enrollment.completedModuleIds.length, course.modules.length - 1);
+  const requestedIndex = moduleId != null ? course.modules.findIndex((m) => m.id === moduleId) : -1;
+  const moduleIndex = requestedIndex >= 0 ? requestedIndex : currentIndex;
   const module = course.modules[moduleIndex];
+  const reviewingPast = moduleIndex !== currentIndex;
   const status = moduleStatus(course, enrollment, module.id);
   const [justPassed, setJustPassed] = useState(false);
   const hasNext = enrollment.completedModuleIds.length < course.modules.length;
@@ -54,7 +57,7 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
       {view === "lecture" && lectureStep === "brief" && (
         <div className="card rounded-2xl p-8">
           <div className="f-label text-[11px] mb-3" style={{ color: "#A79B84" }}>BEFORE YOU START</div>
-          <p className="text-[17px] leading-relaxed mb-6" style={{ color: "#4A4237" }}>{module.brief}</p>
+          <p className="text-[17px] leading-relaxed mb-6 whitespace-pre-wrap" style={{ color: "#4A4237" }}>{module.brief}</p>
           <div className="flex justify-end"><button onClick={() => setLectureStep("content")} className="btn-primary rounded-lg px-6 py-3 text-[14px] flex items-center gap-2">Next <ArrowRight size={15} /></button></div>
         </div>
       )}
@@ -62,7 +65,7 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
       {view === "lecture" && lectureStep === "content" && (
         <div className="card rounded-2xl p-8">
           <div className="f-label text-[11px] mb-3" style={{ color: "#A79B84" }}>{module.testType === "milestone" ? "PROJECT OVERVIEW" : "LECTURE NOTES"}</div>
-          <p className="text-[15px] leading-relaxed mb-5" style={{ color: "#4A4237" }}>{module.notes || "Lecture content coming soon."}</p>
+          <p className="text-[15px] leading-relaxed mb-5 whitespace-pre-wrap" style={{ color: "#4A4237" }}>{module.notes || "Lecture content coming soon."}</p>
           <div className="flex items-center gap-3 mb-2 flex-wrap">
             {module.videoUrl && <a href={module.videoUrl} target="_blank" rel="noreferrer" className="btn-soft rounded-full px-4 py-2 text-[13px] flex items-center gap-1.5" style={{ fontWeight: 700 }}><PlayCircle size={14} /> Watch lecture</a>}
             {module.slideUrl && <a href={module.slideUrl} target="_blank" rel="noreferrer" className="btn-soft rounded-full px-4 py-2 text-[13px] flex items-center gap-1.5" style={{ fontWeight: 700 }}><FileText size={14} /> View slides</a>}
@@ -113,7 +116,7 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
           {status === "current" && !pendingHere && (module.testType === "written" || module.testType === "file-upload" || module.testType === "milestone") && (
             <>
               <div className="f-display text-[19px] mb-3" style={{ fontWeight: 700 }}>{module.testType === "written" ? "Written response" : module.testType === "milestone" ? "Milestone project" : `Upload your work${module.proofType === "document" ? " (document)" : ""}`}</div>
-              {module.questionPrompt && <p className="text-[14px] mb-4" style={{ color: "#4A4237" }}>{module.questionPrompt}</p>}
+              {module.questionPrompt && <p className="text-[14px] mb-4 whitespace-pre-wrap" style={{ color: "#4A4237" }}>{module.questionPrompt}</p>}
               <TextArea label={module.testType === "written" ? "Your answer" : "Link to your file"} value={proof} onChange={(e) => setProof(e.target.value)} />
               <button onClick={submitForReview} className="btn-primary rounded-lg px-6 py-3 text-[14px] mt-4">Submit for review</button>
             </>
@@ -129,11 +132,13 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
 // =========================================================
 export function EnrollmentDashboard({ student, setStudents, course, enrollment, tasks, setTasks, resources, community, setCommunity, notices, setNotices, directThreads, setDirectThreads, allStudents, onBack, notifItems, notifSeen, onMarkSeen }) {
   const [tab, setTab] = useState("path");
-  const [openModuleId, setOpenModuleId] = useState("auto");
+  const [openModuleId, setOpenModuleId] = useState(null);
   const [openTaskId, setOpenTaskId] = useState(null);
   const [activePeer, setActivePeer] = useState("admin");
   const [msg, setMsg] = useState(""); const [communityMsg, setCommunityMsg] = useState("");
   const [viewingResourceId, setViewingResourceId] = useState(null);
+  const [meetingsFilter, setMeetingsFilter] = useState("upcoming"); // "upcoming" | "past"
+  const [expandedMeetingId, setExpandedMeetingId] = useState(null);
   const myTasks = tasks.filter((t) => t.courseId === course.id && t.assigned.includes(student.id));
   const peers = allStudents.filter((s) => s.id !== student.id);
   const key = pairKey(student.id, activePeer);
@@ -152,7 +157,8 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
         <button onClick={onBack} className="flex items-center gap-1.5 text-[13px] mb-6 px-2" style={{ color: "#71675A" }}><ArrowLeft size={14} /> My Courses</button>
         <div className="mb-6 px-2"><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>COURSE</div><div className="f-display text-[16px]" style={{ fontWeight: 700 }}>{course.title}</div></div>
         <div className="flex flex-col gap-1 flex-1">
-          <SidebarLink icon={BookOpen} label="Your path" active={tab === "path"} onClick={() => { setTab("path"); setOpenModuleId("auto"); }} />
+          <SidebarLink icon={BookOpen} label="Your path" active={tab === "path"} onClick={() => { setTab("path"); setOpenModuleId(null); }} />
+          <SidebarLink icon={PlayCircle} label="Virtual Meetings" active={tab === "meetings"} onClick={() => setTab("meetings")} />
           <SidebarLink icon={Library} label="Resource library" active={tab === "library"} onClick={() => setTab("library")} />
           <SidebarLink icon={ListChecks} label="Tasks" active={tab === "tasks"} onClick={() => { setTab("tasks"); setOpenTaskId(null); }} />
           <SidebarLink icon={Award} label="Certificate" active={tab === "certificate"} onClick={() => setTab("certificate")} />
@@ -164,14 +170,60 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
       <main className="flex-1 px-10 md:px-16 py-10 max-w-[880px] relative">
         <div className="flex justify-end mb-4"><NotifBell items={notifItems} seen={notifSeen} onMarkSeen={onMarkSeen} /></div>
 
-        {tab === "path" && openModuleId === "auto" && (
+        {tab === "path" && openModuleId === null && (
           <>
             <div className="mb-10"><div className="f-label text-[12px] mb-2 accent-text">{course.title.toUpperCase()}</div><h1 className="f-display text-[34px] mb-2" style={{ fontWeight: 800 }}>{enrollment.completedModuleIds.length >= course.modules.length ? "All modules complete." : `Module ${enrollment.completedModuleIds.length + 1} of ${course.modules.length}.`}</h1></div>
-            <div className="card rounded-2xl p-8 mb-8 flex items-center justify-between flex-wrap gap-4" style={{ background: "var(--accent)" }}><div><div className="f-label text-[11px] mb-2" style={{ color: "#CDE8F5" }}>{enrollment.completedModuleIds.length >= course.modules.length ? "DONE" : "CONTINUE"}</div><div className="f-display text-[22px]" style={{ color: "#FAF6EC", fontWeight: 800 }}>{course.modules[Math.min(enrollment.completedModuleIds.length, course.modules.length - 1)]?.title}</div></div><button onClick={() => setOpenModuleId("open")} className="rounded-full px-6 py-3 text-[15px] flex items-center gap-2 shrink-0" style={{ background: "#FAF6EC", color: "var(--accent)", fontWeight: 700 }}>{enrollment.completedModuleIds.length >= course.modules.length ? "Review" : "Resume lesson"} <ArrowRight size={16} /></button></div>
-            <div className="card rounded-2xl p-8"><div className="f-label text-[12px] mb-6" style={{ color: "#71675A" }}>YOUR PATH</div><Spine course={course} enrollment={enrollment} onOpen={() => setOpenModuleId("open")} /></div>
+            <div className="card rounded-2xl p-8 mb-8 flex items-center justify-between flex-wrap gap-4" style={{ background: "var(--accent)" }}><div><div className="f-label text-[11px] mb-2" style={{ color: "#CDE8F5" }}>{enrollment.completedModuleIds.length >= course.modules.length ? "DONE" : "CONTINUE"}</div><div className="f-display text-[22px]" style={{ color: "#FAF6EC", fontWeight: 800 }}>{course.modules[Math.min(enrollment.completedModuleIds.length, course.modules.length - 1)]?.title}</div></div><button onClick={() => setOpenModuleId(course.modules[Math.min(enrollment.completedModuleIds.length, course.modules.length - 1)].id)} className="rounded-full px-6 py-3 text-[15px] flex items-center gap-2 shrink-0" style={{ background: "#FAF6EC", color: "var(--accent)", fontWeight: 700 }}>{enrollment.completedModuleIds.length >= course.modules.length ? "Review" : "Resume lesson"} <ArrowRight size={16} /></button></div>
+            <div className="card rounded-2xl p-8"><div className="f-label text-[12px] mb-6" style={{ color: "#71675A" }}>YOUR PATH</div><Spine course={course} enrollment={enrollment} onOpen={(id) => setOpenModuleId(id)} /></div>
           </>
         )}
-        {tab === "path" && openModuleId === "open" && <LessonView course={course} enrollment={enrollment} updateEnrollment={updateEnrollment} onBack={() => setOpenModuleId("auto")} />}
+        {tab === "path" && openModuleId !== null && <LessonView course={course} enrollment={enrollment} updateEnrollment={updateEnrollment} onBack={() => setOpenModuleId(null)} moduleId={openModuleId} />}
+
+        {tab === "meetings" && (() => {
+          const now = Date.now();
+          const grouped = course.modules.map((m, i) => ({
+            module: m,
+            index: i,
+            meetings: (m.meetings || []).filter((mt) => meetingsFilter === "past" ? (mt.date && new Date(mt.date).getTime() < now) : !mt.date || new Date(mt.date).getTime() >= now),
+          })).filter((g) => g.meetings.length > 0);
+          return (
+            <>
+              <SectionHeader eyebrow="ALL CLASSES" title="Virtual Meetings" />
+              <div className="flex items-center gap-2 mb-8">
+                <button onClick={() => setMeetingsFilter("upcoming")} className="f-label text-[11px] px-4 py-2 rounded-full" style={{ background: meetingsFilter === "upcoming" ? "var(--accent)" : "#F0E7D6", color: meetingsFilter === "upcoming" ? "#FAF6EC" : "#71675A" }}>Upcoming</button>
+                <button onClick={() => setMeetingsFilter("past")} className="f-label text-[11px] px-4 py-2 rounded-full" style={{ background: meetingsFilter === "past" ? "var(--accent)" : "#F0E7D6", color: meetingsFilter === "past" ? "#FAF6EC" : "#71675A" }}>Past</button>
+              </div>
+              {grouped.length === 0 && <div className="text-[14px]" style={{ color: "#A79B84" }}>No {meetingsFilter} classes right now.</div>}
+              {grouped.map((g) => (
+                <div key={g.module.id} className="mb-8">
+                  <div className="f-label text-[12px] mb-3" style={{ color: "#71675A" }}>MODULE {String(g.index + 1).padStart(2, "0")} — {g.module.title.toUpperCase()}</div>
+                  <div className="flex flex-col gap-2">{g.meetings.map((mt) => {
+                    const expanded = expandedMeetingId === mt.id;
+                    const hasRecording = mt.recordingLink || mt.recordingFile;
+                    return (
+                      <div key={mt.id} className="card rounded-xl overflow-hidden">
+                        <button onClick={() => setExpandedMeetingId(expanded ? null : mt.id)} className="w-full flex items-center justify-between px-5 py-4 text-left">
+                          <div><div className="text-[14px]" style={{ fontWeight: 700 }}>{mt.label}</div><div className="text-[12px] flex items-center gap-1.5 mt-0.5" style={{ color: "#71675A" }}><Clock size={12} /> {mt.date ? new Date(mt.date).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "Date to be confirmed"}</div></div>
+                          <div className="flex items-center gap-3">
+                            {mt.link && <a href={mt.link} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="btn-primary rounded-full px-4 py-2 text-[13px]">Join class</a>}
+                            {hasRecording && <ChevronDown size={16} color="#A79B84" style={{ transform: expanded ? "rotate(180deg)" : "none" }} />}
+                          </div>
+                        </button>
+                        {expanded && hasRecording && (
+                          <div className="px-5 py-4 flex items-center gap-2" style={{ background: "#FAF6EC", borderTop: "1px solid #E7DEC9" }}>
+                            <span className="f-label text-[10px]" style={{ color: "#A79B84" }}>RECORDING:</span>
+                            {mt.recordingLink && <a href={mt.recordingLink} target="_blank" rel="noreferrer" className="text-[12px] accent-text" style={{ fontWeight: 700 }}>View recording</a>}
+                            {mt.recordingFile && <a href={mt.recordingFile.dataUrl} download={mt.recordingFile.name} className="text-[12px] accent-text flex items-center gap-1" style={{ fontWeight: 700 }}><Download size={11} /> {mt.recordingFile.name}</a>}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}</div>
+                </div>
+              ))}
+            </>
+          );
+        })()}
 
         {tab === "library" && <><SectionHeader eyebrow="ALWAYS OPEN" title="Resource library" />{[...new Set(resources.filter((r) => r.courseId === course.id || r.visibility === "all").map((r) => r.folder))].map((folder) => <div key={folder} className="mb-7"><div className="flex items-center gap-2 mb-3"><Folder size={16} color="var(--accent)" /><span className="f-label text-[12px]" style={{ color: "#71675A" }}>{folder.toUpperCase()}</span></div><div className="grid gap-3">{resources.filter((r) => (r.courseId === course.id || r.visibility === "all") && r.folder === folder).map((r) => <div key={r.id} className="card rounded-xl p-4 flex items-center justify-between"><div className="flex items-center gap-3"><FileText size={18} color="var(--accent)" /><div><div className="text-[15px]" style={{ fontWeight: 700 }}>{r.title}</div><div className="text-[12px]" style={{ color: "#71675A" }}>{r.description.slice(0, 70)}{r.description.length > 70 ? "…" : ""}</div></div></div><button onClick={() => setViewingResourceId(r.id)} className="btn-soft rounded-full px-4 py-2 text-[12px] flex items-center gap-1.5 shrink-0" style={{ fontWeight: 700 }}><Eye size={13} /> View</button></div>)}</div></div>)}
           {viewingResourceId && <ResourceDetail resource={resources.find((r) => r.id === viewingResourceId)} onClose={() => setViewingResourceId(null)} />}

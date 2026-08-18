@@ -95,6 +95,38 @@ export function CohortsTab({ cohorts, setCohorts, courses, students }) {
   );
 }
 
+// Shared meeting add/edit/remove UI, used both inside a module's editor and the cross-course admin Virtual Meetings tab.
+function MeetingsEditor({ meetings, setMeetings }) {
+  function addMeeting() { setMeetings((m) => [...m, { id: "mt" + Date.now(), label: `Class ${m.length + 1}`, date: "", link: "", recordingLink: "", recordingFile: null }]); }
+  function updateMeeting(i, field, value) { setMeetings((m) => m.map((item, idx) => idx !== i ? item : { ...item, [field]: value })); }
+  function removeMeeting(i) { setMeetings((m) => m.filter((_, idx) => idx !== i)); }
+  return (
+    <>
+      <div className="flex items-center justify-between">
+        <div className="f-label text-[11px]" style={{ color: "#71675A" }}>VIRTUAL MEETINGS</div>
+        <button onClick={addMeeting} className="text-[13px] accent-text flex items-center gap-1.5" style={{ fontWeight: 700 }}><Plus size={14} /> Add meeting</button>
+      </div>
+      {meetings.length === 0 && <div className="text-[13px]" style={{ color: "#A79B84" }}>No classes scheduled for this module yet.</div>}
+      {meetings.map((mt, i) => (
+        <div key={mt.id} className="rounded-xl p-4 flex flex-col gap-3" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
+          <div className="grid grid-cols-[1fr_1fr_2fr_auto] gap-3 items-end">
+            <Field label="Label" value={mt.label} onChange={(e) => updateMeeting(i, "label", e.target.value)} placeholder="e.g. Tuesday class" />
+            <Field label="Date & time" type="datetime-local" value={mt.date} onChange={(e) => updateMeeting(i, "date", e.target.value)} />
+            <Field label="Meeting link" value={mt.link} onChange={(e) => updateMeeting(i, "link", e.target.value)} placeholder="https://…" />
+            <button onClick={() => removeMeeting(i)} className="mb-2.5"><Trash2 size={16} color="#B04A3A" /></button>
+          </div>
+          <div className="pt-3" style={{ borderTop: "1px dashed #E7DEC9" }}>
+            <div className="f-label text-[10px] mb-2" style={{ color: "#A79B84" }}>VIRTUAL RECORDING (after class, if there is one)</div>
+            <div className="grid grid-cols-2 gap-3 items-end">
+              <Field label="Recording link" value={mt.recordingLink || ""} onChange={(e) => updateMeeting(i, "recordingLink", e.target.value)} placeholder="https://…" />
+              <FileField label="Or upload a document (minutes, transcript)" value={mt.recordingFile || null} onChange={(v) => updateMeeting(i, "recordingFile", v)} accept=".pdf,.doc,.docx,.txt" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
 export function ModuleEditor({ course, module, setCourses, onBack }) {
   const [title, setTitle] = useState(module.title); const [brief, setBrief] = useState(module.brief || "");
   const [notes, setNotes] = useState(module.notes || ""); const [videoUrl, setVideoUrl] = useState(module.videoUrl || ""); const [slideUrl, setSlideUrl] = useState(module.slideUrl || "");
@@ -108,9 +140,6 @@ export function ModuleEditor({ course, module, setCourses, onBack }) {
   function updateQ(i, field, value) { setQuiz((q) => q.map((item, idx) => idx !== i ? item : { ...item, [field]: value })); }
   function updateOpt(qi, oi, value) { setQuiz((q) => q.map((item, idx) => idx !== qi ? item : { ...item, options: item.options.map((o, oidx) => oidx === oi ? value : o) })); }
   function removeQ(i) { setQuiz((q) => q.filter((_, idx) => idx !== i)); }
-  function addMeeting() { setMeetings((m) => [...m, { id: "mt" + Date.now(), label: `Class ${m.length + 1}`, date: "", link: "", recordingLink: "", recordingFile: null }]); }
-  function updateMeeting(i, field, value) { setMeetings((m) => m.map((item, idx) => idx !== i ? item : { ...item, [field]: value })); }
-  function removeMeeting(i) { setMeetings((m) => m.filter((_, idx) => idx !== i)); }
   function save() { setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, modules: c.modules.map((m) => m.id !== module.id ? m : { ...m, title, brief, notes, videoUrl, slideUrl, slideFile, testType, passPct: Number(passPct), proofType, markingGuide, questionPrompt, quiz, meetings }) })); onBack(); }
   return (
     <div>
@@ -143,28 +172,7 @@ export function ModuleEditor({ course, module, setCourses, onBack }) {
       </div>
 
       <div className="card rounded-2xl p-7 flex flex-col gap-4 mb-6">
-        <div className="flex items-center justify-between">
-          <div className="f-label text-[11px]" style={{ color: "#71675A" }}>VIRTUAL MEETINGS</div>
-          <button onClick={addMeeting} className="text-[13px] accent-text flex items-center gap-1.5" style={{ fontWeight: 700 }}><Plus size={14} /> Add meeting</button>
-        </div>
-        {meetings.length === 0 && <div className="text-[13px]" style={{ color: "#A79B84" }}>No classes scheduled for this module yet.</div>}
-        {meetings.map((mt, i) => (
-          <div key={mt.id} className="rounded-xl p-4 flex flex-col gap-3" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
-            <div className="grid grid-cols-[1fr_1fr_2fr_auto] gap-3 items-end">
-              <Field label="Label" value={mt.label} onChange={(e) => updateMeeting(i, "label", e.target.value)} placeholder="e.g. Tuesday class" />
-              <Field label="Date & time" type="datetime-local" value={mt.date} onChange={(e) => updateMeeting(i, "date", e.target.value)} />
-              <Field label="Meeting link" value={mt.link} onChange={(e) => updateMeeting(i, "link", e.target.value)} placeholder="https://…" />
-              <button onClick={() => removeMeeting(i)} className="mb-2.5"><Trash2 size={16} color="#B04A3A" /></button>
-            </div>
-            <div className="pt-3" style={{ borderTop: "1px dashed #E7DEC9" }}>
-              <div className="f-label text-[10px] mb-2" style={{ color: "#A79B84" }}>VIRTUAL RECORDING (after class, if there is one)</div>
-              <div className="grid grid-cols-2 gap-3 items-end">
-                <Field label="Recording link" value={mt.recordingLink || ""} onChange={(e) => updateMeeting(i, "recordingLink", e.target.value)} placeholder="https://…" />
-                <FileField label="Or upload a document (minutes, transcript)" value={mt.recordingFile || null} onChange={(v) => updateMeeting(i, "recordingFile", v)} accept=".pdf,.doc,.docx,.txt" />
-              </div>
-            </div>
-          </div>
-        ))}
+        <MeetingsEditor meetings={meetings} setMeetings={setMeetings} />
       </div>
 
       <button onClick={save} className="btn-primary rounded-lg px-6 py-3 text-[14px] self-start">Save module</button>
@@ -256,6 +264,28 @@ export function AddCourseForm({ onAdd, onClose }) {
     </div>
   );
 }
+export function AdminMeetingsTab({ courses, setCourses }) {
+  const liveCourses = courses.filter((c) => c.modules.length > 0);
+  const [courseId, setCourseId] = useState(liveCourses[0]?.id);
+  const activeCourse = courses.find((c) => c.id === courseId);
+  const [moduleId, setModuleId] = useState(activeCourse?.modules[0]?.id);
+  const activeModule = activeCourse?.modules.find((m) => m.id === moduleId) || activeCourse?.modules[0];
+  function setMeetingsFor(updater) {
+    setCourses((prev) => prev.map((c) => c.id !== courseId ? c : { ...c, modules: c.modules.map((m) => m.id !== activeModule.id ? m : { ...m, meetings: updater(m.meetings || []) }) }));
+  }
+  return (
+    <>
+      <SectionHeader eyebrow="MANAGE" title="Virtual Meetings" />
+      <div className="card rounded-2xl p-7 flex flex-col gap-4">
+        <div className="grid grid-cols-2 gap-3">
+          <SelectF label="Course" value={courseId} onChange={(e) => { setCourseId(e.target.value); setModuleId(courses.find((c) => c.id === e.target.value)?.modules[0]?.id); }} options={liveCourses.map((c) => ({ value: c.id, label: c.title }))} />
+          <SelectF label="Which module is this?" value={activeModule?.id} onChange={(e) => setModuleId(e.target.value)} options={(activeCourse?.modules || []).map((m, i) => ({ value: m.id, label: `Module ${i + 1} — ${m.title}` }))} />
+        </div>
+        {activeModule && <MeetingsEditor meetings={activeModule.meetings || []} setMeetings={setMeetingsFor} />}
+      </div>
+    </>
+  );
+}
 export function CoursesTab({ courses, setCourses, testimonials }) {
   const [showAdd, setShowAdd] = useState(false); const [openCourseId, setOpenCourseId] = useState(null);
   function addCourse(data) { setCourses((prev) => [...prev, { id: "c" + Date.now(), status: "draft", modules: [], ...data }]); }
@@ -307,8 +337,8 @@ export function StudentDetail({ student, applicant, setStudents, courses, cohort
             return (
               <div key={e.id} className="rounded-xl p-4" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
                 <div className="flex items-center justify-between mb-1"><div className="text-[13px]" style={{ fontWeight: 700 }}>{course?.title} — {module?.title}</div>{typeof e.pendingReview.autoScore === "number" && <span className="f-code text-[10px] px-2 py-0.5 rounded-full" style={{ background: "#F0E7D6", color: "#71675A" }}>AUTO-CHECK: {e.pendingReview.autoScore}% match</span>}</div>
-                {module?.questionPrompt && <div className="text-[12px] mb-2" style={{ color: "#71675A" }}>{module.questionPrompt}</div>}
-                <div className="text-[14px] mb-3 rounded-lg px-3 py-2.5" style={{ background: "#fff", border: "1px solid #E7DEC9" }}>{e.pendingReview.proof}</div>
+                {module?.questionPrompt && <div className="text-[12px] mb-2 whitespace-pre-wrap" style={{ color: "#71675A" }}>{module.questionPrompt}</div>}
+                <div className="text-[14px] mb-3 rounded-lg px-3 py-2.5 whitespace-pre-wrap" style={{ background: "#fff", border: "1px solid #E7DEC9" }}>{e.pendingReview.proof}</div>
                 <div className="flex items-center gap-2"><button onClick={() => decideReview(e.id, true)} className="btn-primary rounded-lg px-4 py-2 text-[12px]">Approve — unlock next module</button><button onClick={() => decideReview(e.id, false)} className="text-[12px]" style={{ color: "#B04A3A" }}>Send back</button></div>
               </div>
             );
@@ -602,6 +632,7 @@ export function AdminDashboard({ courses, setCourses, students, setStudents, app
   const navItems = [
     { id: "overview", icon: Sparkles, label: "Overview" }, { id: "profile", icon: UserCircle, label: "My Profile" }, { id: "applicants", icon: ClipboardCheck, label: "Applicants" },
     { id: "cohorts", icon: Layers, label: "Cohorts" }, { id: "courses", icon: BookOpen, label: "Courses" },
+    { id: "meetings", icon: PlayCircle, label: "Virtual Meetings" },
     { id: "students", icon: Users, label: "Students" }, { id: "gradebook", icon: FileText, label: "Gradebook" },
     { id: "tasks", icon: ListChecks, label: "Tasks" }, { id: "library", icon: Library, label: "Library" },
     { id: "certificates", icon: Award, label: "Certificates" }, { id: "testimonials", icon: Star, label: "Testimonials" },
@@ -624,6 +655,7 @@ export function AdminDashboard({ courses, setCourses, students, setStudents, app
         {tab === "applicants" && <ApplicantsTab applicants={applicants} setApplicants={setApplicants} students={students} setStudents={setStudents} courses={courses} cohorts={cohorts} />}
         {tab === "cohorts" && <CohortsTab cohorts={cohorts} setCohorts={setCohorts} courses={courses} students={students} />}
         {tab === "courses" && <CoursesTab courses={courses} setCourses={setCourses} testimonials={testimonials} />}
+        {tab === "meetings" && <AdminMeetingsTab courses={courses} setCourses={setCourses} />}
         {tab === "students" && <StudentsTab students={students} setStudents={setStudents} applicants={applicants} courses={courses} cohorts={cohorts} />}
         {tab === "gradebook" && <GradebookTab students={students} courses={courses} cohorts={cohorts} />}
         {tab === "tasks" && <TasksTab tasks={tasks} setTasks={setTasks} students={students} courses={courses} />}
