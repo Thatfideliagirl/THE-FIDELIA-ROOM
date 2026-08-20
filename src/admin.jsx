@@ -276,45 +276,91 @@ export function AddCourseForm({ onAdd, onClose }) {
 export function AdminMeetingsTab({ courses, setCourses, cohorts }) {
   const coursesWithModules = courses.filter((c) => c.modules.length > 0);
   const [cohortId, setCohortId] = useState("all");
+  const [courseFilterId, setCourseFilterId] = useState("all");
   const activeCohort = cohortId === "all" ? null : cohorts.find((c) => c.id === cohortId);
-  const liveCourses = activeCohort ? coursesWithModules.filter((c) => activeCohort.courseIds.includes(c.id)) : coursesWithModules;
+  const filterCourses = activeCohort ? coursesWithModules.filter((c) => activeCohort.courseIds.includes(c.id)) : coursesWithModules;
 
-  const [courseId, setCourseId] = useState(liveCourses[0]?.id);
-  const activeCourse = courses.find((c) => c.id === courseId) || liveCourses[0];
-  const [moduleId, setModuleId] = useState(activeCourse?.modules[0]?.id);
-  // Module ids are numbers, but a <select>'s value is always a string, so compare loosely (== not ===).
-  const activeModule = activeCourse?.modules.find((m) => m.id == moduleId) || activeCourse?.modules[0];
-  const [draftMeetings, setDraftMeetings] = useState(activeModule?.meetings || []);
+  // One flat, editable list of every meeting across every course/module — no cohort/course/module
+  // selection required just to see or add one. The filters below only narrow the view.
+  const [draft, setDraft] = useState(() => {
+    const list = [];
+    for (const c of courses) for (const m of c.modules) for (const mt of (m.meetings || [])) list.push({ ...mt, courseId: c.id, moduleId: m.id });
+    return list;
+  });
   const [saved, setSaved] = useState(false);
 
-  useEffect(() => { setDraftMeetings(activeModule?.meetings || []); setSaved(false); }, [activeModule?.id]);
-  useEffect(() => {
-    if (activeCourse && !liveCourses.some((c) => c.id === activeCourse.id)) {
-      setCourseId(liveCourses[0]?.id);
-      setModuleId(liveCourses[0]?.modules[0]?.id);
-    }
-  }, [cohortId]);
-
-  function selectCohort(id) { setCohortId(id); }
-  function selectCourse(id) { setCourseId(id); setModuleId(courses.find((c) => c.id === id)?.modules[0]?.id); }
+  function updateMeeting(id, field, value) { setDraft((d) => d.map((mt) => mt.id !== id ? mt : { ...mt, [field]: value })); }
+  function updateMeetingCourse(id, newCourseId) {
+    const course = courses.find((c) => c.id === newCourseId);
+    setDraft((d) => d.map((mt) => mt.id !== id ? mt : { ...mt, courseId: newCourseId, moduleId: course?.modules[0]?.id }));
+  }
+  function updateMeetingDatePart(id, part, value) {
+    setDraft((d) => d.map((mt) => {
+      if (mt.id !== id) return mt;
+      const [dd, tt] = (mt.date || "").split("T");
+      const next = part === "date" ? [value, tt || ""] : [dd || "", value];
+      return { ...mt, date: next[0] || next[1] ? `${next[0]}T${next[1]}` : "" };
+    }));
+  }
+  function removeMeeting(id) { setDraft((d) => d.filter((mt) => mt.id !== id)); }
+  function addMeeting() {
+    const defaultCourse = (courseFilterId !== "all" ? courses.find((c) => c.id === courseFilterId) : filterCourses[0]) || coursesWithModules[0];
+    if (!defaultCourse) return;
+    setDraft((d) => [...d, { id: "mt" + Date.now(), label: `Class ${d.length + 1}`, date: "", link: "", recordingLink: "", recordingFile: null, courseId: defaultCourse.id, moduleId: defaultCourse.modules[0]?.id }]);
+  }
   function save() {
-    setCourses((prev) => prev.map((c) => c.id !== activeCourse.id ? c : { ...c, modules: c.modules.map((m) => m.id !== activeModule.id ? m : { ...m, meetings: draftMeetings }) }));
+    setCourses((prev) => prev.map((c) => ({
+      ...c,
+      modules: c.modules.map((m) => ({ ...m, meetings: draft.filter((mt) => mt.courseId === c.id && mt.moduleId === m.id).map(({ courseId, moduleId, ...rest }) => rest) })),
+    })));
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
+
+  const visible = draft.filter((mt) => {
+    if (cohortId !== "all" && !filterCourses.some((c) => c.id === mt.courseId)) return false;
+    if (courseFilterId !== "all" && mt.courseId !== courseFilterId) return false;
+    return true;
+  });
+
   return (
     <>
-      <SectionHeader eyebrow="MANAGE" title="Virtual Meetings" />
-      <div className="card rounded-2xl p-7 flex flex-col gap-4">
-        <div className="grid grid-cols-3 gap-3">
-          <SelectF label="Cohort" value={cohortId} onChange={(e) => selectCohort(e.target.value)} options={[{ value: "all", label: "All cohorts" }, ...cohorts.map((c) => ({ value: c.id, label: c.name }))]} />
-          <SelectF label="Course" value={activeCourse?.id} onChange={(e) => selectCourse(e.target.value)} options={liveCourses.map((c) => ({ value: c.id, label: c.title }))} />
-          <SelectF label="Which module is this?" value={activeModule?.id} onChange={(e) => setModuleId(Number(e.target.value))} options={(activeCourse?.modules || []).map((m, i) => ({ value: m.id, label: `Module ${i + 1} — ${m.title}` }))} />
-        </div>
-        {liveCourses.length === 0 && <div className="text-[13px]" style={{ color: "#A79B84" }}>No courses assigned to this cohort yet.</div>}
-        {activeModule && <MeetingsEditor meetings={draftMeetings} setMeetings={setDraftMeetings} />}
-        <div className="flex items-center gap-3"><button onClick={save} disabled={!activeModule} className="btn-primary rounded-lg px-6 py-2.5 text-[14px] self-start">Save changes</button>{saved && <span className="text-[13px] accent-text" style={{ fontWeight: 700 }}>Saved.</span>}</div>
+      <SectionHeader eyebrow="MANAGE" title="Virtual Meetings" action={<button onClick={addMeeting} disabled={coursesWithModules.length === 0} className="btn-primary rounded-full px-5 py-2.5 text-[14px] flex items-center gap-1.5"><Plus size={16} /> Add meeting</button>} />
+      <div className="flex items-center gap-2 mb-5">
+        <span className="f-label text-[11px]" style={{ color: "#A79B84" }}>FILTER</span>
+        <SelectF value={cohortId} onChange={(e) => { setCohortId(e.target.value); setCourseFilterId("all"); }} options={[{ value: "all", label: "All cohorts" }, ...cohorts.map((c) => ({ value: c.id, label: c.name }))]} />
+        <SelectF value={courseFilterId} onChange={(e) => setCourseFilterId(e.target.value)} options={[{ value: "all", label: "All courses" }, ...filterCourses.map((c) => ({ value: c.id, label: c.title }))]} />
       </div>
+      {coursesWithModules.length === 0 && <div className="card rounded-2xl p-8 text-center text-[14px]" style={{ color: "#A79B84" }}>Add a course with at least one module before scheduling meetings.</div>}
+      {coursesWithModules.length > 0 && visible.length === 0 && <div className="card rounded-2xl p-8 text-center text-[14px]" style={{ color: "#A79B84" }}>No virtual meetings match this filter yet — click "Add meeting" to schedule one.</div>}
+      <div className="flex flex-col gap-4">
+        {visible.map((mt) => {
+          const course = courses.find((c) => c.id === mt.courseId);
+          return (
+            <div key={mt.id} className="card rounded-2xl p-5 flex flex-col gap-3">
+              <div className="grid grid-cols-2 gap-3">
+                <SelectF label="Course" value={mt.courseId} onChange={(e) => updateMeetingCourse(mt.id, e.target.value)} options={coursesWithModules.map((c) => ({ value: c.id, label: c.title }))} />
+                <SelectF label="Which module is this?" value={mt.moduleId} onChange={(e) => updateMeeting(mt.id, "moduleId", Number(e.target.value))} options={(course?.modules || []).map((m, i) => ({ value: m.id, label: `Module ${i + 1} — ${m.title}` }))} />
+              </div>
+              <div className="grid grid-cols-[1fr_0.85fr_0.75fr_1.5fr_auto] gap-3 items-end">
+                <Field label="Label" value={mt.label} onChange={(e) => updateMeeting(mt.id, "label", e.target.value)} placeholder="e.g. Tuesday class" />
+                <Field label="Date" type="date" value={mt.date ? mt.date.split("T")[0] : ""} onChange={(e) => updateMeetingDatePart(mt.id, "date", e.target.value)} />
+                <Field label="Time" type="time" value={mt.date && mt.date.includes("T") ? mt.date.split("T")[1] : ""} onChange={(e) => updateMeetingDatePart(mt.id, "time", e.target.value)} />
+                <Field label="Meeting link" value={mt.link} onChange={(e) => updateMeeting(mt.id, "link", e.target.value)} placeholder="https://…" />
+                <button onClick={() => removeMeeting(mt.id)} className="mb-2.5"><Trash2 size={16} color="#B04A3A" /></button>
+              </div>
+              <div className="pt-3" style={{ borderTop: "1px dashed #E7DEC9" }}>
+                <div className="f-label text-[10px] mb-2" style={{ color: "#A79B84" }}>VIRTUAL RECORDING (after class, if there is one)</div>
+                <div className="grid grid-cols-2 gap-3 items-end">
+                  <Field label="Recording link" value={mt.recordingLink || ""} onChange={(e) => updateMeeting(mt.id, "recordingLink", e.target.value)} placeholder="https://…" />
+                  <FileField label="Or upload a document (minutes, transcript)" value={mt.recordingFile || null} onChange={(v) => updateMeeting(mt.id, "recordingFile", v)} accept=".pdf,.doc,.docx,.txt" />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex items-center gap-3 mt-5"><button onClick={save} className="btn-primary rounded-lg px-6 py-2.5 text-[14px]">Save changes</button>{saved && <span className="text-[13px] accent-text" style={{ fontWeight: 700 }}>Saved.</span>}</div>
     </>
   );
 }
