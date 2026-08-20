@@ -552,8 +552,15 @@ export function AdminChatTab({ students, directThreads, setDirectThreads }) {
     </>
   );
 }
-export function AdminCommunityTab({ community, setCommunity, students }) {
-  return <CommunityPanel community={community} setCommunity={setCommunity} authorName="Fidelia" allStudents={students} />;
+export function AdminCommunityTab({ community, setCommunity, students, cohorts }) {
+  const [cohortId, setCohortId] = useState("all");
+  const scopedStudents = cohortId === "all" ? students : students.filter((s) => s.cohortId === cohortId);
+  return (
+    <>
+      <div className="flex items-center gap-2 mb-4"><span className="f-label text-[11px]" style={{ color: "#A79B84" }}>VIEWING</span><SelectF value={cohortId} onChange={(e) => setCohortId(e.target.value)} options={[{ value: "all", label: "All cohorts" }, ...cohorts.map((c) => ({ value: c.id, label: c.name }))]} /></div>
+      <CommunityPanel community={community} setCommunity={setCommunity} authorName="Fidelia" allStudents={scopedStudents} cohortId={cohortId} />
+    </>
+  );
 }
 export function AdminNoticeTab({ notices, setNotices, cohorts, students }) {
   const [noticeMsg, setNoticeMsg] = useState(""); const [cohortId, setCohortId] = useState("all"); const [openSeenId, setOpenSeenId] = useState(null);
@@ -591,6 +598,15 @@ export function BrandingTab({ brand, setBrand }) {
     <>
       <SectionHeader eyebrow="WHITE-LABEL" title="Branding" />
       <div className="card rounded-2xl p-8 max-w-[560px]"><Field label="Platform name" value={brand.name} onChange={(e) => setBrand((b) => ({ ...b, name: e.target.value }))} /><div className="mt-6"><div className="f-label text-[12px] mb-3" style={{ color: "#71675A" }}>ACCENT COLOR</div><div className="flex items-center gap-3 flex-wrap">{swatches.map((s) => <button key={s.v} title={s.n} onClick={() => setBrand((b) => ({ ...b, accent: s.v }))} className="rounded-full flex items-center justify-center" style={{ width: 40, height: 40, background: s.v, border: brand.accent === s.v ? "3px solid #262019" : "3px solid transparent" }}>{brand.accent === s.v && <Check size={16} color="#FAF6EC" />}</button>)}<input type="color" value={brand.accent} onChange={(e) => setBrand((b) => ({ ...b, accent: e.target.value }))} style={{ width: 40, height: 40, border: "none", background: "none", cursor: "pointer" }} /></div></div></div>
+      <div className="card rounded-2xl p-8 max-w-[560px] mt-6">
+        <div className="f-label text-[12px] mb-4" style={{ color: "#71675A" }}>CONTACT LINKS — shown on the public site footer and "Still have questions?" section</div>
+        <div className="flex flex-col gap-4">
+          <Field label="Contact email" value={brand.email} onChange={(e) => setBrand((b) => ({ ...b, email: e.target.value }))} placeholder="you@example.com" />
+          <Field label="WhatsApp number (digits only, country code, no + or spaces)" value={brand.whatsapp} onChange={(e) => setBrand((b) => ({ ...b, whatsapp: e.target.value.replace(/[^0-9]/g, "") }))} placeholder="2348135793935" />
+          <Field label="Instagram handle (no @)" value={brand.instagram} onChange={(e) => setBrand((b) => ({ ...b, instagram: e.target.value.replace(/^@/, "") }))} placeholder="yourhandle" />
+          <Field label="Twitter / X handle (no @)" value={brand.twitter} onChange={(e) => setBrand((b) => ({ ...b, twitter: e.target.value.replace(/^@/, "") }))} placeholder="yourhandle" />
+        </div>
+      </div>
     </>
   );
 }
@@ -696,7 +712,7 @@ export function AdminDashboard({ courses, setCourses, students, setStudents, app
         {tab === "testimonials" && <TestimonialsTab testimonials={testimonials} setTestimonials={setTestimonials} />}
         {tab === "faq" && <FaqTab faqs={faqs} setFaqs={setFaqs} />}
         {tab === "chat" && <AdminChatTab students={students} directThreads={directThreads} setDirectThreads={setDirectThreads} />}
-        {tab === "community" && <AdminCommunityTab community={community} setCommunity={setCommunity} students={students} />}
+        {tab === "community" && <AdminCommunityTab community={community} setCommunity={setCommunity} students={students} cohorts={cohorts} />}
         {tab === "notice" && <AdminNoticeTab notices={notices} setNotices={setNotices} cohorts={cohorts} students={students} />}
         {tab === "branding" && <BrandingTab brand={brand} setBrand={setBrand} />}
       </main>

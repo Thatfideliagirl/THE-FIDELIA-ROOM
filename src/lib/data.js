@@ -1,6 +1,6 @@
 // Seed/mock data and small pure helpers shared across the app.
 
-export const ADMIN_EMAIL = "fidelia@fjroom.com";
+export const ADMIN_EMAIL = "fjroomm@gmail.com";
 
 export const FONT_STYLE = `
   @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;0,9..144,800;0,9..144,900;1,9..144,400;1,9..144,500&family=Work+Sans:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap');

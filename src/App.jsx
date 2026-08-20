@@ -23,10 +23,10 @@ export default function App() {
   const [resources, setResources] = useState(seedResources.map((r) => ({ ...r, visibility: r.visibility || "course" })));
   const [testimonials, setTestimonials] = useState(seedTestimonials);
   const [faqs, setFaqs] = useState(seedFaqs);
-  const [community, setCommunity] = useState([{ id: 1, author: "Amara Chukwu", text: "Anyone else on module 4 yet? The inbox triage section was so useful.", image: null, likes: 2, liked: false, comments: [] }]);
+  const [community, setCommunity] = useState([{ id: 1, author: "Amara Chukwu", text: "Anyone else on module 4 yet? The inbox triage section was so useful.", image: null, likes: 2, liked: false, comments: [], cohortId: "diamond" }]);
   const [notices, setNotices] = useState([{ id: "n0", text: "Welcome to Virtual Assistant Foundations, cohort!", cohortId: "all", seenBy: [] }]);
   const [directThreads, setDirectThreads] = useState({});
-  const [brand, setBrand] = useState({ name: "FJ Room", accent: "#1C6FA0" });
+  const [brand, setBrand] = useState({ name: "FJ Room", accent: "#1C6FA0", email: "FJRoomm@gmail.com", whatsapp: "2348135793935", instagram: "VA_WEY_DEY_PAMPER", twitter: "VA_WeyDeyPamper" });
   const [adminProfile, setAdminProfile] = useState({ name: "Fidelia Joseph", photo: null, bio: "" });
   const [activeStudent, setActiveStudent] = useState(null);
   const [activeApplicant, setActiveApplicant] = useState(null);
@@ -59,7 +59,7 @@ export default function App() {
 
   return (
     <div className="lms-root" style={{ "--accent": brand.accent }}>
-      {page === "landing" && <Landing courses={courses} resources={resources} testimonials={testimonials} faqs={faqs} onSignIn={() => setPage("login")} onSignUp={(courseId) => { setPresetCourseId(typeof courseId === "string" ? courseId : null); setApplyingAsExisting(null); setPage("signup"); }} onViewCourses={() => setPage("courses")} onViewResources={() => setPage("resources")} onViewCourseDetail={(id) => { setViewCourseId(id); setPage("courseDetail"); }} />}
+      {page === "landing" && <Landing courses={courses} resources={resources} testimonials={testimonials} faqs={faqs} brand={brand} onSignIn={() => setPage("login")} onSignUp={(courseId) => { setPresetCourseId(typeof courseId === "string" ? courseId : null); setApplyingAsExisting(null); setPage("signup"); }} onViewCourses={() => setPage("courses")} onViewResources={() => setPage("resources")} onViewCourseDetail={(id) => { setViewCourseId(id); setPage("courseDetail"); }} />}
       {page === "courses" && <CoursesIndex courses={courses} onBack={() => setPage("landing")} onOpen={(id) => { setViewCourseId(id); setPage("courseDetail"); }} />}
       {page === "courseDetail" && viewCourse && <CourseDetail course={viewCourse} testimonials={testimonials} onBack={() => setPage("courses")} onApply={(id) => { setPresetCourseId(id); setApplyingAsExisting(null); setPage("signup"); }} />}
       {page === "resources" && <ResourcesPage resources={resources} onBack={() => setPage("landing")} />}

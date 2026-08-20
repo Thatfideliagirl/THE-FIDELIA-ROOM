@@ -126,7 +126,7 @@ export function NotifBell({ items, seen, onMarkSeen }) {
 }
 
 // ---------------- Guide button ----------------
-export function GuideButton({ onViewCourses, onSignUp, onViewResources }) {
+export function GuideButton({ onViewCourses, onSignUp, onViewResources, brand }) {
   const [open, setOpen] = useState(false);
   const links = [
     { t: "Want to apply to a course?", d: "Jump straight to the application.", action: () => { onSignUp(); setOpen(false); } },
@@ -135,7 +135,7 @@ export function GuideButton({ onViewCourses, onSignUp, onViewResources }) {
   ];
   return (
     <div style={{ position: "fixed", bottom: 26, right: 26, zIndex: 50 }}>
-      {open && <div className="card modal-in rounded-2xl p-5 mb-4" style={{ width: 300, boxShadow: "0 24px 50px -20px rgba(38,32,25,.3)" }}><div className="f-display text-[18px] mb-1" style={{ fontWeight: 700 }}>Where do you want to go?</div><div className="text-[13px] mb-4" style={{ color: "#71675A" }}>A quick guide to the Room.</div><div className="flex flex-col gap-2 mb-4">{links.map((l, i) => <button key={i} onClick={l.action} className="text-left rounded-xl p-3.5" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}><div className="text-[14px]" style={{ fontWeight: 700 }}>{l.t}</div><div className="text-[12px] mt-0.5" style={{ color: "#71675A" }}>{l.d}</div></button>)}</div><div className="pt-4" style={{ borderTop: "1px solid #E7DEC9" }}><div className="text-[12px] mb-2" style={{ color: "#71675A" }}>Still stuck? Reach us directly.</div><div className="flex gap-2"><a href="#" className="btn-primary rounded-lg py-2 flex-1 text-[12px] text-center flex items-center justify-center gap-1.5"><Phone size={12} /> WhatsApp</a><a href="#" className="btn-soft rounded-lg py-2 flex-1 text-[12px] text-center flex items-center justify-center gap-1.5"><Mail size={12} /> Email</a></div></div></div>}
+      {open && <div className="card modal-in rounded-2xl p-5 mb-4" style={{ width: 300, boxShadow: "0 24px 50px -20px rgba(38,32,25,.3)" }}><div className="f-display text-[18px] mb-1" style={{ fontWeight: 700 }}>Where do you want to go?</div><div className="text-[13px] mb-4" style={{ color: "#71675A" }}>A quick guide to the Room.</div><div className="flex flex-col gap-2 mb-4">{links.map((l, i) => <button key={i} onClick={l.action} className="text-left rounded-xl p-3.5" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}><div className="text-[14px]" style={{ fontWeight: 700 }}>{l.t}</div><div className="text-[12px] mt-0.5" style={{ color: "#71675A" }}>{l.d}</div></button>)}</div><div className="pt-4" style={{ borderTop: "1px solid #E7DEC9" }}><div className="text-[12px] mb-2" style={{ color: "#71675A" }}>Still stuck? Reach us directly.</div><div className="flex gap-2"><a href={`https://wa.me/${brand.whatsapp}`} target="_blank" rel="noreferrer" className="btn-primary rounded-lg py-2 flex-1 text-[12px] text-center flex items-center justify-center gap-1.5"><Phone size={12} /> WhatsApp</a><a href={`mailto:${brand.email}`} className="btn-soft rounded-lg py-2 flex-1 text-[12px] text-center flex items-center justify-center gap-1.5"><Mail size={12} /> Email</a></div></div></div>}
       <button onClick={() => setOpen((o) => !o)} className="btn-primary help-pulse rounded-full flex items-center justify-center" style={{ width: 60, height: 60, marginLeft: "auto" }}>{open ? <X size={22} /> : <Layers size={26} />}</button>
     </div>
   );
@@ -144,7 +144,7 @@ export function GuideButton({ onViewCourses, onSignUp, onViewResources }) {
 // =========================================================
 // LANDING
 // =========================================================
-export function Landing({ courses, resources, testimonials, faqs, onSignIn, onSignUp, onViewCourses, onViewResources, onViewCourseDetail }) {
+export function Landing({ courses, resources, testimonials, faqs, brand, onSignIn, onSignUp, onViewCourses, onViewResources, onViewCourseDetail }) {
   const publicResources = resources.filter((r) => r.isPublic);
   const liveCourses = courses.filter((c) => c.status === "live").slice(0, 2);
   const [faqOpen, setFaqOpen] = useState(null);
@@ -219,7 +219,7 @@ export function Landing({ courses, resources, testimonials, faqs, onSignIn, onSi
       <section id="faq" className="max-w-[1000px] mx-auto px-8 md:px-16 py-28">
         <Reveal><div className="f-label text-[13px] mb-4 accent-text">FAQ</div><h2 className="f-display text-[38px] mb-12" style={{ fontWeight: 800 }}>Frequently asked questions.</h2></Reveal>
         <div className="flex flex-col gap-3 mb-10">{faqs.map((f, i) => <Reveal key={f.id} delay={i * 50}><div className="card rounded-xl overflow-hidden"><button onClick={() => setFaqOpen(faqOpen === i ? null : i)} className="w-full flex items-center justify-between px-6 py-5 text-left"><span className="text-[16px]" style={{ fontWeight: 700 }}>{f.q}</span><ChevronDown size={18} color="#A79B84" style={{ transform: faqOpen === i ? "rotate(180deg)" : "none", transition: "transform .2s", flexShrink: 0 }} /></button>{faqOpen === i && <div className="px-6 pb-5 text-[14px]" style={{ color: "#71675A" }}>{f.a}</div>}</div></Reveal>)}</div>
-        <Reveal><div className="rounded-2xl p-10 text-center" style={{ background: "color-mix(in srgb, var(--accent) 10%, white)" }}><div className="f-display text-[22px] mb-2" style={{ fontWeight: 800 }}>Still have questions?</div><a href="https://wa.me/2340000000000" target="_blank" rel="noreferrer" className="btn-primary rounded-full px-7 py-3.5 text-[15px] inline-block mt-4" style={{ fontWeight: 700 }}>Message us on WhatsApp</a></div></Reveal>
+        <Reveal><div className="rounded-2xl p-10 text-center" style={{ background: "color-mix(in srgb, var(--accent) 10%, white)" }}><div className="f-display text-[22px] mb-2" style={{ fontWeight: 800 }}>Still have questions?</div><a href={`https://wa.me/${brand.whatsapp}`} target="_blank" rel="noreferrer" className="btn-primary rounded-full px-7 py-3.5 text-[15px] inline-block mt-4" style={{ fontWeight: 700 }}>Message us on WhatsApp</a></div></Reveal>
       </section>
 
       <footer className="px-8 md:px-16 py-16" style={{ background: "#262019" }}>
@@ -229,12 +229,12 @@ export function Landing({ courses, resources, testimonials, faqs, onSignIn, onSi
           <div className="grid md:grid-cols-3 gap-10 pt-10" style={{ borderTop: "1px solid rgba(250,246,236,.14)" }}>
             <LogoMark height={50} />
             <div className="flex flex-col gap-3 text-[15px]" style={{ color: "#F3EEE1", fontWeight: 700 }}><button onClick={onViewCourses} style={{ color: "#F3EEE1", textAlign: "left" }}>Courses</button><a href="#how" style={{ color: "#F3EEE1" }}>How It Works</a><a href="#about" style={{ color: "#F3EEE1" }}>About</a><button onClick={onViewResources} style={{ color: "#F3EEE1", textAlign: "left" }}>Resources</button><a href="#faq" style={{ color: "#F3EEE1" }}>FAQ</a></div>
-            <div className="flex flex-col gap-3"><a href="mailto:hello@fjroom.example" className="flex items-center gap-3 text-[15px]" style={{ color: "#F3EEE1" }}><span className="rounded-full flex items-center justify-center" style={{ width: 36, height: 36, background: "rgba(250,246,236,.1)" }}><Mail size={16} /></span> hello@fjroom.example</a><a href="https://wa.me/2340000000000" className="flex items-center gap-3 text-[15px]" style={{ color: "#F3EEE1" }}><span className="rounded-full flex items-center justify-center" style={{ width: 36, height: 36, background: "rgba(250,246,236,.1)" }}><Phone size={16} /></span> WhatsApp us</a><div className="flex items-center gap-3 mt-1"><a href="#" className="rounded-full flex items-center justify-center" style={{ width: 36, height: 36, background: "rgba(250,246,236,.1)", color: "#F3EEE1" }}><Instagram size={16} /></a><a href="#" className="rounded-full flex items-center justify-center" style={{ width: 36, height: 36, background: "rgba(250,246,236,.1)", color: "#F3EEE1" }}><Twitter size={16} /></a></div></div>
+            <div className="flex flex-col gap-3"><a href={`mailto:${brand.email}`} className="flex items-center gap-3 text-[15px]" style={{ color: "#F3EEE1" }}><span className="rounded-full flex items-center justify-center" style={{ width: 36, height: 36, background: "rgba(250,246,236,.1)" }}><Mail size={16} /></span> {brand.email}</a><a href={`https://wa.me/${brand.whatsapp}`} target="_blank" rel="noreferrer" className="flex items-center gap-3 text-[15px]" style={{ color: "#F3EEE1" }}><span className="rounded-full flex items-center justify-center" style={{ width: 36, height: 36, background: "rgba(250,246,236,.1)" }}><Phone size={16} /></span> WhatsApp us</a><div className="flex items-center gap-3 mt-1"><a href={`https://instagram.com/${brand.instagram}`} target="_blank" rel="noreferrer" className="rounded-full flex items-center justify-center" style={{ width: 36, height: 36, background: "rgba(250,246,236,.1)", color: "#F3EEE1" }}><Instagram size={16} /></a><a href={`https://twitter.com/${brand.twitter}`} target="_blank" rel="noreferrer" className="rounded-full flex items-center justify-center" style={{ width: 36, height: 36, background: "rgba(250,246,236,.1)", color: "#F3EEE1" }}><Twitter size={16} /></a></div></div>
           </div>
           <div className="f-code text-[11px] mt-12" style={{ color: "#615748" }}>© 2026 FJ ROOM. ALL RIGHTS RESERVED.</div>
         </div>
       </footer>
-      <GuideButton onViewCourses={onViewCourses} onSignUp={onSignUp} onViewResources={onViewResources} />
+      <GuideButton onViewCourses={onViewCourses} onSignUp={onSignUp} onViewResources={onViewResources} brand={brand} />
     </div>
   );
 }
@@ -360,12 +360,16 @@ export function SignInScreen({ students, applicants, onBack, onEnterStudent, onE
         <div className="card rounded-2xl p-7 flex flex-col gap-4" style={{ boxShadow: "0 20px 50px -24px rgba(38,32,25,0.16)" }}>
           <Field label="Email address" value={email} onChange={(e) => setEmail(e.target.value)} /><Field label="Password" type="password" value={pw} onChange={(e) => setPw(e.target.value)} />
           <button onClick={submit} className="btn-primary rounded-lg py-3 text-[15px] mt-1">Sign in</button>
-          <div className="f-label text-[11px] mt-2" style={{ color: "#A79B84" }}>QUICK DEMO ACCESS</div>
-          <div className="flex flex-col gap-2">
-            <button onClick={onEnterAdmin} className="text-left rounded-lg px-4 py-2.5 text-[14px]" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9", fontWeight: 600 }}>Fidelia <span className="f-code text-[10px]" style={{ color: "#A79B84" }}>· admin</span></button>
-            {students.map((s) => <button key={s.id} onClick={() => onEnterStudent(s)} className="text-left rounded-lg px-4 py-2.5 text-[14px]" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9", fontWeight: 600 }}>{s.name}</button>)}
-            {applicants.filter((a) => a.status === "pending").map((a) => <button key={a.id} onClick={() => onEnterApplicant(a)} className="text-left rounded-lg px-4 py-2.5 text-[14px]" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9", fontWeight: 600 }}>{a.name} <span className="f-code text-[10px]" style={{ color: "#A79B84" }}>· pending</span></button>)}
-          </div>
+          {import.meta.env.DEV && (
+            <>
+              <div className="f-label text-[11px] mt-2" style={{ color: "#A79B84" }}>QUICK DEMO ACCESS (dev only)</div>
+              <div className="flex flex-col gap-2">
+                <button onClick={onEnterAdmin} className="text-left rounded-lg px-4 py-2.5 text-[14px]" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9", fontWeight: 600 }}>Fidelia <span className="f-code text-[10px]" style={{ color: "#A79B84" }}>· admin</span></button>
+                {students.map((s) => <button key={s.id} onClick={() => onEnterStudent(s)} className="text-left rounded-lg px-4 py-2.5 text-[14px]" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9", fontWeight: 600 }}>{s.name}</button>)}
+                {applicants.filter((a) => a.status === "pending").map((a) => <button key={a.id} onClick={() => onEnterApplicant(a)} className="text-left rounded-lg px-4 py-2.5 text-[14px]" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9", fontWeight: 600 }}>{a.name} <span className="f-code text-[10px]" style={{ color: "#A79B84" }}>· pending</span></button>)}
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
