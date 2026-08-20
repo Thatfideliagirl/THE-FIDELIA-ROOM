@@ -383,7 +383,6 @@ export function CodeRedeemScreen({ student, enrollment, onRedeem, onExit }) {
       <div className="reveal in max-w-[400px] w-full">
         <LogoMark height={64} /><div className="f-label text-[13px] mt-6 mb-3 accent-text">YOU'RE ACCEPTED</div><h1 className="f-display text-[30px] mb-4" style={{ fontWeight: 800 }}>Enter your access code.</h1>
         <div className="card rounded-2xl p-6 text-left"><div className="f-code text-[11px] mb-4" style={{ color: "#A79B84" }}>STUDENT ID: {student.studentId}</div><Field label="Access code" placeholder="FJ-XXXXX" value={code} onChange={(e) => setCode(e.target.value)} />{error && <div className="text-[12px] mt-2" style={{ color: "#B04A3A" }}>{error}</div>}<button onClick={() => code.trim().toLowerCase() === enrollment.code.toLowerCase() ? onRedeem() : setError("That code doesn't match.")} className="btn-primary rounded-lg py-3 text-[15px] w-full mt-4">Unlock my course</button></div>
-        <div className="f-code text-[11px] mt-5" style={{ color: "#A79B84" }}>DEMO CODE: {enrollment.code}</div>
         <button onClick={onExit} className="f-label text-[12px] mt-4 block mx-auto" style={{ color: "#A79B84" }}>SIGN OUT</button>
       </div>
     </div>
