@@ -264,20 +264,32 @@ export function AddCourseForm({ onAdd, onClose }) {
     </div>
   );
 }
-export function AdminMeetingsTab({ courses, setCourses }) {
-  const liveCourses = courses.filter((c) => c.modules.length > 0);
+export function AdminMeetingsTab({ courses, setCourses, cohorts }) {
+  const coursesWithModules = courses.filter((c) => c.modules.length > 0);
+  const [cohortId, setCohortId] = useState("all");
+  const activeCohort = cohortId === "all" ? null : cohorts.find((c) => c.id === cohortId);
+  const liveCourses = activeCohort ? coursesWithModules.filter((c) => activeCohort.courseIds.includes(c.id)) : coursesWithModules;
+
   const [courseId, setCourseId] = useState(liveCourses[0]?.id);
-  const activeCourse = courses.find((c) => c.id === courseId);
+  const activeCourse = courses.find((c) => c.id === courseId) || liveCourses[0];
   const [moduleId, setModuleId] = useState(activeCourse?.modules[0]?.id);
-  const activeModule = activeCourse?.modules.find((m) => m.id === moduleId) || activeCourse?.modules[0];
+  // Module ids are numbers, but a <select>'s value is always a string, so compare loosely (== not ===).
+  const activeModule = activeCourse?.modules.find((m) => m.id == moduleId) || activeCourse?.modules[0];
   const [draftMeetings, setDraftMeetings] = useState(activeModule?.meetings || []);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => { setDraftMeetings(activeModule?.meetings || []); setSaved(false); }, [activeModule?.id]);
+  useEffect(() => {
+    if (activeCourse && !liveCourses.some((c) => c.id === activeCourse.id)) {
+      setCourseId(liveCourses[0]?.id);
+      setModuleId(liveCourses[0]?.modules[0]?.id);
+    }
+  }, [cohortId]);
 
+  function selectCohort(id) { setCohortId(id); }
   function selectCourse(id) { setCourseId(id); setModuleId(courses.find((c) => c.id === id)?.modules[0]?.id); }
   function save() {
-    setCourses((prev) => prev.map((c) => c.id !== courseId ? c : { ...c, modules: c.modules.map((m) => m.id !== activeModule.id ? m : { ...m, meetings: draftMeetings }) }));
+    setCourses((prev) => prev.map((c) => c.id !== activeCourse.id ? c : { ...c, modules: c.modules.map((m) => m.id !== activeModule.id ? m : { ...m, meetings: draftMeetings }) }));
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
@@ -285,12 +297,14 @@ export function AdminMeetingsTab({ courses, setCourses }) {
     <>
       <SectionHeader eyebrow="MANAGE" title="Virtual Meetings" />
       <div className="card rounded-2xl p-7 flex flex-col gap-4">
-        <div className="grid grid-cols-2 gap-3">
-          <SelectF label="Course" value={courseId} onChange={(e) => selectCourse(e.target.value)} options={liveCourses.map((c) => ({ value: c.id, label: c.title }))} />
-          <SelectF label="Which module is this?" value={activeModule?.id} onChange={(e) => setModuleId(e.target.value)} options={(activeCourse?.modules || []).map((m, i) => ({ value: m.id, label: `Module ${i + 1} — ${m.title}` }))} />
+        <div className="grid grid-cols-3 gap-3">
+          <SelectF label="Cohort" value={cohortId} onChange={(e) => selectCohort(e.target.value)} options={[{ value: "all", label: "All cohorts" }, ...cohorts.map((c) => ({ value: c.id, label: c.name }))]} />
+          <SelectF label="Course" value={activeCourse?.id} onChange={(e) => selectCourse(e.target.value)} options={liveCourses.map((c) => ({ value: c.id, label: c.title }))} />
+          <SelectF label="Which module is this?" value={activeModule?.id} onChange={(e) => setModuleId(Number(e.target.value))} options={(activeCourse?.modules || []).map((m, i) => ({ value: m.id, label: `Module ${i + 1} — ${m.title}` }))} />
         </div>
+        {liveCourses.length === 0 && <div className="text-[13px]" style={{ color: "#A79B84" }}>No courses assigned to this cohort yet.</div>}
         {activeModule && <MeetingsEditor meetings={draftMeetings} setMeetings={setDraftMeetings} />}
-        <div className="flex items-center gap-3"><button onClick={save} className="btn-primary rounded-lg px-6 py-2.5 text-[14px] self-start">Save changes</button>{saved && <span className="text-[13px] accent-text" style={{ fontWeight: 700 }}>Saved.</span>}</div>
+        <div className="flex items-center gap-3"><button onClick={save} disabled={!activeModule} className="btn-primary rounded-lg px-6 py-2.5 text-[14px] self-start">Save changes</button>{saved && <span className="text-[13px] accent-text" style={{ fontWeight: 700 }}>Saved.</span>}</div>
       </div>
     </>
   );
@@ -664,7 +678,7 @@ export function AdminDashboard({ courses, setCourses, students, setStudents, app
         {tab === "applicants" && <ApplicantsTab applicants={applicants} setApplicants={setApplicants} students={students} setStudents={setStudents} courses={courses} cohorts={cohorts} />}
         {tab === "cohorts" && <CohortsTab cohorts={cohorts} setCohorts={setCohorts} courses={courses} students={students} />}
         {tab === "courses" && <CoursesTab courses={courses} setCourses={setCourses} testimonials={testimonials} />}
-        {tab === "meetings" && <AdminMeetingsTab courses={courses} setCourses={setCourses} />}
+        {tab === "meetings" && <AdminMeetingsTab courses={courses} setCourses={setCourses} cohorts={cohorts} />}
         {tab === "students" && <StudentsTab students={students} setStudents={setStudents} applicants={applicants} courses={courses} cohorts={cohorts} />}
         {tab === "gradebook" && <GradebookTab students={students} courses={courses} cohorts={cohorts} />}
         {tab === "tasks" && <TasksTab tasks={tasks} setTasks={setTasks} students={students} courses={courses} />}
