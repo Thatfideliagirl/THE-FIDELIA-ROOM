@@ -16,6 +16,11 @@ alter table applicants add column if not exists auth_user_id uuid references aut
 alter table students add column if not exists enrollments jsonb not null default '[]';
 
 -- ---- APPLICANTS ----
+-- (drop-then-create so this file is safe to re-run if it partially ran before)
+drop policy if exists "applicants_insert_own" on applicants;
+drop policy if exists "applicants_select" on applicants;
+drop policy if exists "applicants_update_admin" on applicants;
+
 -- Anyone signed in can create an application for their own email.
 create policy "applicants_insert_own" on applicants for insert to authenticated
   with check (email = auth.jwt() ->> 'email');
@@ -29,6 +34,10 @@ create policy "applicants_update_admin" on applicants for update to authenticate
   using (auth.jwt() ->> 'email' = 'fjroomm@gmail.com');
 
 -- ---- STUDENTS ----
+drop policy if exists "students_select" on students;
+drop policy if exists "students_insert_admin" on students;
+drop policy if exists "students_update" on students;
+
 -- You can see your own student record; the admin account can see everyone's.
 create policy "students_select" on students for select to authenticated
   using (auth_user_id = auth.uid() or auth.jwt() ->> 'email' = 'fjroomm@gmail.com');
