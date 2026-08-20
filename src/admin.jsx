@@ -270,18 +270,27 @@ export function AdminMeetingsTab({ courses, setCourses }) {
   const activeCourse = courses.find((c) => c.id === courseId);
   const [moduleId, setModuleId] = useState(activeCourse?.modules[0]?.id);
   const activeModule = activeCourse?.modules.find((m) => m.id === moduleId) || activeCourse?.modules[0];
-  function setMeetingsFor(updater) {
-    setCourses((prev) => prev.map((c) => c.id !== courseId ? c : { ...c, modules: c.modules.map((m) => m.id !== activeModule.id ? m : { ...m, meetings: updater(m.meetings || []) }) }));
+  const [draftMeetings, setDraftMeetings] = useState(activeModule?.meetings || []);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => { setDraftMeetings(activeModule?.meetings || []); setSaved(false); }, [activeModule?.id]);
+
+  function selectCourse(id) { setCourseId(id); setModuleId(courses.find((c) => c.id === id)?.modules[0]?.id); }
+  function save() {
+    setCourses((prev) => prev.map((c) => c.id !== courseId ? c : { ...c, modules: c.modules.map((m) => m.id !== activeModule.id ? m : { ...m, meetings: draftMeetings }) }));
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
   }
   return (
     <>
       <SectionHeader eyebrow="MANAGE" title="Virtual Meetings" />
       <div className="card rounded-2xl p-7 flex flex-col gap-4">
         <div className="grid grid-cols-2 gap-3">
-          <SelectF label="Course" value={courseId} onChange={(e) => { setCourseId(e.target.value); setModuleId(courses.find((c) => c.id === e.target.value)?.modules[0]?.id); }} options={liveCourses.map((c) => ({ value: c.id, label: c.title }))} />
+          <SelectF label="Course" value={courseId} onChange={(e) => selectCourse(e.target.value)} options={liveCourses.map((c) => ({ value: c.id, label: c.title }))} />
           <SelectF label="Which module is this?" value={activeModule?.id} onChange={(e) => setModuleId(e.target.value)} options={(activeCourse?.modules || []).map((m, i) => ({ value: m.id, label: `Module ${i + 1} — ${m.title}` }))} />
         </div>
-        {activeModule && <MeetingsEditor meetings={activeModule.meetings || []} setMeetings={setMeetingsFor} />}
+        {activeModule && <MeetingsEditor meetings={draftMeetings} setMeetings={setDraftMeetings} />}
+        <div className="flex items-center gap-3"><button onClick={save} className="btn-primary rounded-lg px-6 py-2.5 text-[14px] self-start">Save changes</button>{saved && <span className="text-[13px] accent-text" style={{ fontWeight: 700 }}>Saved.</span>}</div>
       </div>
     </>
   );
