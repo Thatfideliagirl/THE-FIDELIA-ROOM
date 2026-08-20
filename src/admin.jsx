@@ -287,7 +287,7 @@ export function AdminMeetingsTab({ courses, setCourses, cohorts }) {
     for (const c of courses) for (const m of c.modules) for (const mt of (m.meetings || [])) list.push({ ...mt, courseId: c.id, moduleId: m.id });
     return list;
   });
-  const [saved, setSaved] = useState(false);
+  const [savedIds, setSavedIds] = useState(() => new Set());
 
   function updateMeeting(id, field, value) { setDraft((d) => d.map((mt) => mt.id !== id ? mt : { ...mt, [field]: value })); }
   function updateMeetingCourse(id, newCourseId) {
@@ -302,19 +302,32 @@ export function AdminMeetingsTab({ courses, setCourses, cohorts }) {
       return { ...mt, date: next[0] || next[1] ? `${next[0]}T${next[1]}` : "" };
     }));
   }
-  function removeMeeting(id) { setDraft((d) => d.filter((mt) => mt.id !== id)); }
   function addMeeting() {
     const defaultCourse = (courseFilterId !== "all" ? courses.find((c) => c.id === courseFilterId) : filterCourses[0]) || coursesWithModules[0];
     if (!defaultCourse) return;
     setDraft((d) => [...d, { id: "mt" + Date.now(), label: `Class ${d.length + 1}`, date: "", link: "", recordingLink: "", recordingFile: null, courseId: defaultCourse.id, moduleId: defaultCourse.modules[0]?.id }]);
   }
-  function save() {
+  // Delete is immediate — it drops the meeting from wherever it currently lives, no separate save needed.
+  function removeMeeting(id) {
+    setDraft((d) => d.filter((mt) => mt.id !== id));
+    setCourses((prev) => prev.map((c) => ({ ...c, modules: c.modules.map((m) => (m.meetings || []).some((x) => x.id === id) ? { ...m, meetings: m.meetings.filter((x) => x.id !== id) } : m) })));
+  }
+  // Saving one row removes it from wherever it's currently stored and (re)inserts it at its
+  // chosen course/module — this is what lets a row's own module picker move it on save.
+  function saveMeeting(id) {
+    const mt = draft.find((x) => x.id === id);
+    if (!mt) return;
+    const { courseId, moduleId, ...meetingFields } = mt;
     setCourses((prev) => prev.map((c) => ({
       ...c,
-      modules: c.modules.map((m) => ({ ...m, meetings: draft.filter((mt) => mt.courseId === c.id && mt.moduleId === m.id).map(({ courseId, moduleId, ...rest }) => rest) })),
+      modules: c.modules.map((m) => {
+        const withoutThis = (m.meetings || []).filter((x) => x.id !== id);
+        if (c.id === courseId && m.id === moduleId) return { ...m, meetings: [...withoutThis, meetingFields] };
+        return withoutThis.length === (m.meetings || []).length ? m : { ...m, meetings: withoutThis };
+      }),
     })));
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setSavedIds((s) => new Set(s).add(id));
+    setTimeout(() => setSavedIds((s) => { const n = new Set(s); n.delete(id); return n; }), 2000);
   }
 
   const visible = draft.filter((mt) => {
@@ -356,11 +369,11 @@ export function AdminMeetingsTab({ courses, setCourses, cohorts }) {
                   <FileField label="Or upload a document (minutes, transcript)" value={mt.recordingFile || null} onChange={(v) => updateMeeting(mt.id, "recordingFile", v)} accept=".pdf,.doc,.docx,.txt" />
                 </div>
               </div>
+              <div className="flex items-center gap-3 pt-1"><button onClick={() => saveMeeting(mt.id)} className="btn-primary rounded-lg px-5 py-2 text-[13px] self-start">Save</button>{savedIds.has(mt.id) && <span className="text-[13px] accent-text" style={{ fontWeight: 700 }}>Saved.</span>}</div>
             </div>
           );
         })}
       </div>
-      <div className="flex items-center gap-3 mt-5"><button onClick={save} className="btn-primary rounded-lg px-6 py-2.5 text-[14px]">Save changes</button>{saved && <span className="text-[13px] accent-text" style={{ fontWeight: 700 }}>Saved.</span>}</div>
     </>
   );
 }
