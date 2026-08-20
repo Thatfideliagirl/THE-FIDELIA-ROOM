@@ -99,6 +99,14 @@ export function CohortsTab({ cohorts, setCohorts, courses, students }) {
 function MeetingsEditor({ meetings, setMeetings }) {
   function addMeeting() { setMeetings((m) => [...m, { id: "mt" + Date.now(), label: `Class ${m.length + 1}`, date: "", link: "", recordingLink: "", recordingFile: null }]); }
   function updateMeeting(i, field, value) { setMeetings((m) => m.map((item, idx) => idx !== i ? item : { ...item, [field]: value })); }
+  function updateMeetingDatePart(i, part, value) {
+    setMeetings((m) => m.map((item, idx) => {
+      if (idx !== i) return item;
+      const [d, t] = (item.date || "").split("T");
+      const next = part === "date" ? [value, t || ""] : [d || "", value];
+      return { ...item, date: next[0] || next[1] ? `${next[0]}T${next[1]}` : "" };
+    }));
+  }
   function removeMeeting(i) { setMeetings((m) => m.filter((_, idx) => idx !== i)); }
   return (
     <>
@@ -109,9 +117,10 @@ function MeetingsEditor({ meetings, setMeetings }) {
       {meetings.length === 0 && <div className="text-[13px]" style={{ color: "#A79B84" }}>No classes scheduled for this module yet.</div>}
       {meetings.map((mt, i) => (
         <div key={mt.id} className="rounded-xl p-4 flex flex-col gap-3" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
-          <div className="grid grid-cols-[1fr_1fr_2fr_auto] gap-3 items-end">
+          <div className="grid grid-cols-[1fr_0.85fr_0.75fr_1.5fr_auto] gap-3 items-end">
             <Field label="Label" value={mt.label} onChange={(e) => updateMeeting(i, "label", e.target.value)} placeholder="e.g. Tuesday class" />
-            <Field label="Date & time" type="datetime-local" value={mt.date} onChange={(e) => updateMeeting(i, "date", e.target.value)} />
+            <Field label="Date" type="date" value={mt.date ? mt.date.split("T")[0] : ""} onChange={(e) => updateMeetingDatePart(i, "date", e.target.value)} />
+            <Field label="Time" type="time" value={mt.date && mt.date.includes("T") ? mt.date.split("T")[1] : ""} onChange={(e) => updateMeetingDatePart(i, "time", e.target.value)} />
             <Field label="Meeting link" value={mt.link} onChange={(e) => updateMeeting(i, "link", e.target.value)} placeholder="https://…" />
             <button onClick={() => removeMeeting(i)} className="mb-2.5"><Trash2 size={16} color="#B04A3A" /></button>
           </div>
