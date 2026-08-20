@@ -9,7 +9,7 @@ import {
   Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign
 } from "lucide-react";
 import { LOGO_SRC, HERO_SRC, CREATOR_SRC, HOWITWORKS_SRC } from "./assets/brandImages.js";
-import { ADMIN_EMAIL, moduleStatus } from "./lib/data.js";
+import { moduleStatus } from "./lib/data.js";
 
 // lucide-react dropped trademarked brand marks — small inline stand-ins so the footer keeps working.
 export function Instagram({ size = 16, color = "currentColor" }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="1" fill={color} stroke="none" /></svg>; }
@@ -323,7 +323,8 @@ export function ResourcesPage({ resources, onBack }) {
 // =========================================================
 export function ApplicationForm({ courses, cohorts, presetCourseId, existingUser, onSubmit, onCancel }) {
   const [step, setStep] = useState(existingUser ? 1 : 0);
-  const [name, setName] = useState(existingUser?.name || ""); const [email, setEmail] = useState(existingUser?.email || ""); const [phone, setPhone] = useState("");
+  const [name, setName] = useState(existingUser?.name || ""); const [email, setEmail] = useState(existingUser?.email || ""); const [phone, setPhone] = useState(""); const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false); const [submitError, setSubmitError] = useState("");
   const [courseId, setCourseId] = useState(presetCourseId || courses.find((c) => c.status === "live")?.id);
   const course = courses.find((c) => c.id === courseId);
   const questions = course?.applicationQuestions || [];
@@ -339,27 +340,44 @@ export function ApplicationForm({ courses, cohorts, presetCourseId, existingUser
         <button onClick={onCancel} className="flex items-center gap-1.5 text-[13px] mb-6" style={{ color: "#71675A" }}><ArrowLeft size={14} /> Back</button>
         <div className="flex items-center gap-2 mb-8">{steps.map((s, i) => <div key={i} className="flex-1"><div className="h-1 rounded-full mb-2" style={{ background: (i + stepOffset) <= step ? "var(--accent)" : "#E7DEC9" }} /><div className="f-label text-[10px]" style={{ color: (i + stepOffset) <= step ? "var(--accent)" : "#A79B84" }}>{s.toUpperCase()}</div></div>)}</div>
         <div className="card rounded-2xl p-8" style={{ boxShadow: "0 20px 50px -24px rgba(38,32,25,0.16)" }}>
-          {step === 0 && <div className="flex flex-col gap-4"><h2 className="f-display text-[26px] mb-1" style={{ fontWeight: 800 }}>Let's start with you.</h2><Field label="Full name" value={name} onChange={(e) => setName(e.target.value)} /><Field label="Email address" value={email} onChange={(e) => setEmail(e.target.value)} /><Field label="Phone / WhatsApp" value={phone} onChange={(e) => setPhone(e.target.value)} /><Field label="Password" type="password" /><button disabled={!name || !email} onClick={() => setStep(1)} className="btn-primary rounded-lg py-3 text-[15px] mt-2">Continue</button></div>}
+          {step === 0 && <div className="flex flex-col gap-4"><h2 className="f-display text-[26px] mb-1" style={{ fontWeight: 800 }}>Let's start with you.</h2><Field label="Full name" value={name} onChange={(e) => setName(e.target.value)} /><Field label="Email address" value={email} onChange={(e) => setEmail(e.target.value)} /><Field label="Phone / WhatsApp" value={phone} onChange={(e) => setPhone(e.target.value)} /><Field label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 6 characters" /><button disabled={!name || !email || password.length < 6} onClick={() => setStep(1)} className="btn-primary rounded-lg py-3 text-[15px] mt-2">Continue</button></div>}
           {step === 1 && <div className="flex flex-col gap-4"><h2 className="f-display text-[26px] mb-1" style={{ fontWeight: 800 }}>Which course?</h2><div className="flex flex-col gap-3">{liveCourses.map((c) => <button key={c.id} onClick={() => setCourseId(c.id)} className="text-left rounded-xl p-4" style={{ border: courseId === c.id ? "2px solid var(--accent)" : "1px solid #E7DEC9", background: courseId === c.id ? "color-mix(in srgb, var(--accent) 10%, white)" : "#fff" }}><div className="text-[16px]" style={{ fontWeight: 700 }}>{c.title}</div><div className="text-[13px] mt-1" style={{ color: "#71675A" }}>{c.tagline}</div></button>)}{liveCourses.length === 0 && <div className="text-[14px]" style={{ color: "#A79B84" }}>You're already enrolled in everything available right now.</div>}</div><div className="flex gap-3 mt-2">{!existingUser && <button onClick={() => setStep(0)} className="text-[13px]" style={{ color: "#A79B84" }}>Back</button>}<button disabled={!courseId || liveCourses.length === 0} onClick={() => setStep(2)} className="btn-primary rounded-lg py-3 text-[15px] flex-1">Continue</button></div></div>}
           {step === 2 && <div className="flex flex-col gap-4"><h2 className="f-display text-[26px] mb-1" style={{ fontWeight: 800 }}>A few questions.</h2>{questions.map((q, i) => <TextArea key={i} label={q} value={answers[i]} onChange={(e) => setAnswers((a) => a.map((x, idx) => idx === i ? e.target.value : x))} />)}<div className="flex gap-3 mt-1"><button onClick={() => setStep(1)} className="text-[13px]" style={{ color: "#A79B84" }}>Back</button><button onClick={() => setStep(3)} className="btn-primary rounded-lg py-3 text-[15px] flex-1">Review application</button></div></div>}
-          {step === 3 && <div className="flex flex-col gap-4"><h2 className="f-display text-[26px] mb-1" style={{ fontWeight: 800 }}>Ready to submit?</h2><div className="rounded-xl p-4 text-[13px] flex flex-col gap-1.5" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}><div><strong>{name}</strong> · {email}</div><div style={{ color: "#71675A" }}>Applying to: {course?.title}</div></div><div className="text-[13px]" style={{ color: "#71675A" }}>Your application is reviewed by the Room. Keep an eye on your email for your code.</div><div className="flex gap-3 mt-1"><button onClick={() => setStep(2)} className="text-[13px]" style={{ color: "#A79B84" }}>Back</button><button onClick={() => onSubmit({ name, email, phone, courseId, answers })} className="btn-primary rounded-lg py-3 text-[15px] flex-1">Submit application</button></div></div>}
+          {step === 3 && <div className="flex flex-col gap-4"><h2 className="f-display text-[26px] mb-1" style={{ fontWeight: 800 }}>Ready to submit?</h2><div className="rounded-xl p-4 text-[13px] flex flex-col gap-1.5" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}><div><strong>{name}</strong> · {email}</div><div style={{ color: "#71675A" }}>Applying to: {course?.title}</div></div><div className="text-[13px]" style={{ color: "#71675A" }}>Your application is reviewed by the Room. Keep an eye on your email for your code.</div>{submitError && <div className="text-[13px]" style={{ color: "#B04A3A" }}>{submitError}</div>}<div className="flex gap-3 mt-1"><button onClick={() => setStep(2)} className="text-[13px]" style={{ color: "#A79B84" }}>Back</button><button disabled={submitting} onClick={async () => { setSubmitting(true); setSubmitError(""); const err = await onSubmit({ name, email, phone, courseId, answers, password }); setSubmitting(false); if (err) setSubmitError(err); }} className="btn-primary rounded-lg py-3 text-[15px] flex-1">{submitting ? "Submitting…" : "Submit application"}</button></div></div>}
         </div>
       </div>
     </div>
   );
 }
 
-export function SignInScreen({ students, applicants, onBack, onEnterStudent, onEnterApplicant, onEnterAdmin }) {
+export function SignInScreen({ students, applicants, onBack, onEnterStudent, onEnterApplicant, onEnterAdmin, onSignIn, onForgotPassword }) {
   const [email, setEmail] = useState(""); const [pw, setPw] = useState("");
-  function submit() { if (email.trim().toLowerCase() === ADMIN_EMAIL) { onEnterAdmin(); return; } const s = students.find((x) => x.email.toLowerCase() === email.trim().toLowerCase()); if (s) { onEnterStudent(s); return; } const a = applicants.find((x) => x.email.toLowerCase() === email.trim().toLowerCase()); if (a) onEnterApplicant(a); }
+  const [submitting, setSubmitting] = useState(false); const [error, setError] = useState("");
+  const [forgotSent, setForgotSent] = useState(false);
+  async function submit() {
+    if (!email.trim() || !pw) return;
+    setSubmitting(true); setError("");
+    const result = await onSignIn(email.trim(), pw);
+    setSubmitting(false);
+    if (result === "not-found") setError("We don't recognize that email or Student ID.");
+    else if (result === "wrong-password") setError("That password doesn't match.");
+    else if (result) setError("Something went wrong — please try again.");
+  }
+  async function forgotPassword() {
+    if (!email.trim() || !email.includes("@")) { setError("Enter your email above first, then tap \"Forgot password?\" again."); return; }
+    setError(""); await onForgotPassword(email.trim()); setForgotSent(true);
+  }
   return (
     <div className="min-h-screen flex items-center justify-center px-6">
       <div className="reveal in w-full max-w-[420px]">
         <button onClick={onBack} className="flex items-center gap-1.5 text-[13px] mb-8" style={{ color: "#71675A" }}><ArrowLeft size={14} /> Back</button>
         <div className="flex flex-col items-center text-center mb-8"><LogoMark height={80} /><div className="f-label text-[13px] mt-5 mb-1 accent-text">WELCOME BACK</div><h2 className="f-display text-[26px]" style={{ fontWeight: 800 }}>Sign in</h2></div>
         <div className="card rounded-2xl p-7 flex flex-col gap-4" style={{ boxShadow: "0 20px 50px -24px rgba(38,32,25,0.16)" }}>
-          <Field label="Email address" value={email} onChange={(e) => setEmail(e.target.value)} /><Field label="Password" type="password" value={pw} onChange={(e) => setPw(e.target.value)} />
-          <button onClick={submit} className="btn-primary rounded-lg py-3 text-[15px] mt-1">Sign in</button>
+          <Field label="Email address or Student ID" value={email} onChange={(e) => setEmail(e.target.value)} /><Field label="Password" type="password" value={pw} onChange={(e) => setPw(e.target.value)} />
+          {error && <div className="text-[13px]" style={{ color: "#B04A3A" }}>{error}</div>}
+          {forgotSent && <div className="text-[13px] accent-text">Check your email for a reset link.</div>}
+          <button disabled={submitting} onClick={submit} className="btn-primary rounded-lg py-3 text-[15px] mt-1">{submitting ? "Signing in…" : "Sign in"}</button>
+          <button onClick={forgotPassword} className="text-[12px] mx-auto" style={{ color: "#A79B84" }}>Forgot password?</button>
           {import.meta.env.DEV && (
             <>
               <div className="f-label text-[11px] mt-2" style={{ color: "#A79B84" }}>QUICK DEMO ACCESS (dev only)</div>
