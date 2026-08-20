@@ -23,7 +23,7 @@ export default function App() {
   const [resources, setResources] = useState(seedResources.map((r) => ({ ...r, visibility: r.visibility || "course" })));
   const [testimonials, setTestimonials] = useState(seedTestimonials);
   const [faqs, setFaqs] = useState(seedFaqs);
-  const [community, setCommunity] = useState([{ id: 1, author: "Amara Chukwu", text: "Anyone else on module 4 yet? The inbox triage section was so useful.", image: null, likes: 2, liked: false, comments: [], cohortId: "diamond" }]);
+  const [community, setCommunity] = useState([]);
   const [notices, setNotices] = useState([{ id: "n0", text: "Welcome to Virtual Assistant Foundations, cohort!", cohortId: "all", seenBy: [] }]);
   const [directThreads, setDirectThreads] = useState({});
   const [brand, setBrand] = useState({ name: "FJ Room", accent: "#1C6FA0", email: "FJRoomm@gmail.com", whatsapp: "2348135793935", instagram: "VA_WEY_DEY_PAMPER", twitter: "VA_WeyDeyPamper" });

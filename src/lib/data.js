@@ -70,18 +70,9 @@ export const seedCohorts = [
   { id: "diamond", name: "Diamond Cohort", startDate: "2026-01-06", endDate: "2026-06-30", status: "active", courseIds: ["va", "cs"], unlockedCourseIds: ["va"] },
 ];
 
-export const seedApplicants = [
-  { id: "ap1", name: "Chidi Okafor", email: "chidi@example.com", phone: "0803 555 1122", courseId: "va", cohortId: "diamond", studentRef: null, answers: ["No, this would be my first time.", "Yes, I have a laptop and steady internet.", "I've used Google Docs a little.", "I want a flexible way to earn from home.", "Saw a post from a friend on Instagram."], status: "pending" },
-];
+export const seedApplicants = [];
 
-export const seedStudents = [
-  { id: "s1", studentId: "FJ/2026/001", name: "Amara Chukwu", email: "amara@example.com", cohortId: "diamond", photo: null, seenTour: true, accountStatus: "active",
-    enrollments: [{ id: "e1", courseId: "va", code: "FJ-4KD9M", status: "active", completedModuleIds: [1, 2, 3], certificateReady: false, certificateFile: null }] },
-  { id: "s2", studentId: "FJ/2026/002", name: "Tobi Fashola", email: "tobi@example.com", cohortId: "diamond", photo: null, seenTour: true, accountStatus: "active",
-    enrollments: [{ id: "e2", courseId: "va", code: "FJ-7RN2Q", status: "active", completedModuleIds: [1], certificateReady: false, certificateFile: null, pendingReview: { moduleId: 2, proof: "I think I'm decent at organizing things and I've done some admin work before, so I'm feeling good about this course.", submittedAt: Date.now(), autoScore: 13 } }] },
-  { id: "s3", studentId: "FJ/2026/003", name: "Ngozi Eze", email: "ngozi@example.com", cohortId: "diamond", photo: null, seenTour: false, accountStatus: "active",
-    enrollments: [{ id: "e3", courseId: "va", code: "FJ-9WZ5T", status: "awaiting-code", completedModuleIds: [], certificateReady: false, certificateFile: null }] },
-];
+export const seedStudents = [];
 
 export const seedResources = [
   { id: "r1", courseId: "va", folder: "Module 1 resources", title: "VA industry overview", description: "A quick map of common VA niches — what each involves and who it suits.", type: "Doc", url: "https://docs.google.com", file: null, kind: "link", visibility: "course", isPublic: false },
@@ -89,8 +80,8 @@ export const seedResources = [
 ];
 
 export const seedTasks = [
-  { id: "t1", courseId: "va", title: "Reach out to 3 potential clients", description: "Send a short, genuine intro message to 3 people in your network.", tools: "LinkedIn or WhatsApp, your intro template from Module 6", proofType: "link", dueInDays: 7, assigned: ["s1"], submissions: {} },
-  { id: "t2", courseId: "va", title: "Set up your calendar tool", description: "Have a working Calendly (or similar) link ready.", tools: "Calendly, Google Calendar", proofType: "link", dueInDays: 3, assigned: ["s1", "s2"], submissions: { s1: { status: "approved", note: "Calendly link shared", score: 100 } } },
+  { id: "t1", courseId: "va", title: "Reach out to 3 potential clients", description: "Send a short, genuine intro message to 3 people in your network.", tools: "LinkedIn or WhatsApp, your intro template from Module 6", proofType: "link", dueInDays: 7, assigned: [], submissions: {} },
+  { id: "t2", courseId: "va", title: "Set up your calendar tool", description: "Have a working Calendly (or similar) link ready.", tools: "Calendly, Google Calendar", proofType: "link", dueInDays: 3, assigned: [], submissions: {} },
 ];
 
 export const seedTestimonials = [
