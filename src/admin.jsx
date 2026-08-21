@@ -193,8 +193,9 @@ export function CourseManager({ course, testimonials, setCourses, onBack }) {
   const [addingModule, setAddingModule] = useState(false); const [newModTitle, setNewModTitle] = useState("");
   const [title, setTitle] = useState(course.title); const [tagline, setTagline] = useState(course.tagline || ""); const [audience, setAudience] = useState(course.audience); const [description, setDescription] = useState(course.description); const [durationWeeks, setDurationWeeks] = useState(course.durationWeeks); const [level, setLevel] = useState(course.level); const [image, setImage] = useState(course.image);
   const [questions, setQuestions] = useState(course.applicationQuestions || []); const [newQ, setNewQ] = useState("");
+  const [outcomes, setOutcomes] = useState(course.outcomes || []); const [newOutcome, setNewOutcome] = useState("");
   const [testimonialIds, setTestimonialIds] = useState(course.testimonialIds || []);
-  function saveDetails() { setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, title, tagline, audience, description, durationWeeks: Number(durationWeeks), level, image, testimonialIds })); setEditingDetails(false); }
+  function saveDetails() { setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, title, tagline, audience, description, durationWeeks: Number(durationWeeks), level, image, testimonialIds, outcomes })); setEditingDetails(false); }
   function saveQuestions() { setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, applicationQuestions: questions })); setEditingQuestions(false); }
   function addModule() { if (!newModTitle) return; setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, modules: [...c.modules, { id: Date.now(), title: newModTitle, brief: "", notes: "", videoUrl: "", slideUrl: "", testType: "checklist" }] })); setNewModTitle(""); setAddingModule(false); }
   function moveModule(index, dir) {
@@ -226,6 +227,11 @@ export function CourseManager({ course, testimonials, setCourses, onBack }) {
           <Field label="Who it's for" value={audience} onChange={(e) => setAudience(e.target.value)} />
           <TextArea label="Full description" value={description} onChange={(e) => setDescription(e.target.value)} />
           <div className="grid grid-cols-2 gap-3"><SelectF label="Level" value={level} onChange={(e) => setLevel(e.target.value)} options={[{ value: "Beginner", label: "Beginner" }, { value: "Intermediate", label: "Intermediate" }, { value: "Advanced", label: "Advanced" }]} /><Field label="Duration (weeks)" type="number" value={durationWeeks} onChange={(e) => setDurationWeeks(e.target.value)} /></div>
+          <div>
+            <div className="f-label text-[11px] mb-2" style={{ color: "#71675A" }}>WHAT YOU'LL LEARN (shown as bullet points on the course page)</div>
+            <div className="flex flex-col gap-2">{outcomes.map((o, i) => <div key={i} className="flex items-center gap-2"><input className="input-field rounded-lg px-3.5 py-2 text-[14px]" value={o} onChange={(e) => setOutcomes((prev) => prev.map((x, idx) => idx === i ? e.target.value : x))} /><button onClick={() => setOutcomes((prev) => prev.filter((_, idx) => idx !== i))}><X size={16} color="#A79B84" /></button></div>)}</div>
+            <div className="flex items-center gap-2 mt-2"><input className="input-field rounded-lg px-3.5 py-2 text-[14px]" placeholder="New bullet point…" value={newOutcome} onChange={(e) => setNewOutcome(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && newOutcome) { setOutcomes((prev) => [...prev, newOutcome]); setNewOutcome(""); } }} /><button onClick={() => { if (newOutcome) { setOutcomes((prev) => [...prev, newOutcome]); setNewOutcome(""); } }} className="btn-soft rounded-lg px-4 py-2 text-[13px] shrink-0">Add</button></div>
+          </div>
           <div><div className="f-label text-[11px] mb-2" style={{ color: "#71675A" }}>ASSOCIATED TESTIMONIALS</div><div className="flex flex-wrap gap-2">{testimonials.map((t) => <button key={t.id} onClick={() => toggleTestimonial(t.id)} className="f-label text-[11px] px-3 py-1.5 rounded-full" style={{ background: testimonialIds.includes(t.id) ? "var(--accent)" : "#F0E7D6", color: testimonialIds.includes(t.id) ? "#FAF6EC" : "#71675A" }}>{t.name}</button>)}</div></div>
           <button onClick={saveDetails} className="btn-primary rounded-lg px-5 py-2.5 text-[14px] self-start">Save details</button>
         </div>
