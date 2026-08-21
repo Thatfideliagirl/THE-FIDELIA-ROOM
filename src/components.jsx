@@ -361,11 +361,15 @@ export function SignInScreen({ students, applicants, onBack, onEnterStudent, onE
     setSubmitting(false);
     if (result === "not-found") setError("We don't recognize that email or Student ID.");
     else if (result === "wrong-password") setError("That password doesn't match.");
+    else if (result === "network") setError("Couldn't reach the server — check your connection and try again.");
     else if (result) setError("Something went wrong — please try again.");
   }
   async function forgotPassword() {
     if (!email.trim() || !email.includes("@")) { setError("Enter your email above first, then tap \"Forgot password?\" again."); return; }
-    setError(""); await onForgotPassword(email.trim()); setForgotSent(true);
+    setError(""); setForgotSent(false);
+    const err = await onForgotPassword(email.trim());
+    if (err) setError("Couldn't send the reset email — please try again.");
+    else setForgotSent(true);
   }
   return (
     <div className="min-h-screen flex items-center justify-center px-6">

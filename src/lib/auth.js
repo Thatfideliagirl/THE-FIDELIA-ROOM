@@ -13,23 +13,40 @@ export async function resolveLoginEmail(identifier) {
   return data;
 }
 
+// Every function below wraps its network call in try/catch: a blocked or
+// dropped connection throws instead of returning Supabase's own {error}
+// shape, and left uncaught that stalls the caller's loading state forever
+// with no message shown. Network failures surface as "network" so the UI
+// can say so, instead of hanging.
 export async function signIn(identifier, password) {
-  const email = await resolveLoginEmail(identifier);
-  if (!email) return { error: "not-found" };
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) return { error: error.message.toLowerCase().includes("invalid") ? "wrong-password" : "unknown" };
-  return { user: data.user };
+  try {
+    const email = await resolveLoginEmail(identifier);
+    if (!email) return { error: "not-found" };
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return { error: error.message.toLowerCase().includes("invalid") ? "wrong-password" : "unknown" };
+    return { user: data.user };
+  } catch {
+    return { error: "network" };
+  }
 }
 
 export async function signUpApplicant({ name, email, phone, password }) {
-  const { data, error } = await supabase.auth.signUp({ email, password });
-  if (error) return { error: error.message };
-  return { authUserId: data.user?.id || null };
+  try {
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) return { error: error.message };
+    return { authUserId: data.user?.id || null };
+  } catch {
+    return { error: "network" };
+  }
 }
 
 export async function sendPasswordReset(email) {
-  const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
-  return { error: error?.message || null };
+  try {
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
+    return { error: error?.message || null };
+  } catch {
+    return { error: "network" };
+  }
 }
 
 export async function signOut() {
