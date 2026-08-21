@@ -21,6 +21,8 @@ export const FONT_STYLE = `
   .help-pulse { animation: helpPulse 2.6s ease-in-out infinite; }
   .btn-primary { background:var(--accent); color:#FAF6EC; transition:all .18s ease; box-shadow:0 10px 22px -10px color-mix(in srgb, var(--accent) 70%, transparent); }
   .btn-primary:hover { filter:brightness(1.12); transform:translateY(-2px) scale(1.02); }
+  .btn-primary:disabled { opacity:.45; cursor:not-allowed; box-shadow:none; }
+  .btn-primary:disabled:hover { filter:none; transform:none; }
   .btn-ghost { border:1.5px solid #262019; color:#262019; transition:all .18s ease; }
   .btn-ghost:hover { background:#262019; color:#FAF6EC; transform:translateY(-2px); }
   .btn-soft { background:color-mix(in srgb, var(--accent) 14%, white); color:var(--accent); transition:all .18s ease; }
