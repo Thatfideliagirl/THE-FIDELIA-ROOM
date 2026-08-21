@@ -61,21 +61,17 @@ export default function App() {
   }
 
   // Resources are real too, now -- fetched on load regardless of login (the
-  // public Resources page needs them without anyone signed in). syncResources
-  // handles in-place edits the same way syncStudents/syncApplicants do;
-  // creating and removing a resource are handled explicitly below since
-  // there's no "before" record to diff against for a brand-new one.
+  // public Resources page needs them without anyone signed in). add/edit
+  // return an error string (or null) so the form can show it instead of
+  // silently closing on failure.
   useEffect(() => { fetchResources().then(setResources).catch((e) => console.error("fetchResources failed", e)); }, []);
-  function syncResources(updater) {
-    setResources((prev) => {
-      const next = typeof updater === "function" ? updater(prev) : updater;
-      next.forEach((item) => { const before = prev.find((x) => x.id === item.id); if (before && before !== item) updateResource(item.id, item).catch((e) => console.error("updateResource failed", e)); });
-      return next;
-    });
-  }
   async function addResource(data) {
-    try { const saved = await insertResource(data); setResources((prev) => [...prev, saved]); }
-    catch (e) { console.error("insertResource failed", e); }
+    try { const saved = await insertResource(data); setResources((prev) => [...prev, saved]); return null; }
+    catch (e) { console.error("insertResource failed", e); return "Couldn't save this resource — check your connection and try again."; }
+  }
+  async function editResource(id, data) {
+    try { const saved = await updateResource(id, data); setResources((prev) => prev.map((r) => r.id === id ? saved : r)); return null; }
+    catch (e) { console.error("updateResource failed", e); return "Couldn't save this resource — check your connection and try again."; }
   }
   async function removeResource(id) {
     setResources((prev) => prev.filter((r) => r.id !== id));
@@ -186,7 +182,7 @@ export default function App() {
         <MyCourses student={liveStudent} setStudents={syncStudents} courses={courses} cohorts={cohorts} applicants={applicants} tasks={tasks} setTasks={setTasks} resources={resources} community={community} setCommunity={setCommunity} notices={notices.filter((n) => n.cohortId === "all" || n.cohortId === liveStudent.cohortId)} setNotices={setNotices} directThreads={directThreads} setDirectThreads={setDirectThreads} allStudents={students} onExit={handleSignOut} onApplyMore={(courseId) => { setApplyingAsExisting(liveStudent); setPresetCourseId(courseId || null); setPage("signup"); }} notifItems={studentNotifItems} notifSeen={studentNotifSeen} onMarkSeen={setStudentNotifSeen} />
       )}
       {page === "adminDash" && (
-        <AdminDashboard courses={courses} setCourses={setCourses} students={students} setStudents={syncStudents} applicants={applicants} setApplicants={syncApplicants} onAcceptApplicant={acceptApplicant} cohorts={cohorts} setCohorts={setCohorts} tasks={tasks} setTasks={setTasks} resources={resources} setResources={syncResources} onAddResource={addResource} onRemoveResource={removeResource} community={community} setCommunity={setCommunity} notices={notices} setNotices={setNotices} directThreads={directThreads} setDirectThreads={setDirectThreads} testimonials={testimonials} setTestimonials={setTestimonials} faqs={faqs} setFaqs={setFaqs} brand={brand} setBrand={setBrand} adminProfile={adminProfile} setAdminProfile={setAdminProfile} onExit={handleSignOut} notifItems={adminNotifItems} notifSeen={adminNotifSeen} onMarkSeen={setAdminNotifSeen} />
+        <AdminDashboard courses={courses} setCourses={setCourses} students={students} setStudents={syncStudents} applicants={applicants} setApplicants={syncApplicants} onAcceptApplicant={acceptApplicant} cohorts={cohorts} setCohorts={setCohorts} tasks={tasks} setTasks={setTasks} resources={resources} onAddResource={addResource} onEditResource={editResource} onRemoveResource={removeResource} community={community} setCommunity={setCommunity} notices={notices} setNotices={setNotices} directThreads={directThreads} setDirectThreads={setDirectThreads} testimonials={testimonials} setTestimonials={setTestimonials} faqs={faqs} setFaqs={setFaqs} brand={brand} setBrand={setBrand} adminProfile={adminProfile} setAdminProfile={setAdminProfile} onExit={handleSignOut} notifItems={adminNotifItems} notifSeen={adminNotifSeen} onMarkSeen={setAdminNotifSeen} />
       )}
     </div>
   );

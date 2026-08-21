@@ -516,8 +516,16 @@ export function TasksTab({ tasks, setTasks, students, courses }) {
 
 export function ResourceForm({ courses, initial, onSave, onClose }) {
   const [category, setCategory] = useState(initial?.category || "module"); const [folder, setFolder] = useState(initial?.folder || ""); const [title, setTitle] = useState(initial?.title || ""); const [description, setDescription] = useState(initial?.description || ""); const [type, setType] = useState(initial?.type || "Doc"); const [url, setUrl] = useState(initial?.url || ""); const [file, setFile] = useState(initial?.file || null); const [kind, setKind] = useState(initial?.kind || "link"); const [visibility, setVisibility] = useState(initial?.visibility || "course"); const [courseId, setCourseId] = useState(initial?.courseId || courses[0]?.id);
+  const [saving, setSaving] = useState(false); const [error, setError] = useState("");
   const isPublic = category === "free";
   const canSave = folder && title && (kind === "file" ? file : url);
+  async function submit() {
+    if (!canSave) return;
+    setSaving(true); setError("");
+    const err = await onSave({ courseId, folder, title, description, type, url, file, kind, visibility: category === "free" ? "all" : visibility, isPublic });
+    setSaving(false);
+    if (err) setError(err); else onClose();
+  }
   return (
     <div className="card rounded-xl p-6 mb-6 flex flex-col gap-3">
       <SelectF label="Category" value={category} onChange={(e) => setCategory(e.target.value)} options={[{ value: "module", label: "Module resource (for enrolled students)" }, { value: "free", label: "Free download (public)" }]} />
@@ -529,22 +537,20 @@ export function ResourceForm({ courses, initial, onSave, onClose }) {
       <SelectF label="Output" value={kind} onChange={(e) => setKind(e.target.value)} options={[{ value: "link", label: "Link — Download opens the link" }, { value: "file", label: "Uploaded file — Download serves the file" }]} />
       {kind === "link" ? <Field label="Link" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" /> : <FileField label="File (PDF, slides, image, document)" value={file} onChange={setFile} />}
       <SelectF label="Format" value={type} onChange={(e) => setType(e.target.value)} options={[{ value: "Doc", label: "Doc" }, { value: "Sheet", label: "Sheet" }, { value: "Slides", label: "Slides" }, { value: "Link", label: "Link" }]} />
-      <div className="flex gap-3"><button onClick={() => { if (canSave) onSave({ courseId, folder, title, description, type, url, file, kind, visibility: category === "free" ? "all" : visibility, isPublic }); }} className="btn-primary rounded-lg px-5 py-2.5 text-[14px]">Save resource</button><button onClick={onClose} className="text-[14px]" style={{ color: "#A79B84" }}>Cancel</button></div>
+      {error && <div className="text-[13px]" style={{ color: "#B04A3A" }}>{error}</div>}
+      <div className="flex gap-3"><button disabled={saving} onClick={submit} className="btn-primary rounded-lg px-5 py-2.5 text-[14px]">{saving ? "Saving…" : "Save resource"}</button><button onClick={onClose} className="text-[14px]" style={{ color: "#A79B84" }}>Cancel</button></div>
     </div>
   );
 }
-export function LibraryTab({ resources, setResources, onAdd, onRemove, courses }) {
+export function LibraryTab({ resources, onAdd, onEdit, onRemove, courses }) {
   const [showAdd, setShowAdd] = useState(false); const [editingId, setEditingId] = useState(null);
-  function add(data) { onAdd(data); setShowAdd(false); }
-  function save(id, data) { setResources((prev) => prev.map((r) => r.id === id ? { ...r, ...data } : r)); setEditingId(null); }
-  function remove(id) { onRemove(id); }
   const folders = [...new Set(resources.map((r) => r.folder))];
   return (
     <>
       <SectionHeader eyebrow="MANAGE" title="Resource library" action={<button onClick={() => setShowAdd((s) => !s)} className="btn-primary rounded-full px-5 py-2.5 text-[14px] flex items-center gap-1.5"><Plus size={16} /> Add resource</button>} />
-      {showAdd && <ResourceForm courses={courses} onSave={add} onClose={() => setShowAdd(false)} />}
+      {showAdd && <ResourceForm courses={courses} onSave={onAdd} onClose={() => setShowAdd(false)} />}
       {folders.map((f) => <div key={f} className="mb-6"><div className="f-label text-[12px] mb-3" style={{ color: "#71675A" }}>{f.toUpperCase()}</div><div className="flex flex-col gap-2">{resources.filter((r) => r.folder === f).map((r) => (
-        <div key={r.id}><div className="card rounded-lg px-5 py-3 flex items-center justify-between text-[14px]"><span className="flex items-center gap-2">{r.title} {r.isPublic && <span className="f-code text-[9px] tint-badge px-2 py-0.5 rounded-full">PUBLIC</span>}{r.visibility === "all" && !r.isPublic && <span className="f-code text-[9px] tint-badge px-2 py-0.5 rounded-full">ALL COURSES</span>}</span><div className="flex items-center gap-3"><button onClick={() => setEditingId(editingId === r.id ? null : r.id)} className="f-label text-[10px] accent-text flex items-center gap-1"><Pencil size={11} /> EDIT</button><button onClick={() => remove(r.id)}><Trash2 size={14} color="#B04A3A" /></button></div></div>{editingId === r.id && <ResourceForm courses={courses} initial={r} onSave={(data) => save(r.id, data)} onClose={() => setEditingId(null)} />}</div>
+        <div key={r.id}><div className="card rounded-lg px-5 py-3 flex items-center justify-between text-[14px]"><span className="flex items-center gap-2">{r.title} {r.isPublic && <span className="f-code text-[9px] tint-badge px-2 py-0.5 rounded-full">PUBLIC</span>}{r.visibility === "all" && !r.isPublic && <span className="f-code text-[9px] tint-badge px-2 py-0.5 rounded-full">ALL COURSES</span>}</span><div className="flex items-center gap-3"><button onClick={() => setEditingId(editingId === r.id ? null : r.id)} className="f-label text-[10px] accent-text flex items-center gap-1"><Pencil size={11} /> EDIT</button><button onClick={() => onRemove(r.id)}><Trash2 size={14} color="#B04A3A" /></button></div></div>{editingId === r.id && <ResourceForm courses={courses} initial={r} onSave={(data) => onEdit(r.id, data)} onClose={() => setEditingId(null)} />}</div>
       ))}</div></div>)}
     </>
   );
@@ -749,7 +755,7 @@ export function OverviewTab({ courses, students, applicants, tasks, cohorts, set
   );
 }
 
-export function AdminDashboard({ courses, setCourses, students, setStudents, applicants, setApplicants, onAcceptApplicant, cohorts, setCohorts, tasks, setTasks, resources, setResources, onAddResource, onRemoveResource, community, setCommunity, notices, setNotices, directThreads, setDirectThreads, testimonials, setTestimonials, faqs, setFaqs, brand, setBrand, adminProfile, setAdminProfile, onExit, notifItems, notifSeen, onMarkSeen }) {
+export function AdminDashboard({ courses, setCourses, students, setStudents, applicants, setApplicants, onAcceptApplicant, cohorts, setCohorts, tasks, setTasks, resources, onAddResource, onEditResource, onRemoveResource, community, setCommunity, notices, setNotices, directThreads, setDirectThreads, testimonials, setTestimonials, faqs, setFaqs, brand, setBrand, adminProfile, setAdminProfile, onExit, notifItems, notifSeen, onMarkSeen }) {
   const [tab, setTab] = useState("overview");
   const navItems = [
     { id: "overview", icon: Sparkles, label: "Overview" }, { id: "profile", icon: UserCircle, label: "My Profile" }, { id: "applicants", icon: ClipboardCheck, label: "Applicants" },
@@ -781,7 +787,7 @@ export function AdminDashboard({ courses, setCourses, students, setStudents, app
         {tab === "students" && <StudentsTab students={students} setStudents={setStudents} applicants={applicants} courses={courses} cohorts={cohorts} />}
         {tab === "gradebook" && <GradebookTab students={students} courses={courses} cohorts={cohorts} />}
         {tab === "tasks" && <TasksTab tasks={tasks} setTasks={setTasks} students={students} courses={courses} />}
-        {tab === "library" && <LibraryTab resources={resources} setResources={setResources} onAdd={onAddResource} onRemove={onRemoveResource} courses={courses} />}
+        {tab === "library" && <LibraryTab resources={resources} onAdd={onAddResource} onEdit={onEditResource} onRemove={onRemoveResource} courses={courses} />}
         {tab === "certificates" && <CertificatesTab students={students} setStudents={setStudents} courses={courses} />}
         {tab === "testimonials" && <TestimonialsTab testimonials={testimonials} setTestimonials={setTestimonials} />}
         {tab === "faq" && <FaqTab faqs={faqs} setFaqs={setFaqs} />}
