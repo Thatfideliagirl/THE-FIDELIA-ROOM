@@ -132,7 +132,13 @@ export default function App() {
   const liveStudent = activeStudent ? students.find((s) => s.id === activeStudent.id) || activeStudent : null;
   const liveApplicant = activeApplicant ? applicants.find((a) => a.id === activeApplicant.id) || activeApplicant : null;
   const viewCourse = viewCourseId ? courses.find((c) => c.id === viewCourseId) : null;
-  const pendingEnrollment = liveStudent?.enrollments.find((e) => e.status === "awaiting-code");
+  // Only gate the whole dashboard behind the code-entry screen for a genuinely
+  // brand-new student (nothing usable yet). A student who already has an
+  // active course and gets accepted into a second one shouldn't be locked
+  // out of the first while that second code is still unredeemed -- they
+  // redeem it inline from My Courses instead (see MyCourses).
+  const hasUsableEnrollment = liveStudent?.enrollments.some((e) => e.status !== "awaiting-code");
+  const pendingEnrollment = !hasUsableEnrollment ? liveStudent?.enrollments.find((e) => e.status === "awaiting-code") : null;
 
   const adminNotifItems = [
     ...applicants.filter((a) => a.status === "pending").map((a) => ({ id: `ap-${a.id}`, t: `${a.name} applied for a course` })),

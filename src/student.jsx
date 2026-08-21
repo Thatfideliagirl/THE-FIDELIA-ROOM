@@ -8,7 +8,7 @@ import {
   Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Compass
 } from "lucide-react";
 import { pairKey, moduleStatus, scoreSubmission, AUTO_APPROVE_THRESHOLD } from "./lib/data.js";
-import { SectionHeader, NotifBell, WelcomeTour, SidebarLink, LogoMark, Spine, TextArea, ProgressBar, ResourceDetail } from "./components.jsx";
+import { SectionHeader, NotifBell, WelcomeTour, SidebarLink, LogoMark, Spine, TextArea, ProgressBar, ResourceDetail, Field } from "./components.jsx";
 
 export function LessonView({ course, enrollment, updateEnrollment, onBack, onNext, moduleId }) {
   const [view, setView] = useState("lecture"); // "lecture" | "check" | "meetings"
@@ -316,17 +316,35 @@ const MAX_COURSES_PER_COHORT = 2;
 export function MyCourses({ student, setStudents, courses, cohorts, applicants, tasks, setTasks, resources, community, setCommunity, notices, setNotices, directThreads, setDirectThreads, allStudents, onExit, onApplyMore, notifItems, notifSeen, onMarkSeen }) {
   const [tab, setTab] = useState("courses"); // "courses" | "explore" | "profile"
   const [openEnrollmentId, setOpenEnrollmentId] = useState(null);
+  const [redeemEnrollmentId, setRedeemEnrollmentId] = useState(null);
+  const [redeemCodeInput, setRedeemCodeInput] = useState(""); const [redeemError, setRedeemError] = useState("");
   const [showTour, setShowTour] = useState(!student.seenTour);
   const cohort = cohorts.find((c) => c.id === student.cohortId);
   const openEnrollment = openEnrollmentId ? student.enrollments.find((e) => e.id === openEnrollmentId) : null;
   const openCourse = openEnrollment ? courses.find((c) => c.id === openEnrollment.courseId) : null;
+  const redeemEnrollment = redeemEnrollmentId ? student.enrollments.find((e) => e.id === redeemEnrollmentId) : null;
+  const redeemCourse = redeemEnrollment ? courses.find((c) => c.id === redeemEnrollment.courseId) : null;
   const pendingApplications = applicants.filter((a) => a.studentRef === student.id && a.status === "pending");
   const usedSlots = student.enrollments.length + pendingApplications.length;
   const atCap = usedSlots >= MAX_COURSES_PER_COHORT;
 
   function dismissTour() { setShowTour(false); setStudents((prev) => prev.map((s) => s.id === student.id ? { ...s, seenTour: true } : s)); }
+  function confirmRedeem() {
+    if (redeemCodeInput.trim().toLowerCase() !== redeemEnrollment.code.toLowerCase()) { setRedeemError("That code doesn't match."); return; }
+    setStudents((prev) => prev.map((s) => s.id !== student.id ? s : { ...s, enrollments: s.enrollments.map((e) => e.id === redeemEnrollmentId ? { ...e, status: "active" } : e) }));
+    setRedeemEnrollmentId(null); setRedeemCodeInput(""); setRedeemError("");
+  }
 
   if (openEnrollment && openCourse) return <EnrollmentDashboard student={student} setStudents={setStudents} course={openCourse} enrollment={openEnrollment} tasks={tasks} setTasks={setTasks} resources={resources} community={community} setCommunity={setCommunity} notices={notices} setNotices={setNotices} directThreads={directThreads} setDirectThreads={setDirectThreads} allStudents={allStudents} onBack={() => setOpenEnrollmentId(null)} notifItems={notifItems} notifSeen={notifSeen} onMarkSeen={onMarkSeen} />;
+  if (redeemEnrollment && redeemCourse) return (
+    <div className="min-h-screen flex items-center justify-center px-6 text-center">
+      <div className="reveal in max-w-[400px] w-full">
+        <LogoMark height={64} /><div className="f-label text-[13px] mt-6 mb-3 accent-text">YOU'RE ACCEPTED</div><h1 className="f-display text-[28px] mb-4" style={{ fontWeight: 800 }}>Enter your code for {redeemCourse.title}.</h1>
+        <div className="card rounded-2xl p-6 text-left"><Field label="Access code" placeholder="FJ-XXXXX" value={redeemCodeInput} onChange={(e) => setRedeemCodeInput(e.target.value)} />{redeemError && <div className="text-[12px] mt-2" style={{ color: "#B04A3A" }}>{redeemError}</div>}<button onClick={confirmRedeem} className="btn-primary rounded-lg py-3 text-[15px] w-full mt-4">Unlock this course</button></div>
+        <button onClick={() => { setRedeemEnrollmentId(null); setRedeemCodeInput(""); setRedeemError(""); }} className="f-label text-[12px] mt-5 block mx-auto" style={{ color: "#A79B84" }}>BACK TO MY COURSES</button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen flex">
@@ -352,11 +370,12 @@ export function MyCourses({ student, setStudents, courses, cohorts, applicants, 
                 if (!c) return null;
                 const pct = Math.round((e.completedModuleIds.length / c.modules.length) * 100);
                 const locked = e.status === "active" && cohort && !(cohort.unlockedCourseIds || []).includes(e.courseId);
-                const clickable = e.status !== "awaiting-code" && !locked;
+                const awaitingCode = e.status === "awaiting-code";
+                const clickable = !locked;
                 return (
-                  <button key={e.id} onClick={() => clickable && setOpenEnrollmentId(e.id)} disabled={!clickable} className="card card-pop rounded-2xl p-6 text-left" style={{ opacity: clickable ? 1 : 0.6 }}>
-                    <div className="flex items-center justify-between mb-3"><div className="f-display text-[18px]" style={{ fontWeight: 700 }}>{c.title}</div>{e.status === "awaiting-code" && <span className="f-code text-[9px] px-2 py-1 rounded-full tint-badge">CODE PENDING</span>}{locked && <span className="f-code text-[9px] px-2 py-1 rounded-full flex items-center gap-1" style={{ background: "#F0E7D6", color: "#71675A" }}><Lock size={9} /> LOCKED</span>}</div>
-                    {locked ? <div className="text-[13px]" style={{ color: "#A79B84" }}>Lectures haven't started yet — you'll be unlocked once your cohort begins.</div> : e.status !== "awaiting-code" && <>
+                  <button key={e.id} onClick={() => { if (!clickable) return; awaitingCode ? setRedeemEnrollmentId(e.id) : setOpenEnrollmentId(e.id); }} disabled={!clickable} className="card card-pop rounded-2xl p-6 text-left" style={{ opacity: clickable ? 1 : 0.6 }}>
+                    <div className="flex items-center justify-between mb-3"><div className="f-display text-[18px]" style={{ fontWeight: 700 }}>{c.title}</div>{awaitingCode && <span className="f-code text-[9px] px-2 py-1 rounded-full tint-badge">ACCEPTED — ENTER CODE</span>}{locked && <span className="f-code text-[9px] px-2 py-1 rounded-full flex items-center gap-1" style={{ background: "#F0E7D6", color: "#71675A" }}><Lock size={9} /> LOCKED</span>}</div>
+                    {locked ? <div className="text-[13px]" style={{ color: "#A79B84" }}>Lectures haven't started yet — you'll be unlocked once your cohort begins.</div> : awaitingCode ? <div className="text-[13px] accent-text" style={{ fontWeight: 700 }}>Click to enter your access code</div> : <>
                       <ProgressBar pct={pct} />
                       <div className="flex items-center justify-between mt-2"><span className="text-[13px]" style={{ color: "#71675A" }}>{pct}% complete</span><span className="text-[13px] accent-text" style={{ fontWeight: 700 }}>{c.modules[Math.min(e.completedModuleIds.length, c.modules.length - 1)]?.title}</span></div>
                     </>}
