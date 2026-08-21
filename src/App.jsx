@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
-  seedCourses, seedCohorts, seedStudents, seedApplicants, seedTasks,
+  seedCohorts, seedStudents, seedApplicants, seedTasks,
   seedTestimonials, seedFaqs, FONT_STYLE, genCode, nextStudentId,
 } from "./lib/data.js";
 import {
@@ -11,7 +11,7 @@ import { MyCourses } from "./student.jsx";
 import { AdminDashboard } from "./admin.jsx";
 import { supabase } from "./lib/supabaseClient.js";
 import { signIn, signOut, signUpApplicant, sendPasswordReset, isAdminEmail } from "./lib/auth.js";
-import { fetchApplicants, insertApplicant, updateApplicant, fetchStudents, insertStudent, updateStudent, fetchResources, insertResource, updateResource, deleteResource } from "./lib/db.js";
+import { fetchApplicants, insertApplicant, updateApplicant, fetchStudents, insertStudent, updateStudent, fetchResources, insertResource, updateResource, deleteResource, fetchCourses, upsertCourse, fetchSettings, updateSettings } from "./lib/db.js";
 import { sendWelcomeEmail, sendAcceptanceEmail } from "./lib/email.js";
 
 export default function App() {
@@ -19,7 +19,7 @@ export default function App() {
   const [presetCourseId, setPresetCourseId] = useState(null);
   const [viewCourseId, setViewCourseId] = useState(null);
   const [applyingAsExisting, setApplyingAsExisting] = useState(null);
-  const [courses, setCourses] = useState(seedCourses);
+  const [courses, setCourses] = useState([]);
   const [cohorts, setCohorts] = useState(seedCohorts);
   const [students, setStudents] = useState(seedStudents);
   const [applicants, setApplicants] = useState(seedApplicants);
@@ -66,6 +66,28 @@ export default function App() {
   // return an error string (or null) so the form can show it instead of
   // silently closing on failure.
   useEffect(() => { fetchResources().then(setResources).catch((e) => console.error("fetchResources failed", e)); }, []);
+
+  // Courses and branding/admin-profile are real now too -- both fetched on
+  // load regardless of login (the public landing/courses pages need them).
+  // syncCourses mirrors syncStudents/syncApplicants: any item whose reference
+  // changed (existing edit) or that's missing from prev (a brand-new course
+  // from addCourse) gets upserted in the background, so every existing
+  // setCourses call site in admin.jsx keeps working unchanged.
+  useEffect(() => { fetchCourses().then(setCourses).catch((e) => console.error("fetchCourses failed", e)); }, []);
+  function syncCourses(updater) {
+    setCourses((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      next.forEach((item) => { const before = prev.find((x) => x.id === item.id); if (before !== item) upsertCourse(item).catch((e) => console.error("upsertCourse failed", e)); });
+      return next;
+    });
+  }
+  useEffect(() => { fetchSettings().then((s) => { if (s) { setBrand(s.brand); setAdminProfile(s.adminProfile); } }).catch((e) => console.error("fetchSettings failed", e)); }, []);
+  function syncBrand(updater) {
+    setBrand((prev) => { const next = typeof updater === "function" ? updater(prev) : updater; updateSettings({ brand: next, adminProfile }).catch((e) => console.error("updateSettings failed", e)); return next; });
+  }
+  function syncAdminProfile(updater) {
+    setAdminProfile((prev) => { const next = typeof updater === "function" ? updater(prev) : updater; updateSettings({ brand, adminProfile: next }).catch((e) => console.error("updateSettings failed", e)); return next; });
+  }
   async function addResource(data) {
     try { const saved = await insertResource(data); setResources((prev) => [...prev, saved]); return null; }
     catch (e) { console.error("insertResource failed", e); return "Couldn't save this resource — check your connection and try again."; }
@@ -186,7 +208,7 @@ export default function App() {
         <MyCourses student={liveStudent} setStudents={syncStudents} courses={courses} cohorts={cohorts} applicants={applicants} tasks={tasks} setTasks={setTasks} resources={resources} community={community} setCommunity={setCommunity} notices={notices.filter((n) => n.cohortId === "all" || n.cohortId === liveStudent.cohortId)} setNotices={setNotices} directThreads={directThreads} setDirectThreads={setDirectThreads} allStudents={students} onExit={handleSignOut} onApplyMore={(courseId) => { setApplyingAsExisting(liveStudent); setPresetCourseId(courseId || null); setPage("signup"); }} notifItems={studentNotifItems} notifSeen={studentNotifSeen} onMarkSeen={setStudentNotifSeen} />
       )}
       {page === "adminDash" && (
-        <AdminDashboard courses={courses} setCourses={setCourses} students={students} setStudents={syncStudents} applicants={applicants} setApplicants={syncApplicants} onAcceptApplicant={acceptApplicant} cohorts={cohorts} setCohorts={setCohorts} tasks={tasks} setTasks={setTasks} resources={resources} onAddResource={addResource} onEditResource={editResource} onRemoveResource={removeResource} community={community} setCommunity={setCommunity} notices={notices} setNotices={setNotices} directThreads={directThreads} setDirectThreads={setDirectThreads} testimonials={testimonials} setTestimonials={setTestimonials} faqs={faqs} setFaqs={setFaqs} brand={brand} setBrand={setBrand} adminProfile={adminProfile} setAdminProfile={setAdminProfile} onExit={handleSignOut} notifItems={adminNotifItems} notifSeen={adminNotifSeen} onMarkSeen={setAdminNotifSeen} />
+        <AdminDashboard courses={courses} setCourses={syncCourses} students={students} setStudents={syncStudents} applicants={applicants} setApplicants={syncApplicants} onAcceptApplicant={acceptApplicant} cohorts={cohorts} setCohorts={setCohorts} tasks={tasks} setTasks={setTasks} resources={resources} onAddResource={addResource} onEditResource={editResource} onRemoveResource={removeResource} community={community} setCommunity={setCommunity} notices={notices} setNotices={setNotices} directThreads={directThreads} setDirectThreads={setDirectThreads} testimonials={testimonials} setTestimonials={setTestimonials} faqs={faqs} setFaqs={setFaqs} brand={brand} setBrand={syncBrand} adminProfile={adminProfile} setAdminProfile={syncAdminProfile} onExit={handleSignOut} notifItems={adminNotifItems} notifSeen={adminNotifSeen} onMarkSeen={setAdminNotifSeen} />
       )}
     </div>
   );

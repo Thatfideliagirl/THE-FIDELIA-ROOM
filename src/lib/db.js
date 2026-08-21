@@ -93,3 +93,34 @@ export async function updateStudent(id, student) {
   if (error) throw error;
   return studentOut(data);
 }
+
+// Courses are stored as one opaque jsonb blob per row (keyed by the app's
+// own string id, e.g. "va") rather than a normalized schema -- the shape
+// (nested modules, quizzes, meetings) already lives in this exact form
+// throughout the app, so this is just giving that same object a place to
+// persist instead of reinventing it as columns.
+const courseOut = (row) => ({ id: row.id, ...row.data });
+export async function fetchCourses() {
+  const { data, error } = await supabase.from("courses").select("*").order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data || []).map(courseOut);
+}
+export async function upsertCourse(course) {
+  const { id, ...rest } = course;
+  const { data, error } = await supabase.from("courses").upsert({ id, data: rest, updated_at: new Date().toISOString() }).select().single();
+  if (error) throw error;
+  return courseOut(data);
+}
+
+// Branding and the admin's own profile are both single-object, single-admin
+// settings -- one row in site_settings covers both rather than two tables.
+export async function fetchSettings() {
+  const { data, error } = await supabase.from("site_settings").select("*").eq("id", "main").maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return { brand: data.brand, adminProfile: data.admin_profile };
+}
+export async function updateSettings({ brand, adminProfile }) {
+  const { error } = await supabase.from("site_settings").upsert({ id: "main", brand, admin_profile: adminProfile, updated_at: new Date().toISOString() });
+  if (error) throw error;
+}
