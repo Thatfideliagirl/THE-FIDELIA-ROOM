@@ -705,26 +705,43 @@ export function GradebookTab({ students, courses, cohorts }) {
 }
 export function OverviewTab({ courses, students, applicants, tasks, cohorts, setTab }) {
   const [cohortFilter, setCohortFilter] = useState("all");
+  const [courseFilter, setCourseFilter] = useState("all");
+  const activeCohort = cohortFilter === "all" ? null : cohorts.find((c) => c.id === cohortFilter);
+  const filterCourses = activeCohort ? courses.filter((c) => activeCohort.courseIds.includes(c.id)) : courses;
+  useEffect(() => { if (courseFilter !== "all" && !filterCourses.some((c) => c.id === courseFilter)) setCourseFilter("all"); }, [cohortFilter]);
+
   const scopedStudents = cohortFilter === "all" ? students : students.filter((s) => s.cohortId === cohortFilter);
   const scopedStudentIds = new Set(scopedStudents.map((s) => s.id));
-  const scopedApplicants = cohortFilter === "all" ? applicants : applicants.filter((a) => a.cohortId === cohortFilter);
+  const scopedApplicants = (cohortFilter === "all" ? applicants : applicants.filter((a) => a.cohortId === cohortFilter)).filter((a) => courseFilter === "all" || a.courseId === courseFilter);
+  const scopedEnrollments = (s) => s.enrollments.filter((e) => courseFilter === "all" || e.courseId === courseFilter);
 
   const pendingApplicants = scopedApplicants.filter((a) => a.status === "pending").length;
-  const activeEnrollments = scopedStudents.reduce((n, s) => n + s.enrollments.filter((e) => e.status === "active").length, 0);
+  const activeEnrollments = scopedStudents.reduce((n, s) => n + scopedEnrollments(s).filter((e) => e.status === "active").length, 0);
   const inReview = tasks.reduce((n, t) => n + Object.entries(t.submissions).filter(([sid, v]) => scopedStudentIds.has(sid) && v.status === "in review").length, 0);
   const completedTasks = tasks.reduce((n, t) => n + Object.entries(t.submissions).filter(([sid, v]) => scopedStudentIds.has(sid) && v.status === "approved").length, 0);
-  const progressData = scopedStudents.flatMap((s) => s.enrollments.map((e) => ({ name: s.name.split(" ")[0], modules: e.completedModuleIds.length })));
+  // Each bar is one enrollment, not one student -- label with the course too
+  // (as "First Name (COURSE)") so a student in two courses shows as two
+  // clearly distinct bars instead of two identical, unlabeled ones.
+  const progressData = scopedStudents.flatMap((s) => scopedEnrollments(s).map((e) => ({ name: `${s.name.split(" ")[0]} (${e.courseId.toUpperCase()})`, student: s.name, course: courses.find((c) => c.id === e.courseId)?.title || e.courseId, modules: e.completedModuleIds.length })));
   const recent = [...scopedApplicants.filter((a) => a.status === "pending").map((a) => ({ t: `${a.name} applied for a course` })), ...tasks.flatMap((t) => Object.entries(t.submissions).filter(([sid, v]) => scopedStudentIds.has(sid) && v.status === "in review").map(([sid]) => ({ t: `A submission for "${t.title}" is awaiting review` })))].slice(0, 6);
   return (
     <>
       <SectionHeader eyebrow="ADMIN OVERVIEW" title="Everything you're running." />
-      <div className="flex items-center gap-2 mb-6 flex-wrap">
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
         <button onClick={() => setCohortFilter("all")} className="f-label text-[11px] px-3.5 py-1.5 rounded-full" style={{ background: cohortFilter === "all" ? "var(--accent)" : "#F0E7D6", color: cohortFilter === "all" ? "#FAF6EC" : "#71675A" }}>All cohorts</button>
         {cohorts.map((co) => <button key={co.id} onClick={() => setCohortFilter(co.id)} className="f-label text-[11px] px-3.5 py-1.5 rounded-full" style={{ background: cohortFilter === co.id ? "var(--accent)" : "#F0E7D6", color: cohortFilter === co.id ? "#FAF6EC" : "#71675A" }}>{co.name}</button>)}
       </div>
+      <div className="flex items-center gap-2 mb-6 flex-wrap">
+        <button onClick={() => setCourseFilter("all")} className="f-label text-[11px] px-3.5 py-1.5 rounded-full" style={{ background: courseFilter === "all" ? "#4A4237" : "#F0E7D6", color: courseFilter === "all" ? "#FAF6EC" : "#71675A" }}>All courses</button>
+        {filterCourses.map((c) => <button key={c.id} onClick={() => setCourseFilter(c.id)} className="f-label text-[11px] px-3.5 py-1.5 rounded-full" style={{ background: courseFilter === c.id ? "#4A4237" : "#F0E7D6", color: courseFilter === c.id ? "#FAF6EC" : "#71675A" }}>{c.title}</button>)}
+      </div>
       <div className="grid grid-cols-5 gap-4 mb-8">{[{ label: "PENDING APPLICANTS", value: pendingApplicants }, { label: "ACTIVE ENROLLMENTS", value: activeEnrollments }, { label: "TASKS IN REVIEW", value: inReview }, { label: "TASKS COMPLETED", value: completedTasks }, { label: "COURSES LIVE", value: courses.filter((c) => c.status === "live").length }].map((s, i) => <div key={i} className="card rounded-2xl p-5"><div className="f-label text-[10px] mb-2" style={{ color: "#A79B84" }}>{s.label}</div><div className="f-display text-[26px] accent-text" style={{ fontWeight: 800 }}>{s.value}</div></div>)}</div>
       <div className="grid md:grid-cols-3 gap-5 mb-8">
-        <div className="card rounded-2xl p-6 md:col-span-2"><div className="f-label text-[12px] mb-4" style={{ color: "#71675A" }}>MODULES COMPLETED PER ENROLLMENT</div><div style={{ height: 220 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={progressData}><XAxis dataKey="name" tick={{ fontSize: 12, fill: "#71675A" }} axisLine={{ stroke: "#E7DEC9" }} tickLine={false} /><YAxis tick={{ fontSize: 12, fill: "#71675A" }} axisLine={false} tickLine={false} domain={[0, 8]} /><Tooltip cursor={{ fill: "#F0E7D6" }} contentStyle={{ borderRadius: 10, border: "1px solid #E7DEC9", fontSize: 13 }} /><Bar dataKey="modules" radius={[6, 6, 0, 0]}>{progressData.map((_, i) => <Cell key={i} fill="var(--accent)" />)}</Bar></BarChart></ResponsiveContainer></div></div>
+        <div className="card rounded-2xl p-6 md:col-span-2">
+          <div className="f-label text-[12px] mb-4" style={{ color: "#71675A" }}>MODULES COMPLETED PER ENROLLMENT</div>
+          {progressData.length === 0 && <div className="text-[14px]" style={{ color: "#A79B84" }}>No enrollments match this filter yet.</div>}
+          {progressData.length > 0 && <div style={{ height: 220 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={progressData}><XAxis dataKey="name" tick={{ fontSize: 12, fill: "#71675A" }} axisLine={{ stroke: "#E7DEC9" }} tickLine={false} /><YAxis tick={{ fontSize: 12, fill: "#71675A" }} axisLine={false} tickLine={false} domain={[0, 8]} allowDecimals={false} /><Tooltip cursor={{ fill: "#F0E7D6" }} contentStyle={{ borderRadius: 10, border: "1px solid #E7DEC9", fontSize: 13 }} formatter={(value) => [`${value} modules`, "Completed"]} labelFormatter={(_, payload) => payload?.[0] ? `${payload[0].payload.student} — ${payload[0].payload.course}` : ""} /><Bar dataKey="modules" radius={[6, 6, 0, 0]}>{progressData.map((_, i) => <Cell key={i} fill="var(--accent)" />)}</Bar></BarChart></ResponsiveContainer></div>}
+        </div>
         <div className="card rounded-2xl p-6"><div className="f-label text-[12px] mb-4" style={{ color: "#71675A" }}>RECENT ACTIVITY</div>{recent.length === 0 && <div className="text-[14px]" style={{ color: "#A79B84" }}>All caught up.</div>}<div className="flex flex-col gap-3">{recent.map((r, i) => <div key={i} className="text-[14px] pb-3" style={{ borderBottom: i < recent.length - 1 ? "1px solid #F0E7D6" : "none", color: "#4A4237" }}>{r.t}</div>)}</div></div>
       </div>
       <button onClick={() => setTab("applicants")} className="card rounded-2xl p-6 w-full text-left flex items-center justify-between"><div><div className="f-display text-[19px]" style={{ fontWeight: 700 }}>Review new applicants</div><div className="text-[14px] mt-1" style={{ color: "#71675A" }}>{pendingApplicants} waiting on you.</div></div><ChevronRight size={18} color="#A79B84" /></button>
