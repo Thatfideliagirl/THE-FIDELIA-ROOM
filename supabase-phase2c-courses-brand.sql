@@ -3,6 +3,18 @@
 -- the deployed site on a phone) instead of only in the browser tab that
 -- made them.
 
+-- The very first schema created a `courses` table (and modules/meetings/
+-- enrollments/tasks tables riding on it) for a fully relational design that
+-- was never actually adopted -- the app has used local/jsonb state for all
+-- of these instead from the start. Nothing in the app queries any of them,
+-- so they're safe to clear out before creating the real `courses` table
+-- this app actually uses.
+drop table if exists meetings cascade;
+drop table if exists modules cascade;
+drop table if exists enrollments cascade;
+drop table if exists tasks cascade;
+drop table if exists courses cascade;
+
 create table if not exists courses (
   id text primary key,
   data jsonb not null,
