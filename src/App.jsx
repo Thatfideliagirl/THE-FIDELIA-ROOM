@@ -5,7 +5,7 @@ import {
 } from "./lib/data.js";
 import {
   Landing, CoursesIndex, CourseDetail, ResourcesPage, ApplicationForm,
-  SignInScreen, InReviewScreen, CodeRedeemScreen,
+  SignInScreen, InReviewScreen, CodeRedeemScreen, LogoMark,
 } from "./components.jsx";
 import { MyCourses } from "./student.jsx";
 import { AdminDashboard } from "./admin.jsx";
@@ -117,7 +117,12 @@ export default function App() {
     const myStudent = studs.find((s) => s.authUserId === session.user.id || s.email.toLowerCase() === email.toLowerCase());
     if (myStudent) { setActiveStudent(myStudent); setPage("studentDash"); return; }
     const myApplicant = [...apps].reverse().find((a) => a.email.toLowerCase() === email.toLowerCase());
-    if (myApplicant) { setActiveApplicant(myApplicant); setPage(myApplicant.status === "pending" ? "inReview" : "landing"); }
+    if (myApplicant) { setActiveApplicant(myApplicant); setPage(myApplicant.status === "pending" ? "inReview" : "landing"); return; }
+    // A real, working login with no matching applicant/student record --
+    // e.g. the account got created but the application step right after it
+    // failed. Silently landing on the plain landing page here looked
+    // exactly like "nothing happened" with no way to tell what went wrong.
+    setPage("accountNotFound");
   }
   useEffect(() => {
     supabase?.auth.getSession().then(({ data }) => loadForSession(data.session));
@@ -217,6 +222,20 @@ export default function App() {
       {page === "signup" && <ApplicationForm courses={courses} cohorts={cohorts} presetCourseId={presetCourseId} existingUser={applyingAsExisting} onSubmit={submitApplication} onCancel={() => setPage(applyingAsExisting ? "studentDash" : "landing")} />}
       {page === "login" && <SignInScreen students={students} applicants={applicants} onBack={() => setPage("landing")} onSignIn={handleSignIn} onForgotPassword={handleForgotPassword} onEnterStudent={(s) => { setActiveStudent(s); setPage("studentDash"); }} onEnterApplicant={(a) => { setActiveApplicant(a); setPage("inReview"); }} onEnterAdmin={() => setPage("adminDash")} />}
       {page === "inReview" && liveApplicant && <InReviewScreen applicant={liveApplicant} onExit={handleSignOut} />}
+      {page === "accountNotFound" && (
+        <div className="min-h-screen flex items-center justify-center px-6 text-center">
+          <div className="reveal in max-w-[420px]">
+            <LogoMark height={64} />
+            <div className="f-label text-[13px] mt-6 mb-3 accent-text">ACCOUNT NOT FOUND</div>
+            <h1 className="f-display text-[26px] mb-4" style={{ fontWeight: 800 }}>We can't find an application for this account.</h1>
+            <p className="text-[15px] leading-relaxed mb-8" style={{ color: "#71675A" }}>You're signed in, but there's no application on file for this email. If you started applying before and it didn't go through, please apply again.</p>
+            <div className="flex flex-col gap-3">
+              <button onClick={() => setPage("signup")} className="btn-primary rounded-lg py-3 text-[15px]">Apply again</button>
+              <button onClick={handleSignOut} className="f-label text-[12px]" style={{ color: "#A79B84" }}>SIGN OUT</button>
+            </div>
+          </div>
+        </div>
+      )}
       {page === "studentDash" && liveStudent && pendingEnrollment && <CodeRedeemScreen student={liveStudent} enrollment={pendingEnrollment} onRedeem={() => redeemCode(pendingEnrollment.id)} onExit={handleSignOut} />}
       {page === "studentDash" && liveStudent && !pendingEnrollment && (
         <MyCourses student={liveStudent} setStudents={syncStudents} courses={courses} cohorts={cohorts} applicants={applicants} tasks={tasks} setTasks={setTasks} resources={resources} community={community} setCommunity={setCommunity} notices={notices.filter((n) => n.cohortId === "all" || n.cohortId === liveStudent.cohortId)} setNotices={setNotices} directThreads={directThreads} setDirectThreads={setDirectThreads} allStudents={students} onExit={handleSignOut} onApplyMore={(courseId) => { setApplyingAsExisting(liveStudent); setPresetCourseId(courseId || null); setPage("signup"); }} notifItems={studentNotifItems} notifSeen={studentNotifSeen} onMarkSeen={setStudentNotifSeen} />
