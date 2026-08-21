@@ -2,6 +2,12 @@ import { supabase } from "./supabaseClient.js";
 import { ADMIN_EMAIL } from "./data.js";
 
 const isEmail = (v) => v.includes("@");
+// supabase-js doesn't always throw when the browser's own fetch fails (a
+// dropped connection, a blocked domain, no signal) -- sometimes it resolves
+// normally with an {error} whose message is the raw "Failed to fetch",
+// which would otherwise show as an opaque "something went wrong" instead
+// of the connection problem it actually is.
+const isFetchFailure = (message) => /fetch/i.test(message || "");
 
 // Applicants sign in by email or Student ID; Supabase only signs in by email,
 // so a Student ID gets resolved to its email first via a safe RPC lookup.
@@ -27,7 +33,10 @@ export async function signIn(identifier, password) {
     // enough that it's more useful to show the real reason than to hide it
     // behind one generic "something went wrong" -- that's what made the last
     // occurrence of this impossible to diagnose without guessing.
-    if (error) return { error: error.message.toLowerCase().includes("invalid") ? "wrong-password" : "unknown", detail: error.message };
+    if (error) {
+      if (isFetchFailure(error.message)) return { error: "network" };
+      return { error: error.message.toLowerCase().includes("invalid") ? "wrong-password" : "unknown", detail: error.message };
+    }
     return { user: data.user };
   } catch {
     return { error: "network" };
