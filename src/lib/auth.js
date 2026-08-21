@@ -55,7 +55,11 @@ export async function signUpApplicant({ name, email, phone, password }) {
 
 export async function sendPasswordReset(email) {
   try {
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
+    // Without an explicit redirectTo, Supabase sends the user back to
+    // whatever "Site URL" is configured in the project's own Auth settings
+    // -- which may not be this deployment at all. Pointing it at the page
+    // that's actually running is what makes the link go anywhere useful.
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: window.location.origin });
     return { error: error?.message || null };
   } catch {
     return { error: "network" };

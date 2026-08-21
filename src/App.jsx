@@ -5,7 +5,7 @@ import {
 } from "./lib/data.js";
 import {
   Landing, CoursesIndex, CourseDetail, ResourcesPage, ApplicationForm,
-  SignInScreen, InReviewScreen, CodeRedeemScreen, LogoMark,
+  SignInScreen, InReviewScreen, CodeRedeemScreen, LogoMark, Field,
 } from "./components.jsx";
 import { MyCourses } from "./student.jsx";
 import { AdminDashboard } from "./admin.jsx";
@@ -126,9 +126,25 @@ export default function App() {
   }
   useEffect(() => {
     supabase?.auth.getSession().then(({ data }) => loadForSession(data.session));
-    const { data: listener } = supabase?.auth.onAuthStateChange((_event, session) => loadForSession(session)) || { data: null };
+    // A password-reset link lands here with a real (temporary) session and
+    // this specific event, not a normal sign-in -- routing it through
+    // loadForSession would just dump them on whatever their account normally
+    // opens to, with no way to actually set the new password.
+    const { data: listener } = supabase?.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY") { setPage("resetPassword"); return; }
+      loadForSession(session);
+    }) || { data: null };
     return () => listener?.subscription.unsubscribe();
   }, []);
+  const [newPassword, setNewPassword] = useState(""); const [resetSaving, setResetSaving] = useState(false); const [resetError, setResetError] = useState(""); const [resetDone, setResetDone] = useState(false);
+  async function submitNewPassword() {
+    if (newPassword.length < 6) { setResetError("Needs at least 6 characters."); return; }
+    setResetSaving(true); setResetError("");
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    setResetSaving(false);
+    if (error) { setResetError(error.message); return; }
+    setResetDone(true);
+  }
 
   async function handleSignIn(identifier, password) {
     const result = await signIn(identifier, password);
@@ -222,6 +238,27 @@ export default function App() {
       {page === "signup" && <ApplicationForm courses={courses} cohorts={cohorts} presetCourseId={presetCourseId} existingUser={applyingAsExisting} onSubmit={submitApplication} onCancel={() => setPage(applyingAsExisting ? "studentDash" : "landing")} />}
       {page === "login" && <SignInScreen students={students} applicants={applicants} onBack={() => setPage("landing")} onSignIn={handleSignIn} onForgotPassword={handleForgotPassword} onEnterStudent={(s) => { setActiveStudent(s); setPage("studentDash"); }} onEnterApplicant={(a) => { setActiveApplicant(a); setPage("inReview"); }} onEnterAdmin={() => setPage("adminDash")} />}
       {page === "inReview" && liveApplicant && <InReviewScreen applicant={liveApplicant} onExit={handleSignOut} />}
+      {page === "resetPassword" && (
+        <div className="min-h-screen flex items-center justify-center px-6">
+          <div className="reveal in w-full max-w-[420px]">
+            <div className="flex flex-col items-center text-center mb-8"><LogoMark height={80} /><div className="f-label text-[13px] mt-5 mb-1 accent-text">RESET PASSWORD</div><h2 className="f-display text-[26px]" style={{ fontWeight: 800 }}>Choose a new password.</h2></div>
+            <div className="card rounded-2xl p-7 flex flex-col gap-4" style={{ boxShadow: "0 20px 50px -24px rgba(38,32,25,0.16)" }}>
+              {resetDone ? (
+                <>
+                  <div className="text-[14px] accent-text">Your password's been updated — you're signed in.</div>
+                  <button onClick={() => { setResetDone(false); setNewPassword(""); supabase.auth.getSession().then(({ data }) => loadForSession(data.session)); }} className="btn-primary rounded-lg py-3 text-[15px]">Continue</button>
+                </>
+              ) : (
+                <>
+                  <Field label="New password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="At least 6 characters" />
+                  {resetError && <div className="text-[13px]" style={{ color: "#B04A3A" }}>{resetError}</div>}
+                  <button disabled={resetSaving} onClick={submitNewPassword} className="btn-primary rounded-lg py-3 text-[15px]">{resetSaving ? "Saving…" : "Save new password"}</button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       {page === "accountNotFound" && (
         <div className="min-h-screen flex items-center justify-center px-6 text-center">
           <div className="reveal in max-w-[420px]">
