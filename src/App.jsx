@@ -12,6 +12,7 @@ import { AdminDashboard } from "./admin.jsx";
 import { supabase } from "./lib/supabaseClient.js";
 import { signIn, signOut, signUpApplicant, sendPasswordReset, isAdminEmail } from "./lib/auth.js";
 import { fetchApplicants, insertApplicant, updateApplicant, fetchStudents, insertStudent, updateStudent, fetchResources, insertResource, updateResource, deleteResource } from "./lib/db.js";
+import { sendWelcomeEmail, sendAcceptanceEmail } from "./lib/email.js";
 
 export default function App() {
   const [page, setPage] = useState("landing");
@@ -120,6 +121,7 @@ export default function App() {
       const saved = await insertApplicant({ ...rest, status: "pending", studentRef: null, authUserId });
       setApplicants((prev) => [...prev, saved]);
       setActiveApplicant(saved); setApplyingAsExisting(null); setPage("inReview");
+      sendWelcomeEmail({ email: rest.email, name: rest.name, courseName: courses.find((c) => c.id === rest.courseId)?.title || "your course" });
       return null;
     } catch (e) {
       console.error("submitApplication failed", e);
@@ -140,6 +142,7 @@ export default function App() {
       }
       const acceptedApplicant = await updateApplicant(applicant.id, { ...applicant, status: "accepted" });
       setApplicants((prev) => prev.map((a) => a.id === acceptedApplicant.id ? acceptedApplicant : a));
+      sendAcceptanceEmail({ email: applicant.email, name: applicant.name, courseName: courses.find((c) => c.id === applicant.courseId)?.title || "your course", accessCode: code, loginUrl: window.location.origin });
       return null;
     } catch (e) {
       console.error("acceptApplicant failed", e);
@@ -164,6 +167,7 @@ export default function App() {
     ...students.flatMap((s) => s.enrollments.filter((e) => e.pendingReview).map((e) => ({ id: `mod-${e.id}`, t: `${s.name} submitted a module quick check for review` }))),
   ];
   const studentNotifItems = liveStudent ? [
+    ...tasks.filter((t) => t.assigned.includes(liveStudent.id) && !t.submissions[liveStudent.id]).map((t) => ({ id: `assigned-${t.id}`, t: `You've been assigned a new task: "${t.title}"` })),
     ...tasks.filter((t) => t.assigned.includes(liveStudent.id)).flatMap((t) => { const sub = t.submissions[liveStudent.id]; return sub && sub.status === "approved" ? [{ id: `grade-${t.id}`, t: `Your task "${t.title}" was reviewed — ${sub.score}%` }] : []; }),
     ...liveStudent.enrollments.filter((e) => e.certificateReady).map((e) => ({ id: `cert-${e.id}`, t: "Your certificate is ready to download" })),
   ] : [];
