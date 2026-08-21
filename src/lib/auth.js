@@ -23,7 +23,11 @@ export async function signIn(identifier, password) {
     const email = await resolveLoginEmail(identifier);
     if (!email) return { error: "not-found" };
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return { error: error.message.toLowerCase().includes("invalid") ? "wrong-password" : "unknown" };
+    // Any other Supabase error (unconfirmed email, rate limit, etc.) is rare
+    // enough that it's more useful to show the real reason than to hide it
+    // behind one generic "something went wrong" -- that's what made the last
+    // occurrence of this impossible to diagnose without guessing.
+    if (error) return { error: error.message.toLowerCase().includes("invalid") ? "wrong-password" : "unknown", detail: error.message };
     return { user: data.user };
   } catch {
     return { error: "network" };

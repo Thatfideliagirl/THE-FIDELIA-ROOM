@@ -127,7 +127,8 @@ export default function App() {
 
   async function handleSignIn(identifier, password) {
     const result = await signIn(identifier, password);
-    return result.error || null;
+    if (!result.error) return null;
+    return result.error === "unknown" && result.detail ? result.detail : result.error;
   }
   async function handleForgotPassword(email) { const { error } = await sendPasswordReset(email); return error; }
   async function handleSignOut() { await signOut(); setActiveStudent(null); setActiveApplicant(null); setPage("landing"); }
