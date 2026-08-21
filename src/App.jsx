@@ -46,17 +46,24 @@ export default function App() {
   // `.map(x => x.id !== id ? x : {...x, ...})` pattern) gets written back to
   // Supabase in the background. Everything else (courses, cohorts, tasks,
   // community, notices, chat) is still local/mock -- that's the rest of Phase 2.
+  //
+  // These background writes have no UI of their own to show a failure in --
+  // callers just call setX and move on. saveError/reportSaveError gives every
+  // sync wrapper below a single shared place to surface "that didn't actually
+  // save" instead of only logging to a console nobody's watching.
+  const [saveError, setSaveError] = useState("");
+  function reportSaveError(context) { return (e) => { console.error(context, e); setSaveError("Something didn't save -- check your connection and try that again."); }; }
   function syncStudents(updater) {
     setStudents((prev) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
-      next.forEach((item) => { const before = prev.find((x) => x.id === item.id); if (before && before !== item) updateStudent(item.id, item).catch((e) => console.error("updateStudent failed", e)); });
+      next.forEach((item) => { const before = prev.find((x) => x.id === item.id); if (before && before !== item) updateStudent(item.id, item).catch(reportSaveError("updateStudent failed")); });
       return next;
     });
   }
   function syncApplicants(updater) {
     setApplicants((prev) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
-      next.forEach((item) => { const before = prev.find((x) => x.id === item.id); if (before && before !== item) updateApplicant(item.id, item).catch((e) => console.error("updateApplicant failed", e)); });
+      next.forEach((item) => { const before = prev.find((x) => x.id === item.id); if (before && before !== item) updateApplicant(item.id, item).catch(reportSaveError("updateApplicant failed")); });
       return next;
     });
   }
@@ -77,16 +84,16 @@ export default function App() {
   function syncCourses(updater) {
     setCourses((prev) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
-      next.forEach((item) => { const before = prev.find((x) => x.id === item.id); if (before !== item) upsertCourse(item).catch((e) => console.error("upsertCourse failed", e)); });
+      next.forEach((item) => { const before = prev.find((x) => x.id === item.id); if (before !== item) upsertCourse(item).catch(reportSaveError("upsertCourse failed")); });
       return next;
     });
   }
   useEffect(() => { fetchSettings().then((s) => { if (s) { setBrand(s.brand); setAdminProfile(s.adminProfile); } }).catch((e) => console.error("fetchSettings failed", e)); }, []);
   function syncBrand(updater) {
-    setBrand((prev) => { const next = typeof updater === "function" ? updater(prev) : updater; updateSettings({ brand: next, adminProfile }).catch((e) => console.error("updateSettings failed", e)); return next; });
+    setBrand((prev) => { const next = typeof updater === "function" ? updater(prev) : updater; updateSettings({ brand: next, adminProfile }).catch(reportSaveError("updateSettings failed")); return next; });
   }
   function syncAdminProfile(updater) {
-    setAdminProfile((prev) => { const next = typeof updater === "function" ? updater(prev) : updater; updateSettings({ brand, adminProfile: next }).catch((e) => console.error("updateSettings failed", e)); return next; });
+    setAdminProfile((prev) => { const next = typeof updater === "function" ? updater(prev) : updater; updateSettings({ brand, adminProfile: next }).catch(reportSaveError("updateSettings failed")); return next; });
   }
   async function addResource(data) {
     try { const saved = await insertResource(data); setResources((prev) => [...prev, saved]); return null; }
@@ -196,6 +203,12 @@ export default function App() {
 
   return (
     <div className="lms-root" style={{ "--accent": brand.accent }}>
+      {saveError && (
+        <div className="fixed left-1/2 z-[999] flex items-center gap-3 rounded-xl px-5 py-3 text-[13px]" style={{ top: 16, transform: "translateX(-50%)", background: "#B04A3A", color: "#FAF6EC", boxShadow: "0 14px 30px -10px rgba(0,0,0,.35)", fontWeight: 600 }}>
+          {saveError}
+          <button onClick={() => setSaveError("")} className="f-label text-[11px]" style={{ opacity: .85 }}>DISMISS</button>
+        </div>
+      )}
       {page === "landing" && <Landing courses={courses} resources={resources} testimonials={testimonials} faqs={faqs} brand={brand} onSignIn={() => setPage("login")} onSignUp={(courseId) => { setPresetCourseId(typeof courseId === "string" ? courseId : null); setApplyingAsExisting(null); setPage("signup"); }} onViewCourses={() => setPage("courses")} onViewResources={() => setPage("resources")} onViewCourseDetail={(id) => { setViewCourseId(id); setPage("courseDetail"); }} />}
       {page === "courses" && <CoursesIndex courses={courses} onBack={() => setPage("landing")} onOpen={(id) => { setViewCourseId(id); setPage("courseDetail"); }} />}
       {page === "courseDetail" && viewCourse && <CourseDetail course={viewCourse} testimonials={testimonials} onBack={() => setPage("courses")} onApply={(id) => { setPresetCourseId(id); setApplyingAsExisting(null); setPage("signup"); }} />}
