@@ -24,7 +24,7 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
   const hasNext = enrollment.completedModuleIds.length < course.modules.length;
   const pendingHere = enrollment.pendingReview?.moduleId === module.id;
 
-  useEffect(() => { setView("lecture"); setLectureStep(module.brief ? "brief" : "content"); setAnswers({}); setResult(null); setProof(""); }, [module.id]);
+  useEffect(() => { setView("lecture"); setLectureStep(module.brief ? "brief" : "content"); setAnswers({}); setResult(null); setProof(""); setJustPassed(false); }, [module.id]);
 
   function completeModule() { updateEnrollment({ completedModuleIds: [...new Set([...enrollment.completedModuleIds, module.id])] }); setJustPassed(true); }
   function submitQuiz() { let correct = 0; module.quiz.forEach((q, i) => { if (answers[i] === q.correct) correct++; }); const pct = Math.round((correct / module.quiz.length) * 100); setResult(pct); if (pct >= (module.passPct || 70)) completeModule(); }
@@ -39,7 +39,7 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
       <CheckCircle2 size={48} color="var(--accent)" className="mb-5" />
       <div className="f-display text-[28px] mb-3" style={{ fontWeight: 800 }}>Well done — you passed!</div>
       <div className="text-[15px] mb-8" style={{ color: "#71675A" }}>{hasNext ? "The next module is unlocked." : "That was the last module — nicely done."}</div>
-      <div className="flex gap-3">{hasNext && <button onClick={() => setJustPassed(false)} className="btn-primary rounded-full px-7 py-3.5 text-[15px]" style={{ fontWeight: 700 }}>Continue to next module</button>}<button onClick={onBack} className="btn-ghost rounded-full px-7 py-3.5 text-[15px]">Back to your path</button></div>
+      <div className="flex gap-3">{hasNext && <button onClick={() => onNext ? onNext() : setJustPassed(false)} className="btn-primary rounded-full px-7 py-3.5 text-[15px]" style={{ fontWeight: 700 }}>Continue to next module</button>}<button onClick={onBack} className="btn-ghost rounded-full px-7 py-3.5 text-[15px]">Back to your path</button></div>
     </div>
   );
   const tabs = [
@@ -177,7 +177,7 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
             <div className="card rounded-2xl p-8"><div className="f-label text-[12px] mb-6" style={{ color: "#71675A" }}>YOUR PATH</div><Spine course={course} enrollment={enrollment} onOpen={(id) => setOpenModuleId(id)} /></div>
           </>
         )}
-        {tab === "path" && openModuleId !== null && <LessonView course={course} enrollment={enrollment} updateEnrollment={updateEnrollment} onBack={() => setOpenModuleId(null)} moduleId={openModuleId} />}
+        {tab === "path" && openModuleId !== null && <LessonView course={course} enrollment={enrollment} updateEnrollment={updateEnrollment} onBack={() => setOpenModuleId(null)} onNext={() => setOpenModuleId(course.modules[enrollment.completedModuleIds.length]?.id ?? null)} moduleId={openModuleId} />}
 
         {tab === "meetings" && (() => {
           const now = Date.now();
