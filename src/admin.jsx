@@ -15,11 +15,13 @@ import { CommunityPanel } from "./student.jsx";
 export function ApplicantsTab({ applicants, setApplicants, students, setStudents, courses, cohorts, onAccept }) {
   const [openId, setOpenId] = useState(null); const [cohortInput, setCohortInput] = useState(cohorts[0]?.id);
   const [accepting, setAccepting] = useState(null);
+  const [acceptError, setAcceptError] = useState("");
   const course = (id) => courses.find((c) => c.id === id);
   async function accept(a) {
-    setAccepting(a.id);
-    await onAccept(a, cohortInput);
+    setAccepting(a.id); setAcceptError("");
+    const err = await onAccept(a, cohortInput);
     setAccepting(null);
+    if (err) setAcceptError(err);
   }
   function decline(a) { setApplicants((prev) => prev.map((x) => x.id === a.id ? { ...x, status: "declined" } : x)); }
   const pending = applicants.filter((a) => a.status === "pending"); const resolved = applicants.filter((a) => a.status !== "pending");
@@ -30,7 +32,7 @@ export function ApplicantsTab({ applicants, setApplicants, students, setStudents
       <div className="flex flex-col gap-4 mb-10">{pending.map((a) => (
         <div key={a.id} className="card rounded-2xl p-6">
           <button className="w-full flex items-center justify-between" onClick={() => setOpenId(openId === a.id ? null : a.id)}><div className="text-left"><div className="text-[17px]" style={{ fontWeight: 700 }}>{a.name} {a.studentRef && <span className="f-code text-[10px] tint-badge px-2 py-0.5 rounded-full ml-1">EXISTING STUDENT</span>}</div><div className="text-[13px] mt-1" style={{ color: "#71675A" }}>{a.email} · applying to {course(a.courseId)?.title}</div></div><ChevronDown size={18} color="#A79B84" style={{ transform: openId === a.id ? "rotate(180deg)" : "none" }} /></button>
-          {openId === a.id && <div className="mt-5 pt-5" style={{ borderTop: "1px solid #F0E7D6" }}>{course(a.courseId)?.applicationQuestions.map((q, i) => <div key={i} className="mb-3"><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>{q.toUpperCase()}</div><div className="text-[14px]">{a.answers[i]}</div></div>)}{!a.studentRef && <div className="mt-4 mb-4" style={{ maxWidth: 220 }}><SelectF label="Cohort" value={cohortInput} onChange={(e) => setCohortInput(e.target.value)} options={cohorts.map((c) => ({ value: c.id, label: c.name }))} /></div>}<div className="flex gap-3"><button disabled={accepting === a.id} onClick={() => accept(a)} className="btn-primary rounded-lg px-5 py-2.5 text-[14px]">{accepting === a.id ? "Accepting…" : "Accept & generate code"}</button><button onClick={() => decline(a)} className="btn-ghost rounded-lg px-5 py-2.5 text-[14px]">Decline</button></div></div>}
+          {openId === a.id && <div className="mt-5 pt-5" style={{ borderTop: "1px solid #F0E7D6" }}>{course(a.courseId)?.applicationQuestions.map((q, i) => <div key={i} className="mb-3"><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>{q.toUpperCase()}</div><div className="text-[14px]">{a.answers[i]}</div></div>)}{!a.studentRef && <div className="mt-4 mb-4" style={{ maxWidth: 220 }}><SelectF label="Cohort" value={cohortInput} onChange={(e) => setCohortInput(e.target.value)} options={cohorts.map((c) => ({ value: c.id, label: c.name }))} /></div>}{accepting !== a.id && acceptError && <div className="text-[13px] mb-3" style={{ color: "#B04A3A" }}>{acceptError}</div>}<div className="flex gap-3"><button disabled={accepting === a.id} onClick={() => accept(a)} className="btn-primary rounded-lg px-5 py-2.5 text-[14px]">{accepting === a.id ? "Accepting…" : "Accept & generate code"}</button><button onClick={() => decline(a)} className="btn-ghost rounded-lg px-5 py-2.5 text-[14px]">Decline</button></div></div>}
         </div>
       ))}</div>
       {resolved.length > 0 && <><div className="f-label text-[12px] mb-4" style={{ color: "#71675A" }}>DECIDED</div><div className="flex flex-col gap-2">{resolved.map((a) => <div key={a.id} className="flex items-center justify-between px-5 py-3 rounded-lg text-[14px]" style={{ background: "#F0E7D6" }}><span>{a.name}</span><span className="f-code text-[10px]" style={{ color: a.status === "accepted" ? "var(--accent)" : "#A79B84" }}>{a.status.toUpperCase()}</span></div>)}</div></>}

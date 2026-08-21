@@ -122,8 +122,10 @@ export default function App() {
       }
       const acceptedApplicant = await updateApplicant(applicant.id, { ...applicant, status: "accepted" });
       setApplicants((prev) => prev.map((a) => a.id === acceptedApplicant.id ? acceptedApplicant : a));
+      return null;
     } catch (e) {
       console.error("acceptApplicant failed", e);
+      return "Couldn't accept this applicant — check your connection and try again.";
     }
   }
   function redeemCode(enrollmentId) { syncStudents((prev) => prev.map((s) => s.id !== activeStudent.id ? s : { ...s, enrollments: s.enrollments.map((e) => e.id === enrollmentId ? { ...e, status: "active" } : e) })); }
