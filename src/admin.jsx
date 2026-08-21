@@ -533,11 +533,11 @@ export function ResourceForm({ courses, initial, onSave, onClose }) {
     </div>
   );
 }
-export function LibraryTab({ resources, setResources, courses }) {
+export function LibraryTab({ resources, setResources, onAdd, onRemove, courses }) {
   const [showAdd, setShowAdd] = useState(false); const [editingId, setEditingId] = useState(null);
-  function add(data) { setResources((prev) => [...prev, { id: "r" + Date.now(), ...data }]); setShowAdd(false); }
+  function add(data) { onAdd(data); setShowAdd(false); }
   function save(id, data) { setResources((prev) => prev.map((r) => r.id === id ? { ...r, ...data } : r)); setEditingId(null); }
-  function remove(id) { setResources((prev) => prev.filter((r) => r.id !== id)); }
+  function remove(id) { onRemove(id); }
   const folders = [...new Set(resources.map((r) => r.folder))];
   return (
     <>
@@ -749,7 +749,7 @@ export function OverviewTab({ courses, students, applicants, tasks, cohorts, set
   );
 }
 
-export function AdminDashboard({ courses, setCourses, students, setStudents, applicants, setApplicants, onAcceptApplicant, cohorts, setCohorts, tasks, setTasks, resources, setResources, community, setCommunity, notices, setNotices, directThreads, setDirectThreads, testimonials, setTestimonials, faqs, setFaqs, brand, setBrand, adminProfile, setAdminProfile, onExit, notifItems, notifSeen, onMarkSeen }) {
+export function AdminDashboard({ courses, setCourses, students, setStudents, applicants, setApplicants, onAcceptApplicant, cohorts, setCohorts, tasks, setTasks, resources, setResources, onAddResource, onRemoveResource, community, setCommunity, notices, setNotices, directThreads, setDirectThreads, testimonials, setTestimonials, faqs, setFaqs, brand, setBrand, adminProfile, setAdminProfile, onExit, notifItems, notifSeen, onMarkSeen }) {
   const [tab, setTab] = useState("overview");
   const navItems = [
     { id: "overview", icon: Sparkles, label: "Overview" }, { id: "profile", icon: UserCircle, label: "My Profile" }, { id: "applicants", icon: ClipboardCheck, label: "Applicants" },
@@ -781,7 +781,7 @@ export function AdminDashboard({ courses, setCourses, students, setStudents, app
         {tab === "students" && <StudentsTab students={students} setStudents={setStudents} applicants={applicants} courses={courses} cohorts={cohorts} />}
         {tab === "gradebook" && <GradebookTab students={students} courses={courses} cohorts={cohorts} />}
         {tab === "tasks" && <TasksTab tasks={tasks} setTasks={setTasks} students={students} courses={courses} />}
-        {tab === "library" && <LibraryTab resources={resources} setResources={setResources} courses={courses} />}
+        {tab === "library" && <LibraryTab resources={resources} setResources={setResources} onAdd={onAddResource} onRemove={onRemoveResource} courses={courses} />}
         {tab === "certificates" && <CertificatesTab students={students} setStudents={setStudents} courses={courses} />}
         {tab === "testimonials" && <TestimonialsTab testimonials={testimonials} setTestimonials={setTestimonials} />}
         {tab === "faq" && <FaqTab faqs={faqs} setFaqs={setFaqs} />}

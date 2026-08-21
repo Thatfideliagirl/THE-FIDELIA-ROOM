@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   seedCourses, seedCohorts, seedStudents, seedApplicants, seedTasks,
-  seedResources, seedTestimonials, seedFaqs, FONT_STYLE, genCode, nextStudentId,
+  seedTestimonials, seedFaqs, FONT_STYLE, genCode, nextStudentId,
 } from "./lib/data.js";
 import {
   Landing, CoursesIndex, CourseDetail, ResourcesPage, ApplicationForm,
@@ -11,7 +11,7 @@ import { MyCourses } from "./student.jsx";
 import { AdminDashboard } from "./admin.jsx";
 import { supabase } from "./lib/supabaseClient.js";
 import { signIn, signOut, signUpApplicant, sendPasswordReset, isAdminEmail } from "./lib/auth.js";
-import { fetchApplicants, insertApplicant, updateApplicant, fetchStudents, insertStudent, updateStudent } from "./lib/db.js";
+import { fetchApplicants, insertApplicant, updateApplicant, fetchStudents, insertStudent, updateStudent, fetchResources, insertResource, updateResource, deleteResource } from "./lib/db.js";
 
 export default function App() {
   const [page, setPage] = useState("landing");
@@ -23,7 +23,7 @@ export default function App() {
   const [students, setStudents] = useState(seedStudents);
   const [applicants, setApplicants] = useState(seedApplicants);
   const [tasks, setTasks] = useState(seedTasks);
-  const [resources, setResources] = useState(seedResources.map((r) => ({ ...r, visibility: r.visibility || "course" })));
+  const [resources, setResources] = useState([]);
   const [testimonials, setTestimonials] = useState(seedTestimonials);
   const [faqs, setFaqs] = useState(seedFaqs);
   const [community, setCommunity] = useState([]);
@@ -44,7 +44,7 @@ export default function App() {
   // whatever record actually changed (a new object reference, from the usual
   // `.map(x => x.id !== id ? x : {...x, ...})` pattern) gets written back to
   // Supabase in the background. Everything else (courses, cohorts, tasks,
-  // resources, community, notices, chat) is still local/mock -- that's Phase 2.
+  // community, notices, chat) is still local/mock -- that's the rest of Phase 2.
   function syncStudents(updater) {
     setStudents((prev) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
@@ -58,6 +58,28 @@ export default function App() {
       next.forEach((item) => { const before = prev.find((x) => x.id === item.id); if (before && before !== item) updateApplicant(item.id, item).catch((e) => console.error("updateApplicant failed", e)); });
       return next;
     });
+  }
+
+  // Resources are real too, now -- fetched on load regardless of login (the
+  // public Resources page needs them without anyone signed in). syncResources
+  // handles in-place edits the same way syncStudents/syncApplicants do;
+  // creating and removing a resource are handled explicitly below since
+  // there's no "before" record to diff against for a brand-new one.
+  useEffect(() => { fetchResources().then(setResources).catch((e) => console.error("fetchResources failed", e)); }, []);
+  function syncResources(updater) {
+    setResources((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      next.forEach((item) => { const before = prev.find((x) => x.id === item.id); if (before && before !== item) updateResource(item.id, item).catch((e) => console.error("updateResource failed", e)); });
+      return next;
+    });
+  }
+  async function addResource(data) {
+    try { const saved = await insertResource(data); setResources((prev) => [...prev, saved]); }
+    catch (e) { console.error("insertResource failed", e); }
+  }
+  async function removeResource(id) {
+    setResources((prev) => prev.filter((r) => r.id !== id));
+    try { await deleteResource(id); } catch (e) { console.error("deleteResource failed", e); }
   }
 
   async function loadForSession(session) {
@@ -164,7 +186,7 @@ export default function App() {
         <MyCourses student={liveStudent} setStudents={syncStudents} courses={courses} cohorts={cohorts} applicants={applicants} tasks={tasks} setTasks={setTasks} resources={resources} community={community} setCommunity={setCommunity} notices={notices.filter((n) => n.cohortId === "all" || n.cohortId === liveStudent.cohortId)} setNotices={setNotices} directThreads={directThreads} setDirectThreads={setDirectThreads} allStudents={students} onExit={handleSignOut} onApplyMore={(courseId) => { setApplyingAsExisting(liveStudent); setPresetCourseId(courseId || null); setPage("signup"); }} notifItems={studentNotifItems} notifSeen={studentNotifSeen} onMarkSeen={setStudentNotifSeen} />
       )}
       {page === "adminDash" && (
-        <AdminDashboard courses={courses} setCourses={setCourses} students={students} setStudents={syncStudents} applicants={applicants} setApplicants={syncApplicants} onAcceptApplicant={acceptApplicant} cohorts={cohorts} setCohorts={setCohorts} tasks={tasks} setTasks={setTasks} resources={resources} setResources={setResources} community={community} setCommunity={setCommunity} notices={notices} setNotices={setNotices} directThreads={directThreads} setDirectThreads={setDirectThreads} testimonials={testimonials} setTestimonials={setTestimonials} faqs={faqs} setFaqs={setFaqs} brand={brand} setBrand={setBrand} adminProfile={adminProfile} setAdminProfile={setAdminProfile} onExit={handleSignOut} notifItems={adminNotifItems} notifSeen={adminNotifSeen} onMarkSeen={setAdminNotifSeen} />
+        <AdminDashboard courses={courses} setCourses={setCourses} students={students} setStudents={syncStudents} applicants={applicants} setApplicants={syncApplicants} onAcceptApplicant={acceptApplicant} cohorts={cohorts} setCohorts={setCohorts} tasks={tasks} setTasks={setTasks} resources={resources} setResources={syncResources} onAddResource={addResource} onRemoveResource={removeResource} community={community} setCommunity={setCommunity} notices={notices} setNotices={setNotices} directThreads={directThreads} setDirectThreads={setDirectThreads} testimonials={testimonials} setTestimonials={setTestimonials} faqs={faqs} setFaqs={setFaqs} brand={brand} setBrand={setBrand} adminProfile={adminProfile} setAdminProfile={setAdminProfile} onExit={handleSignOut} notifItems={adminNotifItems} notifSeen={adminNotifSeen} onMarkSeen={setAdminNotifSeen} />
       )}
     </div>
   );

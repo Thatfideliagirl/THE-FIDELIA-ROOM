@@ -24,6 +24,37 @@ const studentIn = (s) => ({
   enrollments: s.enrollments || [],
 });
 
+const resourceOut = (r) => ({
+  id: r.id, courseId: r.course_id, folder: r.folder, title: r.title, description: r.description || "",
+  type: r.type, kind: r.kind, url: r.url || "", file: r.file_url ? { name: r.title, dataUrl: r.file_url } : null,
+  visibility: r.visibility, isPublic: r.is_public,
+});
+const resourceIn = (r) => ({
+  course_id: r.courseId || null, folder: r.folder, title: r.title, description: r.description || "",
+  type: r.type, kind: r.kind || "link", url: r.url || null, file_url: r.file?.dataUrl || null,
+  visibility: r.visibility || "course", is_public: !!r.isPublic,
+});
+
+export async function fetchResources() {
+  const { data, error } = await supabase.from("resources").select("*").order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data || []).map(resourceOut);
+}
+export async function insertResource(resource) {
+  const { data, error } = await supabase.from("resources").insert(resourceIn(resource)).select().single();
+  if (error) throw error;
+  return resourceOut(data);
+}
+export async function updateResource(id, resource) {
+  const { data, error } = await supabase.from("resources").update(resourceIn(resource)).eq("id", id).select().single();
+  if (error) throw error;
+  return resourceOut(data);
+}
+export async function deleteResource(id) {
+  const { error } = await supabase.from("resources").delete().eq("id", id);
+  if (error) throw error;
+}
+
 export async function fetchApplicants() {
   const { data, error } = await supabase.from("applicants").select("*").order("created_at", { ascending: true });
   if (error) throw error;
