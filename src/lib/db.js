@@ -112,6 +112,24 @@ export async function upsertCourse(course) {
   return courseOut(data);
 }
 
+// Cohorts follow the same opaque-jsonb-blob pattern as courses.
+const cohortOut = (row) => ({ id: row.id, ...row.data });
+export async function fetchCohorts() {
+  const { data, error } = await supabase.from("cohorts").select("*").order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data || []).map(cohortOut);
+}
+export async function upsertCohort(cohort) {
+  const { id, ...rest } = cohort;
+  const { data, error } = await supabase.from("cohorts").upsert({ id, data: rest, updated_at: new Date().toISOString() }).select().single();
+  if (error) throw error;
+  return cohortOut(data);
+}
+export async function deleteCohort(id) {
+  const { error } = await supabase.from("cohorts").delete().eq("id", id);
+  if (error) throw error;
+}
+
 // Branding and the admin's own profile are both single-object, single-admin
 // settings -- one row in site_settings covers both rather than two tables.
 export async function fetchSettings() {

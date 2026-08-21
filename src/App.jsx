@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
-  seedCohorts, seedStudents, seedApplicants, seedTasks,
+  seedStudents, seedApplicants, seedTasks,
   seedTestimonials, seedFaqs, FONT_STYLE, genCode, nextStudentId,
 } from "./lib/data.js";
 import {
@@ -11,7 +11,7 @@ import { MyCourses } from "./student.jsx";
 import { AdminDashboard } from "./admin.jsx";
 import { supabase } from "./lib/supabaseClient.js";
 import { signIn, signOut, signUpApplicant, sendPasswordReset, isAdminEmail } from "./lib/auth.js";
-import { fetchApplicants, insertApplicant, updateApplicant, fetchStudents, insertStudent, updateStudent, fetchResources, insertResource, updateResource, deleteResource, fetchCourses, upsertCourse, fetchSettings, updateSettings } from "./lib/db.js";
+import { fetchApplicants, insertApplicant, updateApplicant, fetchStudents, insertStudent, updateStudent, fetchResources, insertResource, updateResource, deleteResource, fetchCourses, upsertCourse, fetchCohorts, upsertCohort, deleteCohort, fetchSettings, updateSettings } from "./lib/db.js";
 import { sendWelcomeEmail, sendAcceptanceEmail } from "./lib/email.js";
 
 export default function App() {
@@ -20,7 +20,7 @@ export default function App() {
   const [viewCourseId, setViewCourseId] = useState(null);
   const [applyingAsExisting, setApplyingAsExisting] = useState(null);
   const [courses, setCourses] = useState([]);
-  const [cohorts, setCohorts] = useState(seedCohorts);
+  const [cohorts, setCohorts] = useState([]);
   const [students, setStudents] = useState(seedStudents);
   const [applicants, setApplicants] = useState(seedApplicants);
   const [tasks, setTasks] = useState(seedTasks);
@@ -85,6 +85,18 @@ export default function App() {
     setCourses((prev) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
       next.forEach((item) => { const before = prev.find((x) => x.id === item.id); if (before !== item) upsertCourse(item).catch(reportSaveError("upsertCourse failed")); });
+      return next;
+    });
+  }
+  // Cohorts too -- same shape as syncCourses, but cohorts can also be
+  // deleted (admin.jsx's remove()), so anything present in prev but missing
+  // from next gets deleted in the background as well.
+  useEffect(() => { fetchCohorts().then(setCohorts).catch((e) => console.error("fetchCohorts failed", e)); }, []);
+  function syncCohorts(updater) {
+    setCohorts((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      next.forEach((item) => { const before = prev.find((x) => x.id === item.id); if (before !== item) upsertCohort(item).catch(reportSaveError("upsertCohort failed")); });
+      prev.forEach((item) => { if (!next.find((x) => x.id === item.id)) deleteCohort(item.id).catch(reportSaveError("deleteCohort failed")); });
       return next;
     });
   }
@@ -278,7 +290,7 @@ export default function App() {
         <MyCourses student={liveStudent} setStudents={syncStudents} courses={courses} cohorts={cohorts} applicants={applicants} tasks={tasks} setTasks={setTasks} resources={resources} community={community} setCommunity={setCommunity} notices={notices.filter((n) => n.cohortId === "all" || n.cohortId === liveStudent.cohortId)} setNotices={setNotices} directThreads={directThreads} setDirectThreads={setDirectThreads} allStudents={students} onExit={handleSignOut} onApplyMore={(courseId) => { setApplyingAsExisting(liveStudent); setPresetCourseId(courseId || null); setPage("signup"); }} notifItems={studentNotifItems} notifSeen={studentNotifSeen} onMarkSeen={setStudentNotifSeen} />
       )}
       {page === "adminDash" && (
-        <AdminDashboard courses={courses} setCourses={syncCourses} students={students} setStudents={syncStudents} applicants={applicants} setApplicants={syncApplicants} onAcceptApplicant={acceptApplicant} cohorts={cohorts} setCohorts={setCohorts} tasks={tasks} setTasks={setTasks} resources={resources} onAddResource={addResource} onEditResource={editResource} onRemoveResource={removeResource} community={community} setCommunity={setCommunity} notices={notices} setNotices={setNotices} directThreads={directThreads} setDirectThreads={setDirectThreads} testimonials={testimonials} setTestimonials={setTestimonials} faqs={faqs} setFaqs={setFaqs} brand={brand} setBrand={syncBrand} adminProfile={adminProfile} setAdminProfile={syncAdminProfile} onExit={handleSignOut} notifItems={adminNotifItems} notifSeen={adminNotifSeen} onMarkSeen={setAdminNotifSeen} />
+        <AdminDashboard courses={courses} setCourses={syncCourses} students={students} setStudents={syncStudents} applicants={applicants} setApplicants={syncApplicants} onAcceptApplicant={acceptApplicant} cohorts={cohorts} setCohorts={syncCohorts} tasks={tasks} setTasks={setTasks} resources={resources} onAddResource={addResource} onEditResource={editResource} onRemoveResource={removeResource} community={community} setCommunity={setCommunity} notices={notices} setNotices={setNotices} directThreads={directThreads} setDirectThreads={setDirectThreads} testimonials={testimonials} setTestimonials={setTestimonials} faqs={faqs} setFaqs={setFaqs} brand={brand} setBrand={syncBrand} adminProfile={adminProfile} setAdminProfile={syncAdminProfile} onExit={handleSignOut} notifItems={adminNotifItems} notifSeen={adminNotifSeen} onMarkSeen={setAdminNotifSeen} />
       )}
     </div>
   );
