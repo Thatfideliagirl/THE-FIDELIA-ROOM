@@ -2,8 +2,12 @@
 // a signup or an acceptance should never fail just because an email didn't
 // go out, so every call here only ever logs on failure, never throws.
 const SERVICE_ID = "service_xmhddto";
-const TEMPLATE_WELCOME = "template_e99x71c";
-const TEMPLATE_ACCEPTANCE = "template_cjquzwf";
+// Confirmed backwards from a real test: signup sent the "you're in" content
+// and accept sent the "thanks for applying" content -- swapped from what was
+// assumed when these IDs were first given (order they were created in EmailJS
+// isn't necessarily the order they were described in).
+const TEMPLATE_WELCOME = "template_cjquzwf";
+const TEMPLATE_ACCEPTANCE = "template_e99x71c";
 const PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
 
 async function send(templateId, params) {
