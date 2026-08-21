@@ -84,34 +84,47 @@ export default function App() {
   async function handleForgotPassword(email) { const { error } = await sendPasswordReset(email); return error; }
   async function handleSignOut() { await signOut(); setActiveStudent(null); setActiveApplicant(null); setPage("landing"); }
 
+  // insertApplicant/insertStudent/updateStudent/updateApplicant throw on failure
+  // (a real DB error, or a blocked/dropped connection) -- caught here so a
+  // failure always resolves the caller's loading state and shows a message,
+  // instead of leaving a "Submitting..." button stuck forever.
   async function submitApplication(data) {
-    const { password, ...rest } = data;
-    if (applyingAsExisting) {
-      const saved = await insertApplicant({ ...rest, status: "pending", studentRef: applyingAsExisting.id });
+    try {
+      const { password, ...rest } = data;
+      if (applyingAsExisting) {
+        const saved = await insertApplicant({ ...rest, status: "pending", studentRef: applyingAsExisting.id });
+        setApplicants((prev) => [...prev, saved]);
+        setActiveStudent(applyingAsExisting); setPage("studentDash");
+        return null;
+      }
+      const { error, authUserId } = await signUpApplicant({ name: rest.name, email: rest.email, password });
+      if (error) return error.toLowerCase().includes("already registered") ? "That email already has an account — try signing in instead." : error;
+      const saved = await insertApplicant({ ...rest, status: "pending", studentRef: null, authUserId });
       setApplicants((prev) => [...prev, saved]);
-      setActiveStudent(applyingAsExisting); setPage("studentDash");
+      setActiveApplicant(saved); setApplyingAsExisting(null); setPage("inReview");
       return null;
+    } catch (e) {
+      console.error("submitApplication failed", e);
+      return "Couldn't reach the server — check your connection and try again.";
     }
-    const { error, authUserId } = await signUpApplicant({ name: rest.name, email: rest.email, password });
-    if (error) return error.toLowerCase().includes("already registered") ? "That email already has an account — try signing in instead." : error;
-    const saved = await insertApplicant({ ...rest, status: "pending", studentRef: null, authUserId });
-    setApplicants((prev) => [...prev, saved]);
-    setActiveApplicant(saved); setApplyingAsExisting(null); setPage("inReview");
-    return null;
   }
   async function acceptApplicant(applicant, cohortId) {
-    const code = genCode();
-    if (applicant.studentRef) {
-      const student = students.find((s) => s.id === applicant.studentRef);
-      const updated = await updateStudent(student.id, { ...student, enrollments: [...student.enrollments, { id: "e" + Date.now(), courseId: applicant.courseId, code, status: "awaiting-code", completedModuleIds: [], certificateReady: false, certificateFile: null }] });
-      setStudents((prev) => prev.map((s) => s.id === updated.id ? updated : s));
-    } else {
-      const studentId = nextStudentId(students);
-      const newStudent = await insertStudent({ studentId, name: applicant.name, email: applicant.email, cohortId, photo: null, seenTour: false, accountStatus: "active", authUserId: applicant.authUserId, enrollments: [{ id: "e" + Date.now(), courseId: applicant.courseId, code, status: "awaiting-code", completedModuleIds: [], certificateReady: false, certificateFile: null }] });
-      setStudents((prev) => [...prev, newStudent]);
+    try {
+      const code = genCode();
+      if (applicant.studentRef) {
+        const student = students.find((s) => s.id === applicant.studentRef);
+        const updated = await updateStudent(student.id, { ...student, enrollments: [...student.enrollments, { id: "e" + Date.now(), courseId: applicant.courseId, code, status: "awaiting-code", completedModuleIds: [], certificateReady: false, certificateFile: null }] });
+        setStudents((prev) => prev.map((s) => s.id === updated.id ? updated : s));
+      } else {
+        const studentId = nextStudentId(students);
+        const newStudent = await insertStudent({ studentId, name: applicant.name, email: applicant.email, cohortId, photo: null, seenTour: false, accountStatus: "active", authUserId: applicant.authUserId, enrollments: [{ id: "e" + Date.now(), courseId: applicant.courseId, code, status: "awaiting-code", completedModuleIds: [], certificateReady: false, certificateFile: null }] });
+        setStudents((prev) => [...prev, newStudent]);
+      }
+      const acceptedApplicant = await updateApplicant(applicant.id, { ...applicant, status: "accepted" });
+      setApplicants((prev) => prev.map((a) => a.id === acceptedApplicant.id ? acceptedApplicant : a));
+    } catch (e) {
+      console.error("acceptApplicant failed", e);
     }
-    const acceptedApplicant = await updateApplicant(applicant.id, { ...applicant, status: "accepted" });
-    setApplicants((prev) => prev.map((a) => a.id === acceptedApplicant.id ? acceptedApplicant : a));
   }
   function redeemCode(enrollmentId) { syncStudents((prev) => prev.map((s) => s.id !== activeStudent.id ? s : { ...s, enrollments: s.enrollments.map((e) => e.id === enrollmentId ? { ...e, status: "active" } : e) })); }
   const liveStudent = activeStudent ? students.find((s) => s.id === activeStudent.id) || activeStudent : null;
