@@ -19,6 +19,7 @@ export default function App() {
   const [presetCourseId, setPresetCourseId] = useState(null);
   const [viewCourseId, setViewCourseId] = useState(null);
   const [applyingAsExisting, setApplyingAsExisting] = useState(null);
+  const [pendingConfirmEmail, setPendingConfirmEmail] = useState("");
   const [courses, setCourses] = useState([]);
   const [cohorts, setCohorts] = useState([]);
   const [students, setStudents] = useState(seedStudents);
@@ -34,6 +35,7 @@ export default function App() {
   const [adminProfile, setAdminProfile] = useState({ name: "Fidelia Joseph", photo: null, bio: "" });
   const [activeStudent, setActiveStudent] = useState(null);
   const [activeApplicant, setActiveApplicant] = useState(null);
+  const [isAdminSession, setIsAdminSession] = useState(false);
   const [adminNotifSeen, setAdminNotifSeen] = useState([]);
   const [studentNotifSeen, setStudentNotifSeen] = useState([]);
 
@@ -125,7 +127,7 @@ export default function App() {
     const [studs, apps] = await Promise.all([fetchStudents(), fetchApplicants()]);
     setStudents(studs); setApplicants(apps);
     const email = session.user.email;
-    if (isAdminEmail(email)) { setPage("adminDash"); return; }
+    if (isAdminEmail(email)) { setIsAdminSession(true); setPage("adminDash"); return; }
     const myStudent = studs.find((s) => s.authUserId === session.user.id || s.email.toLowerCase() === email.toLowerCase());
     if (myStudent) { setActiveStudent(myStudent); setPage("studentDash"); return; }
     const myApplicant = [...apps].reverse().find((a) => a.email.toLowerCase() === email.toLowerCase());
@@ -164,7 +166,7 @@ export default function App() {
     return result.error === "unknown" && result.detail ? result.detail : result.error;
   }
   async function handleForgotPassword(email) { const { error } = await sendPasswordReset(email); return error; }
-  async function handleSignOut() { await signOut(); setActiveStudent(null); setActiveApplicant(null); setPage("landing"); }
+  async function handleSignOut() { await signOut(); setActiveStudent(null); setActiveApplicant(null); setIsAdminSession(false); setPage("landing"); }
 
   // insertApplicant/insertStudent/updateStudent/updateApplicant throw on failure
   // (a real DB error, or a blocked/dropped connection) -- caught here so a
@@ -179,8 +181,17 @@ export default function App() {
         setActiveStudent(applyingAsExisting); setPage("studentDash");
         return null;
       }
-      const { error, authUserId } = await signUpApplicant({ name: rest.name, email: rest.email, password });
+      const { error, authUserId, needsConfirmation } = await signUpApplicant({ name: rest.name, email: rest.email, password, courseId: rest.courseId, answers: rest.answers });
       if (error) return error.toLowerCase().includes("already registered") ? "That email already has an account — try signing in instead." : error;
+      if (needsConfirmation) {
+        // No session yet, so nothing can be saved until they confirm --
+        // the applicant row gets created automatically by a database
+        // trigger the moment their email is confirmed (see signUpApplicant).
+        setPendingConfirmEmail(rest.email);
+        setPage("checkEmail");
+        sendWelcomeEmail({ email: rest.email, name: rest.name, courseName: courses.find((c) => c.id === rest.courseId)?.title || "your course" });
+        return null;
+      }
       const saved = await insertApplicant({ ...rest, status: "pending", studentRef: null, authUserId });
       setApplicants((prev) => [...prev, saved]);
       setActiveApplicant(saved); setApplyingAsExisting(null); setPage("inReview");
@@ -243,6 +254,13 @@ export default function App() {
           <button onClick={() => setSaveError("")} className="f-label text-[11px]" style={{ opacity: .85 }}>DISMISS</button>
         </div>
       )}
+      {/* Lets a signed-in student/admin browse the public site without signing out, and get back to their dashboard afterward. */}
+      {(page === "studentDash" || page === "adminDash") && (
+        <button onClick={() => setPage("landing")} className="fixed z-[999] f-label text-[11px] px-4 py-2 rounded-full" style={{ top: 16, left: 16, background: "#262019", color: "#FAF6EC", fontWeight: 700, boxShadow: "0 10px 22px -10px rgba(0,0,0,.4)" }}>VIEW SITE</button>
+      )}
+      {page === "landing" && (isAdminSession || liveStudent) && (
+        <button onClick={() => setPage(isAdminSession ? "adminDash" : "studentDash")} className="fixed z-[999] f-label text-[11px] px-4 py-2 rounded-full" style={{ top: 16, left: 16, background: "var(--accent)", color: "#FAF6EC", fontWeight: 700, boxShadow: "0 10px 22px -10px rgba(0,0,0,.4)" }}>BACK TO DASHBOARD</button>
+      )}
       {page === "landing" && <Landing courses={courses} resources={resources} testimonials={testimonials} faqs={faqs} brand={brand} onSignIn={() => setPage("login")} onSignUp={(courseId) => { setPresetCourseId(typeof courseId === "string" ? courseId : null); setApplyingAsExisting(null); setPage("signup"); }} onViewCourses={() => setPage("courses")} onViewResources={() => setPage("resources")} onViewCourseDetail={(id) => { setViewCourseId(id); setPage("courseDetail"); }} />}
       {page === "courses" && <CoursesIndex courses={courses} onBack={() => setPage("landing")} onOpen={(id) => { setViewCourseId(id); setPage("courseDetail"); }} />}
       {page === "courseDetail" && viewCourse && <CourseDetail course={viewCourse} testimonials={testimonials} onBack={() => setPage("courses")} onApply={(id) => { setPresetCourseId(id); setApplyingAsExisting(null); setPage("signup"); }} />}
@@ -268,6 +286,17 @@ export default function App() {
                 </>
               )}
             </div>
+          </div>
+        </div>
+      )}
+      {page === "checkEmail" && (
+        <div className="min-h-screen flex items-center justify-center px-6 text-center">
+          <div className="reveal in max-w-[420px]">
+            <LogoMark height={64} />
+            <div className="f-label text-[13px] mt-6 mb-3 accent-text">CHECK YOUR EMAIL</div>
+            <h1 className="f-display text-[26px] mb-4" style={{ fontWeight: 800 }}>Confirm your email to continue.</h1>
+            <p className="text-[15px] leading-relaxed mb-8" style={{ color: "#71675A" }}>We've sent a confirmation link to <strong>{pendingConfirmEmail}</strong>. Open it and tap the link — it'll bring you right back here, and your application will be submitted automatically.</p>
+            <button onClick={() => setPage("landing")} className="f-label text-[12px]" style={{ color: "#A79B84" }}>BACK TO HOME</button>
           </div>
         </div>
       )}

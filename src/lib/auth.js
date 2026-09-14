@@ -43,11 +43,26 @@ export async function signIn(identifier, password) {
   }
 }
 
-export async function signUpApplicant({ name, email, phone, password }) {
+// If the project requires email confirmation, signUp returns a user with no
+// session -- the application itself can't be saved yet (nothing is signed
+// in to authenticate that write). So the whole application is carried as
+// signup metadata instead, and a database trigger creates the real
+// applicants row automatically the moment their email gets confirmed (see
+// supabase-email-confirm-trigger.sql). If confirmation is off, Supabase
+// returns a session immediately and the caller inserts the applicant row
+// itself right away, same as before -- this covers both cases without
+// needing to know which mode the project is in.
+export async function signUpApplicant({ name, email, phone, password, courseId, answers }) {
   try {
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({
+      email, password,
+      options: {
+        emailRedirectTo: window.location.origin,
+        data: { pendingApplication: true, name, phone: phone || "", courseId: courseId || "", answers: answers || [] },
+      },
+    });
     if (error) return { error: error.message };
-    return { authUserId: data.user?.id || null };
+    return { authUserId: data.user?.id || null, needsConfirmation: !data.session };
   } catch {
     return { error: "network" };
   }
