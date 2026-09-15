@@ -14,8 +14,17 @@ import { signIn, signOut, signUpApplicant, sendPasswordReset, isAdminEmail } fro
 import { fetchApplicants, insertApplicant, updateApplicant, fetchStudents, insertStudent, updateStudent, deleteStudent, fetchResources, insertResource, updateResource, deleteResource, fetchCourses, upsertCourse, fetchCohorts, upsertCohort, deleteCohort, fetchSettings, updateSettings } from "./lib/db.js";
 import { sendWelcomeEmail, sendAcceptanceEmail } from "./lib/email.js";
 
+// Captured the instant this module evaluates -- before Supabase's own client
+// (imported above) gets any chance to run its background session-detection
+// and silently strip these tokens from the URL. Reading this later, e.g.
+// inside a useEffect, races that background work and loses often enough to
+// be the actual bug: the tokens are gone by the time React's first effect
+// runs, so a recovery link falls through to a normal sign-in instead of the
+// reset-password screen.
+const isRecoveryLink = typeof window !== "undefined" && (window.location.hash.includes("type=recovery") || window.location.search.includes("type=recovery"));
+
 export default function App() {
-  const [page, setPage] = useState("landing");
+  const [page, setPage] = useState(() => (isRecoveryLink ? "resetPassword" : "landing"));
   const [presetCourseId, setPresetCourseId] = useState(null);
   const [viewCourseId, setViewCourseId] = useState(null);
   const [applyingAsExisting, setApplyingAsExisting] = useState(null);
@@ -148,21 +157,12 @@ export default function App() {
     setPage("accountNotFound");
   }
   useEffect(() => {
-    // A password-reset link lands here with a real (temporary) session and
-    // this specific event, not a normal sign-in -- routing it through
-    // loadForSession would just dump them on whatever their account normally
-    // opens to, with no way to actually set the new password. The bug this
-    // guards against: getSession() below resolves independently of the
-    // PASSWORD_RECOVERY event and was calling loadForSession() regardless,
-    // which won the race often enough to skip the reset screen entirely and
-    // just sign them straight in.
-    // Newer Supabase projects default to the PKCE flow, where a recovery
-    // link carries "?code=...&type=recovery" in the URL's query string
-    // instead of "#access_token=...&type=recovery" in the hash -- checking
-    // only the hash (the older/implicit-flow shape) meant this never
-    // actually triggered on this project, and the original race condition
-    // was still happening exactly as before despite the earlier fix.
-    const isRecoveryLink = window.location.hash.includes("type=recovery") || window.location.search.includes("type=recovery");
+    // isRecoveryLink (module-level, captured before Supabase's client could
+    // touch the URL) already put us on the resetPassword screen via the
+    // initial page state above. Skipping getSession() here too -- on a
+    // recovery link it would resolve to the temporary recovery session and
+    // call loadForSession(), dumping the user on whatever their account
+    // normally opens to instead of letting them set a new password.
     if (!isRecoveryLink) {
       supabase?.auth.getSession().then(({ data }) => loadForSession(data.session));
     }
