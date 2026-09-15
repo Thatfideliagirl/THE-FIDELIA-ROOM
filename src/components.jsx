@@ -11,8 +11,11 @@ import {
 import { LOGO_SRC, HERO_SRC, CREATOR_SRC, HOWITWORKS_SRC } from "./assets/brandImages.js";
 import { moduleStatus } from "./lib/data.js";
 import { changePassword } from "./lib/auth.js";
-import { useEditor, EditorContent } from "@tiptap/react";
+import { useEditor, EditorContent, NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
+import { Node as TiptapNode } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
+import TextStyle from "@tiptap/extension-text-style";
+import Color from "@tiptap/extension-color";
 
 // lucide-react dropped trademarked brand marks — small inline stand-ins so the footer keeps working.
 export function Instagram({ size = 16, color = "currentColor" }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="1" fill={color} stroke="none" /></svg>; }
@@ -72,19 +75,99 @@ export function Field({ label, ...props }) { return <label className="block">{la
 // only see rendered later. Stores real HTML. Old plain-text notes still
 // display fine, since plain text with no tags in it renders identically as
 // "HTML" with none of the elements a browser would treat as markup.
-const ALLOWED_TAGS = new Set(["B", "STRONG", "I", "EM", "U", "H1", "H2", "H3", "UL", "OL", "LI", "P", "DIV", "BR", "BLOCKQUOTE", "SPAN"]);
+const ALLOWED_TAGS = new Set(["B", "STRONG", "I", "EM", "U", "H1", "H2", "H3", "UL", "OL", "LI", "P", "DIV", "BR", "BLOCKQUOTE", "SPAN", "IMG", "FIGURE", "FIGCAPTION"]);
+// The color picker's only output is a single "color: <value>" declaration
+// on a <span> -- anything else in a style attribute (including a second
+// declaration smuggled in after a semicolon) is rejected outright rather
+// than trimmed, so there's no partial-sanitization gap to exploit. Both
+// forms are allowed because the browser itself rewrites a hex value like
+// "#cc3355" to "rgb(204, 51, 85)" when the attribute is read back, so a
+// hex-only pattern silently stripped every real color a user picked.
+const SAFE_COLOR_STYLE = /^color:\s*(#[0-9a-fA-F]{3,8}|rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\))$/;
 function sanitizeHtml(html) {
   const doc = new DOMParser().parseFromString(html || "", "text/html");
   (function clean(node) {
     [...node.childNodes].forEach((child) => {
-      if (child.nodeType === 1) {
-        if (!ALLOWED_TAGS.has(child.tagName)) { const text = document.createTextNode(child.textContent); node.replaceChild(text, child); return; }
+      if (child.nodeType !== 1) return;
+      if (!ALLOWED_TAGS.has(child.tagName)) { const text = document.createTextNode(child.textContent); node.replaceChild(text, child); return; }
+      if (child.tagName === "IMG") {
+        // Only a data: image or an http(s) URL is a real image -- anything
+        // else (javascript:, etc.) drops the image entirely rather than
+        // risk rendering it.
+        const src = child.getAttribute("src") || "";
+        const alt = child.getAttribute("alt") || "";
         [...child.attributes].forEach((a) => child.removeAttribute(a.name));
-        clean(child);
+        if (/^(data:image\/|https?:\/\/)/i.test(src)) { child.setAttribute("src", src); if (alt) child.setAttribute("alt", alt); }
+        else { child.remove(); return; }
+      } else if (child.tagName === "FIGURE") {
+        [...child.attributes].forEach((a) => child.removeAttribute(a.name));
+        child.setAttribute("class", "rt-figure");
+      } else if (child.tagName === "SPAN") {
+        const style = (child.getAttribute("style") || "").trim().replace(/;$/, "");
+        [...child.attributes].forEach((a) => child.removeAttribute(a.name));
+        if (SAFE_COLOR_STYLE.test(style)) child.setAttribute("style", style);
+      } else {
+        [...child.attributes].forEach((a) => child.removeAttribute(a.name));
       }
+      clean(child);
     });
   })(doc.body);
   return doc.body.innerHTML;
+}
+// A custom atom node (image + optional caption) instead of the plain Tiptap
+// Image extension -- the caption needs its own editable field attached to
+// the image, which a plain <img> attribute can't provide.
+const ImageFigure = TiptapNode.create({
+  name: "imageFigure",
+  group: "block",
+  atom: true,
+  // Not selectable: clicking directly on the image (an easy, likely click
+  // target once it's the biggest thing in the box) used to create a node
+  // selection, and typing right after that -- the ordinary way anyone
+  // resumes writing -- silently replaced the whole image with the typed
+  // text. Confirmed by testing this exact click-then-type sequence.
+  // Unselectable atoms can't be node-selected, so a click near the image
+  // resolves to the nearest real text position instead, and the image can
+  // only be removed deliberately (backspace/delete from beside it).
+  selectable: false,
+  addAttributes() {
+    return {
+      src: { default: null, renderHTML: () => ({}) },
+      alt: { default: "", renderHTML: () => ({}) },
+      caption: { default: "", renderHTML: () => ({}) },
+    };
+  },
+  parseHTML() {
+    return [{
+      tag: "figure.rt-figure",
+      getAttrs: (el) => ({
+        src: el.querySelector("img")?.getAttribute("src") || null,
+        alt: el.querySelector("img")?.getAttribute("alt") || "",
+        caption: el.querySelector("figcaption")?.textContent || "",
+      }),
+    }];
+  },
+  renderHTML({ node }) {
+    const { src, alt, caption } = node.attrs;
+    return ["figure", { class: "rt-figure" }, ["img", { src, alt: alt || "" }], ...(caption ? [["figcaption", {}, caption]] : [])];
+  },
+  addNodeView() {
+    return ReactNodeViewRenderer(ImageFigureView);
+  },
+});
+function ImageFigureView({ node, updateAttributes, selected }) {
+  return (
+    <NodeViewWrapper className="rt-figure" style={{ margin: "16px 0", outline: selected ? "2px solid var(--accent)" : "none", borderRadius: 10 }}>
+      <img src={node.attrs.src} alt={node.attrs.alt || ""} style={{ maxWidth: "100%", maxHeight: 420, borderRadius: 10, display: "block" }} />
+      <input
+        value={node.attrs.caption || ""}
+        onChange={(e) => updateAttributes({ caption: e.target.value })}
+        placeholder="Add a caption (optional)"
+        className="f-code"
+        style={{ width: "100%", marginTop: 6, fontSize: 13, color: "#71675A", fontStyle: "italic", border: "none", outline: "none", background: "transparent", padding: 0 }}
+      />
+    </NodeViewWrapper>
+  );
 }
 // Built on Tiptap/ProseMirror rather than raw contentEditable + execCommand.
 // The first version used execCommand directly, which turned out to corrupt
@@ -95,13 +178,20 @@ function sanitizeHtml(html) {
 // raw DOM selection hacks, so combining formats behaves predictably.
 export function RichTextEditor({ value, onChange, minRows = 8 }) {
   const wrapRef = useRef(null);
+  const imageInputRef = useRef(null);
   const [slashMenu, setSlashMenu] = useState(null);
   const editor = useEditor({
-    extensions: [StarterKit.configure({ heading: { levels: [1, 2, 3] } })],
+    extensions: [StarterKit.configure({ heading: { levels: [1, 2, 3] } }), TextStyle, Color, ImageFigure],
     content: value || "",
     onUpdate: ({ editor }) => { onChange(sanitizeHtml(editor.getHTML())); checkSlash(editor); },
     onSelectionUpdate: ({ editor }) => checkSlash(editor),
   });
+  function insertImage(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => { editor.chain().focus().insertContent({ type: "imageFigure", attrs: { src: reader.result, alt: "", caption: "" } }).run(); };
+    reader.readAsDataURL(file);
+  }
   useEffect(() => {
     if (editor && !editor.isFocused && value !== editor.getHTML()) editor.commands.setContent(value || "", false);
   }, [value, editor]);
@@ -127,6 +217,15 @@ export function RichTextEditor({ value, onChange, minRows = 8 }) {
     chainFn(editor.chain().focus().deleteRange({ from: pos - 1, to: pos })).run();
     setSlashMenu(null);
   }
+  // Image needs an actual file picker, not a synchronous editor command --
+  // clears the "/" immediately (same as every other option) but the insert
+  // itself happens later, once a file's been chosen and read.
+  function applySlashImage() {
+    const pos = editor.state.selection.$from.pos;
+    editor.chain().focus().deleteRange({ from: pos - 1, to: pos }).run();
+    setSlashMenu(null);
+    imageInputRef.current?.click();
+  }
   const slashOptions = [
     { label: "Heading 1", chain: (c) => c.toggleHeading({ level: 1 }) },
     { label: "Heading 2", chain: (c) => c.toggleHeading({ level: 2 }) },
@@ -135,6 +234,7 @@ export function RichTextEditor({ value, onChange, minRows = 8 }) {
     { label: "Numbered list", chain: (c) => c.toggleOrderedList() },
     { label: "Quote", chain: (c) => c.toggleBlockquote() },
     { label: "Bold text", chain: (c) => c.toggleBold() },
+    { label: "Image", onClick: applySlashImage },
     { label: "Normal text", chain: (c) => c.setParagraph() },
   ];
   if (!editor) return null;
@@ -152,12 +252,19 @@ export function RichTextEditor({ value, onChange, minRows = 8 }) {
         <button type="button" onClick={() => editor.chain().focus().toggleOrderedList().run()} className={btn} style={btnStyle(editor.isActive("orderedList"))}>1. List</button>
         <button type="button" onClick={() => editor.chain().focus().toggleBlockquote().run()} className={btn} style={btnStyle(editor.isActive("blockquote"))}>" Quote</button>
         <button type="button" onClick={() => editor.chain().focus().setParagraph().run()} className={btn} style={btnStyle(editor.isActive("paragraph") && !editor.isActive("bulletList") && !editor.isActive("orderedList"))}>Normal</button>
+        <label className={btn} style={{ ...btnStyle(!!editor.getAttributes("textStyle").color), display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+          Color
+          <input type="color" value={editor.getAttributes("textStyle").color || "#262019"} onChange={(e) => editor.chain().focus().setColor(e.target.value).run()} style={{ width: 16, height: 16, padding: 0, border: "none", background: "none", cursor: "pointer" }} />
+        </label>
+        {editor.getAttributes("textStyle").color && <button type="button" onClick={() => editor.chain().focus().unsetColor().run()} className={btn} style={btnStyle(false)}>Clear color</button>}
+        <button type="button" onClick={() => imageInputRef.current?.click()} className={btn} style={btnStyle(false)}>+ Image</button>
+        <input ref={imageInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => { insertImage(e.target.files?.[0]); e.target.value = ""; }} />
       </div>
       <EditorContent editor={editor} className="input-field rich-content rounded-lg px-3.5 py-2.5" style={{ minHeight: minRows * 22 }} onKeyDown={(e) => { if (e.key === "Escape") setSlashMenu(null); }} />
       {slashMenu && (
         <div style={{ position: "absolute", top: slashMenu.top, left: slashMenu.left, zIndex: 50, background: "#fff", border: "1px solid #E7DEC9", borderRadius: 10, boxShadow: "0 14px 30px -10px rgba(0,0,0,.25)", minWidth: 160, overflow: "hidden" }}>
           {slashOptions.map((opt) => (
-            <button key={opt.label} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => applySlash(opt.chain)} className="block w-full text-left px-3.5 py-2 text-[13px]" style={{ borderBottom: "1px solid #F0E7D6" }}>{opt.label}</button>
+            <button key={opt.label} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => opt.onClick ? opt.onClick() : applySlash(opt.chain)} className="block w-full text-left px-3.5 py-2 text-[13px]" style={{ borderBottom: "1px solid #F0E7D6" }}>{opt.label}</button>
           ))}
         </div>
       )}

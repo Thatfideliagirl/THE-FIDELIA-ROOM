@@ -52,6 +52,9 @@ export const FONT_STYLE = `
   .rich-content li { margin-bottom:4px; }
   .rich-content blockquote { margin:0 0 12px; padding:2px 16px; border-left:3px solid var(--accent); color:#71675A; font-style:italic; }
   .rich-content > *:first-child { margin-top:0; }
+  .rich-content .rt-figure { margin:16px 0; }
+  .rich-content .rt-figure img { max-width:100%; max-height:420px; border-radius:10px; display:block; }
+  .rich-content .rt-figure figcaption { font-size:13px; color:#71675A; margin-top:6px; font-style:italic; }
 `;
 
 // ---------------- data ----------------
