@@ -104,7 +104,7 @@ export const seedTestimonials = [
 export const seedFaqs = [
   { id: "f1", q: "Do I need previous experience before applying?", a: "No — most courses are built for beginners." },
   { id: "f2", q: "How do I apply for a course?", a: "Applying and signing up happen in one step." },
-  { id: "f4", q: "How do I receive my access code?", a: "Once approved, keep an eye on your email." },
+  { id: "f4", q: "How do I receive my access code?", a: "Once approved, keep an eye on your email — check spam too, just in case." },
   { id: "f5", q: "Will I get a certificate?", a: "Yes, once you complete every module." },
 ];
 

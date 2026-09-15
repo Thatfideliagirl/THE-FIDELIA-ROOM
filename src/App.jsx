@@ -320,7 +320,7 @@ export default function App() {
             <LogoMark height={64} />
             <div className="f-label text-[13px] mt-6 mb-3 accent-text">CHECK YOUR EMAIL</div>
             <h1 className="f-display text-[26px] mb-4" style={{ fontWeight: 800 }}>Confirm your email to continue.</h1>
-            <p className="text-[15px] leading-relaxed mb-8" style={{ color: "#71675A" }}>We've sent a confirmation link to <strong>{pendingConfirmEmail}</strong>. Open it and tap the link — it'll bring you right back here, and your application will be submitted automatically.</p>
+            <p className="text-[15px] leading-relaxed mb-8" style={{ color: "#71675A" }}>We've sent a confirmation link to <strong>{pendingConfirmEmail}</strong>. Open it and tap the link — it'll bring you right back here, and your application will be submitted automatically. Don't see it? Check your spam/junk folder too.</p>
             <button onClick={() => setPage("landing")} className="f-label text-[12px]" style={{ color: "#A79B84" }}>BACK TO HOME</button>
           </div>
         </div>
