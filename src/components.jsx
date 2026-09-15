@@ -63,47 +63,59 @@ export function CourseImage({ src, ratio = "16/9", radius = 20, icon: Icon = Gra
 }
 export function Field({ label, ...props }) { return <label className="block">{label && <div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>{label}</div>}<input className="input-field rounded-lg px-3.5 py-2.5" {...props} /></label>; }
 
-// Lightweight formatting for lecture notes/briefs -- not a rich-text editor,
-// just a small set of plain-text conventions (typed straight into the
-// existing textarea) rendered nicely on the student side: "# Heading",
-// "**bold**", "*italic*", "- bullet". Deliberately not Notion-style slash
-// commands or a WYSIWYG editor -- this reads the exact same plain text an
-// admin already types, just displayed with structure instead of as one flat
-// paragraph.
-export function FormattedText({ text, className = "", style = {} }) {
-  if (!text) return null;
-  const lines = text.split("\n");
-  const blocks = []; let listBuffer = [];
-  const flushList = () => { if (listBuffer.length) { blocks.push({ type: "ul", items: listBuffer }); listBuffer = []; } };
-  lines.forEach((line) => {
-    const trimmed = line.trim();
-    if (/^#{1,3}\s+/.test(trimmed)) { flushList(); blocks.push({ type: "h", level: trimmed.match(/^#+/)[0].length, text: trimmed.replace(/^#{1,3}\s+/, "") }); }
-    else if (/^[-*]\s+/.test(trimmed)) { listBuffer.push(trimmed.replace(/^[-*]\s+/, "")); }
-    else { flushList(); blocks.push({ type: "p", text: line }); }
-  });
-  flushList();
-  function inline(str) {
-    const parts = []; let rest = str; let key = 0;
-    const regex = /(\*\*(.+?)\*\*|\*(.+?)\*)/;
-    while (rest.length) {
-      const m = rest.match(regex);
-      if (!m) { parts.push(rest); break; }
-      if (m.index > 0) parts.push(rest.slice(0, m.index));
-      parts.push(m[2] !== undefined ? <strong key={key++}>{m[2]}</strong> : <em key={key++}>{m[3]}</em>);
-      rest = rest.slice(m.index + m[0].length);
-    }
-    return parts;
-  }
-  const headingSize = { 1: "20px", 2: "18px", 3: "16px" };
+// Real WYSIWYG editing for lecture notes/briefs: select text and press the
+// toolbar buttons (or the browser's native Ctrl+B / Ctrl+I, which just work
+// inside a contentEditable box) and it visibly bolds/italicizes/etc right
+// there while typing -- not a markdown shorthand you have to remember and
+// only see rendered later. Stores real HTML. Old plain-text notes still
+// display fine, since plain text with no tags in it renders identically as
+// "HTML" with none of the elements a browser would treat as markup.
+const ALLOWED_TAGS = new Set(["B", "STRONG", "I", "EM", "U", "H1", "H2", "H3", "UL", "OL", "LI", "P", "DIV", "BR", "BLOCKQUOTE", "SPAN"]);
+function sanitizeHtml(html) {
+  const doc = new DOMParser().parseFromString(html || "", "text/html");
+  (function clean(node) {
+    [...node.childNodes].forEach((child) => {
+      if (child.nodeType === 1) {
+        if (!ALLOWED_TAGS.has(child.tagName)) { const text = document.createTextNode(child.textContent); node.replaceChild(text, child); return; }
+        [...child.attributes].forEach((a) => child.removeAttribute(a.name));
+        clean(child);
+      }
+    });
+  })(doc.body);
+  return doc.body.innerHTML;
+}
+export function RichTextEditor({ value, onChange, minRows = 8 }) {
+  const ref = useRef(null);
+  useEffect(() => { if (ref.current && document.activeElement !== ref.current) ref.current.innerHTML = value || ""; }, [value]);
+  function exec(cmd, arg) { document.execCommand(cmd, false, arg); ref.current?.focus(); onChange(sanitizeHtml(ref.current.innerHTML)); }
+  const btn = "f-code text-[12px] px-2.5 py-1.5 rounded";
+  const btnStyle = { background: "#fff", border: "1px solid #E7DEC9" };
   return (
-    <div className={className} style={style}>
-      {blocks.map((b, i) => {
-        if (b.type === "h") return <div key={i} className="f-display" style={{ fontWeight: 800, fontSize: headingSize[b.level] || "16px", margin: i === 0 ? "0 0 10px" : "18px 0 10px" }}>{inline(b.text)}</div>;
-        if (b.type === "ul") return <ul key={i} style={{ margin: "0 0 12px", paddingLeft: 20 }}>{b.items.map((it, j) => <li key={j} style={{ marginBottom: 4 }}>{inline(it)}</li>)}</ul>;
-        return b.text.trim() ? <p key={i} style={{ margin: "0 0 12px" }}>{inline(b.text)}</p> : <div key={i} style={{ height: 4 }} />;
-      })}
+    <div>
+      <div className="flex items-center gap-1.5 mb-2 p-1.5 rounded-lg flex-wrap" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
+        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("bold")} className={btn} style={{ ...btnStyle, fontWeight: 800 }}>B</button>
+        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("italic")} className={btn} style={{ ...btnStyle, fontStyle: "italic" }}>I</button>
+        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("formatBlock", "H3")} className={btn} style={btnStyle}>Heading</button>
+        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("insertUnorderedList")} className={btn} style={btnStyle}>• List</button>
+        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("formatBlock", "P")} className={btn} style={btnStyle}>Paragraph</button>
+      </div>
+      <div
+        ref={ref}
+        contentEditable
+        suppressContentEditableWarning
+        onInput={() => onChange(sanitizeHtml(ref.current.innerHTML))}
+        onBlur={() => onChange(sanitizeHtml(ref.current.innerHTML))}
+        className="input-field rounded-lg px-3.5 py-2.5"
+        style={{ minHeight: minRows * 22, outline: "none", lineHeight: 1.6 }}
+      />
     </div>
   );
+}
+// The student-facing display side -- just renders that same sanitized HTML,
+// growing with however much content is there instead of a fixed-height box.
+export function RichText({ html, className = "", style = {} }) {
+  if (!html) return null;
+  return <div className={className} style={style} dangerouslySetInnerHTML={{ __html: sanitizeHtml(html) }} />;
 }
 
 // Shared by both the student and admin profile pages -- same "old password,
@@ -350,7 +362,7 @@ export function CourseDetail({ course, testimonials, onBack, onApply }) {
   );
 }
 // Shown when a student clicks "View" on a resource — full details before deciding to download.
-export function ResourceDetail({ resource, onClose }) {
+export function ResourceDetail({ resource, onClose, onBrowseMore }) {
   const [copied, setCopied] = useState(false);
   function copyLink() {
     const link = `${window.location.origin}/?r=${resource.id}`;
@@ -371,6 +383,7 @@ export function ResourceDetail({ resource, onClose }) {
           )}
           {resource.isPublic && <button onClick={copyLink} className="btn-soft rounded-full px-5 py-3 text-[14px] inline-flex items-center gap-2" style={{ fontWeight: 700 }}>{copied ? "Link copied!" : "Copy shareable link"}</button>}
         </div>
+        {onBrowseMore && <button onClick={onBrowseMore} className="text-[13px] mt-6 flex items-center gap-1.5 accent-text" style={{ fontWeight: 700 }}>Check our other free resources <ArrowRight size={13} /></button>}
       </div>
     </div>
   );

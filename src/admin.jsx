@@ -5,11 +5,11 @@ import {
   ChevronDown, Sparkles, Plus, Check, Send, X, Heart, MessageSquare,
   FileText, Download, GraduationCap, Mail, Phone, Award,
   UserCircle, FolderPlus, Folder, UploadCloud, ClipboardCheck, HelpCircle as HelpIcon,
-  Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign
+  Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Home
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from "recharts";
 import { genCode, pairKey, ADMIN_EMAIL } from "./lib/data.js";
-import { Field, SectionHeader, NotifBell, SidebarLink, LogoMark, TextArea, SelectF, ImgField, FileField, ChangePasswordCard } from "./components.jsx";
+import { Field, SectionHeader, NotifBell, SidebarLink, LogoMark, TextArea, SelectF, ImgField, FileField, ChangePasswordCard, RichTextEditor } from "./components.jsx";
 import { CommunityPanel } from "./student.jsx";
 
 export function ApplicantsTab({ applicants, setApplicants, students, setStudents, courses, cohorts, onAccept }) {
@@ -154,9 +154,8 @@ export function ModuleEditor({ course, module, setCourses, onBack }) {
       <div className="card rounded-2xl p-7 flex flex-col gap-4 mb-6">
         <div className="f-label text-[11px]" style={{ color: "#71675A" }}>LECTURE CONTENT</div>
         <Field label="Module title" value={title} onChange={(e) => setTitle(e.target.value)} />
-        <TextArea label="Short brief (shown in course path)" value={brief} onChange={(e) => setBrief(e.target.value)} rows={2} />
-        <TextArea label="Lecture notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={14} />
-        <div className="text-[12px] -mt-2" style={{ color: "#A79B84" }}>Formatting: start a line with # for a heading, - for a bullet, wrap text in **bold** or *italic*. Renders styled on the student side.</div>
+        <div><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Short brief (shown in course path)</div><RichTextEditor value={brief} onChange={setBrief} minRows={2} /></div>
+        <div><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Lecture notes</div><RichTextEditor value={notes} onChange={setNotes} minRows={12} /></div>
         <div className="grid grid-cols-2 gap-3"><Field label="Video link (max ~50MB if uploading elsewhere)" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://…" /><Field label="Slide deck link (optional if uploading a file below)" value={slideUrl} onChange={(e) => setSlideUrl(e.target.value)} placeholder="https://…" /></div>
         <FileField label="Or upload a slide deck file (PDF, PPT, etc.)" value={slideFile} onChange={setSlideFile} accept=".pdf,.ppt,.pptx,.key" />
       </div>
@@ -766,7 +765,7 @@ export function OverviewTab({ courses, students, applicants, tasks, cohorts, set
   );
 }
 
-export function AdminDashboard({ courses, setCourses, students, setStudents, applicants, setApplicants, onAcceptApplicant, cohorts, setCohorts, tasks, setTasks, resources, onAddResource, onEditResource, onRemoveResource, community, setCommunity, notices, setNotices, directThreads, setDirectThreads, testimonials, setTestimonials, faqs, setFaqs, brand, setBrand, adminProfile, setAdminProfile, onExit, notifItems, notifSeen, onMarkSeen }) {
+export function AdminDashboard({ courses, setCourses, students, setStudents, applicants, setApplicants, onAcceptApplicant, cohorts, setCohorts, tasks, setTasks, resources, onAddResource, onEditResource, onRemoveResource, community, setCommunity, notices, setNotices, directThreads, setDirectThreads, testimonials, setTestimonials, faqs, setFaqs, brand, setBrand, adminProfile, setAdminProfile, onExit, onViewSite, notifItems, notifSeen, onMarkSeen }) {
   const [tab, setTab] = useState("overview");
   const navItems = [
     { id: "overview", icon: Sparkles, label: "Overview" }, { id: "profile", icon: UserCircle, label: "My Profile" }, { id: "applicants", icon: ClipboardCheck, label: "Applicants" },
@@ -786,7 +785,8 @@ export function AdminDashboard({ courses, setCourses, students, setStudents, app
         <div className="f-label text-[11px] mb-4 px-2" style={{ color: "#A79B84" }}>ADMIN</div>
         <div className="px-2 mb-3"><NotifBell items={notifItems} seen={notifSeen} onMarkSeen={onMarkSeen} /></div>
         <div className="flex flex-col gap-1 flex-1">{navItems.map((n) => <SidebarLink key={n.id} icon={n.icon} label={n.label} active={tab === n.id} onClick={() => setTab(n.id)} />)}</div>
-        <button onClick={onExit} className="flex items-center gap-2 px-4 py-2.5 text-[14px] mt-4" style={{ color: "#A79B84", fontWeight: 600 }}><LogOut size={16} /> Sign out</button>
+        <button onClick={onViewSite} className="flex items-center gap-2 px-4 py-2.5 text-[14px] mt-4" style={{ color: "#A79B84", fontWeight: 600 }}><Home size={16} /> Home page</button>
+        <button onClick={onExit} className="flex items-center gap-2 px-4 py-2.5 text-[14px]" style={{ color: "#A79B84", fontWeight: 600 }}><LogOut size={16} /> Sign out</button>
       </aside>
       <main className="flex-1 px-10 md:px-16 py-12 max-w-[1040px]">
         {tab === "overview" && <OverviewTab courses={courses} students={students} applicants={applicants} tasks={tasks} cohorts={cohorts} setTab={setTab} />}

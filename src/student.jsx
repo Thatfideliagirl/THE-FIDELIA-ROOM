@@ -5,10 +5,10 @@ import {
   ChevronDown, Sparkles, Plus, Check, Send, X, Heart, MessageSquare,
   FileText, Download, GraduationCap, Mail, Phone, Award,
   UserCircle, FolderPlus, Folder, UploadCloud, ClipboardCheck, HelpCircle as HelpIcon,
-  Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Compass
+  Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Compass, Home
 } from "lucide-react";
 import { pairKey, moduleStatus, scoreSubmission, AUTO_APPROVE_THRESHOLD } from "./lib/data.js";
-import { SectionHeader, NotifBell, WelcomeTour, SidebarLink, LogoMark, Spine, TextArea, ProgressBar, ResourceDetail, Field, ChangePasswordCard, FormattedText } from "./components.jsx";
+import { SectionHeader, NotifBell, WelcomeTour, SidebarLink, LogoMark, Spine, TextArea, ProgressBar, ResourceDetail, Field, ChangePasswordCard, RichText } from "./components.jsx";
 
 export function LessonView({ course, enrollment, updateEnrollment, onBack, onNext, moduleId }) {
   const [view, setView] = useState("lecture"); // "lecture" | "check" | "meetings"
@@ -57,7 +57,7 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
       {view === "lecture" && lectureStep === "brief" && (
         <div className="card rounded-2xl p-8">
           <div className="f-label text-[11px] mb-3" style={{ color: "#A79B84" }}>BEFORE YOU START</div>
-          <FormattedText text={module.brief} className="text-[17px] leading-relaxed mb-6" style={{ color: "#4A4237" }} />
+          <RichText html={module.brief} className="rich-content text-[17px] leading-relaxed mb-6" style={{ color: "#4A4237" }} />
           <div className="flex justify-end"><button onClick={() => setLectureStep("content")} className="btn-primary rounded-lg px-6 py-3 text-[14px] flex items-center gap-2">Next <ArrowRight size={15} /></button></div>
         </div>
       )}
@@ -65,7 +65,7 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
       {view === "lecture" && lectureStep === "content" && (
         <div className="card rounded-2xl p-8">
           <div className="f-label text-[11px] mb-3" style={{ color: "#A79B84" }}>{module.testType === "milestone" ? "PROJECT OVERVIEW" : "LECTURE NOTES"}</div>
-          <FormattedText text={module.notes || "Lecture content coming soon."} className="text-[15px] leading-relaxed mb-5" style={{ color: "#4A4237" }} />
+          <RichText html={module.notes || "Lecture content coming soon."} className="rich-content text-[15px] leading-relaxed mb-5" style={{ color: "#4A4237" }} />
           <div className="flex items-center gap-3 mb-2 flex-wrap">
             {module.videoUrl && <a href={module.videoUrl} target="_blank" rel="noreferrer" className="btn-soft rounded-full px-4 py-2 text-[13px] flex items-center gap-1.5" style={{ fontWeight: 700 }}><PlayCircle size={14} /> Watch lecture</a>}
             {module.slideUrl && <a href={module.slideUrl} target="_blank" rel="noreferrer" className="btn-soft rounded-full px-4 py-2 text-[13px] flex items-center gap-1.5" style={{ fontWeight: 700 }}><FileText size={14} /> View slides</a>}
@@ -313,7 +313,7 @@ export function CommunityPost({ post, onLike, onComment }) {
 }
 
 const MAX_COURSES_PER_COHORT = 2;
-export function MyCourses({ student, setStudents, courses, cohorts, applicants, tasks, setTasks, resources, community, setCommunity, notices, setNotices, directThreads, setDirectThreads, allStudents, onExit, onApplyMore, notifItems, notifSeen, onMarkSeen }) {
+export function MyCourses({ student, setStudents, courses, cohorts, applicants, tasks, setTasks, resources, community, setCommunity, notices, setNotices, directThreads, setDirectThreads, allStudents, onExit, onViewSite, onApplyMore, notifItems, notifSeen, onMarkSeen }) {
   const [tab, setTab] = useState("courses"); // "courses" | "explore" | "profile"
   const [openEnrollmentId, setOpenEnrollmentId] = useState(null);
   const [redeemEnrollmentId, setRedeemEnrollmentId] = useState(null);
@@ -356,6 +356,7 @@ export function MyCourses({ student, setStudents, courses, cohorts, applicants, 
           <div data-tour="nav-explore"><SidebarLink icon={Compass} label="Explore More Courses" active={tab === "explore"} onClick={() => setTab("explore")} /></div>
           <div data-tour="nav-profile"><SidebarLink icon={UserCircle} label="Profile" active={tab === "profile"} onClick={() => setTab("profile")} /></div>
         </div>
+        <button onClick={onViewSite} className="flex items-center gap-2 px-4 py-2.5 text-[14px]" style={{ color: "#A79B84", fontWeight: 600 }}><Home size={16} /> Home page</button>
         <button onClick={onExit} className="flex items-center gap-2 px-4 py-2.5 text-[14px]" style={{ color: "#A79B84", fontWeight: 600 }}><LogOut size={16} /> Sign out</button>
       </aside>
       <main className="flex-1 px-10 md:px-16 py-10 max-w-[880px]">
