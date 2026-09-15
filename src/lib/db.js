@@ -93,6 +93,14 @@ export async function updateStudent(id, student) {
   if (error) throw error;
   return studentOut(data);
 }
+// Only removes the students row -- their login account itself isn't touched
+// (deleting an auth user needs the service-role key, which never belongs in
+// this app's own code). Any applicant row that referenced them auto-clears
+// that reference at the database level rather than breaking.
+export async function deleteStudent(id) {
+  const { error } = await supabase.from("students").delete().eq("id", id);
+  if (error) throw error;
+}
 
 // Courses are stored as one opaque jsonb blob per row (keyed by the app's
 // own string id, e.g. "va") rather than a normalized schema -- the shape

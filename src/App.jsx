@@ -11,7 +11,7 @@ import { MyCourses } from "./student.jsx";
 import { AdminDashboard } from "./admin.jsx";
 import { supabase } from "./lib/supabaseClient.js";
 import { signIn, signOut, signUpApplicant, sendPasswordReset, isAdminEmail } from "./lib/auth.js";
-import { fetchApplicants, insertApplicant, updateApplicant, fetchStudents, insertStudent, updateStudent, fetchResources, insertResource, updateResource, deleteResource, fetchCourses, upsertCourse, fetchCohorts, upsertCohort, deleteCohort, fetchSettings, updateSettings } from "./lib/db.js";
+import { fetchApplicants, insertApplicant, updateApplicant, fetchStudents, insertStudent, updateStudent, deleteStudent, fetchResources, insertResource, updateResource, deleteResource, fetchCourses, upsertCourse, fetchCohorts, upsertCohort, deleteCohort, fetchSettings, updateSettings } from "./lib/db.js";
 import { sendWelcomeEmail, sendAcceptanceEmail } from "./lib/email.js";
 
 export default function App() {
@@ -66,6 +66,10 @@ export default function App() {
       next.forEach((item) => { const before = prev.find((x) => x.id === item.id); if (before && before !== item) updateStudent(item.id, item).catch(reportSaveError("updateStudent failed")); });
       return next;
     });
+  }
+  async function removeStudent(id) {
+    setStudents((prev) => prev.filter((s) => s.id !== id));
+    try { await deleteStudent(id); } catch (e) { reportSaveError("deleteStudent failed")(e); }
   }
   function syncApplicants(updater) {
     setApplicants((prev) => {
@@ -340,7 +344,7 @@ export default function App() {
         <MyCourses student={liveStudent} setStudents={syncStudents} courses={courses} cohorts={cohorts} applicants={applicants} tasks={tasks} setTasks={setTasks} resources={resources} community={community} setCommunity={setCommunity} notices={notices.filter((n) => n.cohortId === "all" || n.cohortId === liveStudent.cohortId)} setNotices={setNotices} directThreads={directThreads} setDirectThreads={setDirectThreads} allStudents={students} onExit={handleSignOut} onViewSite={() => setPage("landing")} onApplyMore={(courseId) => { setApplyingAsExisting(liveStudent); setPresetCourseId(courseId || null); setPage("signup"); }} notifItems={studentNotifItems} notifSeen={studentNotifSeen} onMarkSeen={setStudentNotifSeen} />
       )}
       {page === "adminDash" && (
-        <AdminDashboard courses={courses} setCourses={syncCourses} students={students} setStudents={syncStudents} applicants={applicants} setApplicants={syncApplicants} onAcceptApplicant={acceptApplicant} cohorts={cohorts} setCohorts={syncCohorts} tasks={tasks} setTasks={setTasks} resources={resources} onAddResource={addResource} onEditResource={editResource} onRemoveResource={removeResource} community={community} setCommunity={setCommunity} notices={notices} setNotices={setNotices} directThreads={directThreads} setDirectThreads={setDirectThreads} testimonials={testimonials} setTestimonials={setTestimonials} faqs={faqs} setFaqs={setFaqs} brand={brand} setBrand={syncBrand} adminProfile={adminProfile} setAdminProfile={syncAdminProfile} onExit={handleSignOut} onViewSite={() => setPage("landing")} notifItems={adminNotifItems} notifSeen={adminNotifSeen} onMarkSeen={setAdminNotifSeen} />
+        <AdminDashboard courses={courses} setCourses={syncCourses} students={students} setStudents={syncStudents} onRemoveStudent={removeStudent} applicants={applicants} setApplicants={syncApplicants} onAcceptApplicant={acceptApplicant} cohorts={cohorts} setCohorts={syncCohorts} tasks={tasks} setTasks={setTasks} resources={resources} onAddResource={addResource} onEditResource={editResource} onRemoveResource={removeResource} community={community} setCommunity={setCommunity} notices={notices} setNotices={setNotices} directThreads={directThreads} setDirectThreads={setDirectThreads} testimonials={testimonials} setTestimonials={setTestimonials} faqs={faqs} setFaqs={setFaqs} brand={brand} setBrand={syncBrand} adminProfile={adminProfile} setAdminProfile={syncAdminProfile} onExit={handleSignOut} onViewSite={() => setPage("landing")} notifItems={adminNotifItems} notifSeen={adminNotifSeen} onMarkSeen={setAdminNotifSeen} />
       )}
     </div>
   );

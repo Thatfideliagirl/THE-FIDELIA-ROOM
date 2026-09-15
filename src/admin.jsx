@@ -395,8 +395,9 @@ export function CoursesTab({ courses, setCourses, testimonials }) {
   );
 }
 
-export function StudentDetail({ student, applicant, setStudents, courses, cohorts, onClose }) {
+export function StudentDetail({ student, applicant, setStudents, courses, cohorts, onClose, onDelete }) {
   const [status, setStatus] = useState(student.accountStatus); const [cohortId, setCohortId] = useState(student.cohortId);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   function saveStatus(v) { setStatus(v); setStudents((prev) => prev.map((s) => s.id === student.id ? { ...s, accountStatus: v } : s)); }
   function saveCohort(v) { setCohortId(v); setStudents((prev) => prev.map((s) => s.id === student.id ? { ...s, cohortId: v } : s)); }
   function reissue(enrollmentId) { const code = genCode(); setStudents((prev) => prev.map((s) => s.id !== student.id ? s : { ...s, enrollments: s.enrollments.map((e) => e.id === enrollmentId ? { ...e, code } : e) })); }
@@ -417,7 +418,17 @@ export function StudentDetail({ student, applicant, setStudents, courses, cohort
   const pendingReviews = student.enrollments.filter((e) => e.pendingReview);
   return (
     <div className="card rounded-2xl p-7 mb-6">
-      <div className="flex items-center justify-between mb-5"><div><div className="f-display text-[21px]" style={{ fontWeight: 800 }}>{student.name}</div><div className="text-[14px]" style={{ color: "#71675A" }}>{student.email}</div></div><button onClick={onClose}><X size={18} color="#A79B84" /></button></div>
+      <div className="flex items-center justify-between mb-5">
+        <div><div className="f-display text-[21px]" style={{ fontWeight: 800 }}>{student.name}</div><div className="text-[14px]" style={{ color: "#71675A" }}>{student.email}</div></div>
+        <div className="flex items-center gap-4">
+          {confirmingDelete ? (
+            <div className="flex items-center gap-2 text-[12px]"><span style={{ color: "#B04A3A" }}>Delete this student?</span><button onClick={onDelete} className="f-label" style={{ color: "#B04A3A", fontWeight: 700 }}>YES, DELETE</button><button onClick={() => setConfirmingDelete(false)} style={{ color: "#A79B84" }}>Cancel</button></div>
+          ) : (
+            <button onClick={() => setConfirmingDelete(true)} className="flex items-center gap-1.5 text-[12px]" style={{ color: "#B04A3A" }}><Trash2 size={14} /> Delete student</button>
+          )}
+          <button onClick={onClose}><X size={18} color="#A79B84" /></button>
+        </div>
+      </div>
       <div className="grid grid-cols-2 gap-5 mb-5">
         <div><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>STUDENT ID</div><div className="text-[14px] f-code">{student.studentId}</div></div>
         <div className="flex-1"><SelectF label="Cohort" value={cohortId} onChange={(e) => saveCohort(e.target.value)} options={cohorts.map((c) => ({ value: c.id, label: c.name }))} /></div>
@@ -446,7 +457,7 @@ export function StudentDetail({ student, applicant, setStudents, courses, cohort
     </div>
   );
 }
-export function StudentsTab({ students, setStudents, applicants, courses, cohorts }) {
+export function StudentsTab({ students, setStudents, onRemove, applicants, courses, cohorts }) {
   const [selected, setSelected] = useState(null);
   function exportCsv() { const rows = [["Student ID", "Name", "Email", "Cohort", "Status", "Enrollments"], ...students.map((s) => [s.studentId, s.name, s.email, cohorts.find((c) => c.id === s.cohortId)?.name || "", s.accountStatus, s.enrollments.map((e) => courses.find((c) => c.id === e.courseId)?.title).join("; ")])]; const csv = rows.map((r) => r.join(",")).join("\n"); const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "fj-room-students.csv"; a.click(); URL.revokeObjectURL(url); }
   const selectedStudent = students.find((s) => s.id === selected);
@@ -454,7 +465,7 @@ export function StudentsTab({ students, setStudents, applicants, courses, cohort
   return (
     <>
       <SectionHeader eyebrow="ROSTER" title="Students" action={<button onClick={exportCsv} className="btn-soft rounded-full px-5 py-2.5 text-[14px] flex items-center gap-1.5" style={{ fontWeight: 700 }}><Download size={14} /> Export CSV</button>} />
-      {selectedStudent && <StudentDetail student={selectedStudent} applicant={selectedApplicant} setStudents={setStudents} courses={courses} cohorts={cohorts} onClose={() => setSelected(null)} />}
+      {selectedStudent && <StudentDetail student={selectedStudent} applicant={selectedApplicant} setStudents={setStudents} courses={courses} cohorts={cohorts} onClose={() => setSelected(null)} onDelete={() => { onRemove(selectedStudent.id); setSelected(null); }} />}
       <div className="card rounded-2xl overflow-hidden">
         <div className="grid grid-cols-5 px-6 py-3 f-label text-[11px]" style={{ background: "#F0E7D6", color: "#71675A" }}><div>STUDENT ID</div><div>NAME</div><div>COHORT</div><div>STATUS</div><div>COURSES</div></div>
         {students.map((s) => <button key={s.id} onClick={() => setSelected(s.id)} className="w-full grid grid-cols-5 px-6 py-4 items-center text-[14px] text-left" style={{ borderTop: "1px solid #F0E7D6" }}><div className="f-code text-[11px]" style={{ color: "#71675A" }}>{s.studentId}</div><div style={{ fontWeight: 700 }}>{s.name}</div><div style={{ color: "#4A4237" }}>{cohorts.find((c) => c.id === s.cohortId)?.name || "—"}</div><span className="f-code text-[10px] px-2.5 py-1 rounded-full self-start tint-badge">{s.accountStatus.toUpperCase()}</span><div style={{ color: "#4A4237" }}>{s.enrollments.length}</div></button>)}
@@ -765,7 +776,7 @@ export function OverviewTab({ courses, students, applicants, tasks, cohorts, set
   );
 }
 
-export function AdminDashboard({ courses, setCourses, students, setStudents, applicants, setApplicants, onAcceptApplicant, cohorts, setCohorts, tasks, setTasks, resources, onAddResource, onEditResource, onRemoveResource, community, setCommunity, notices, setNotices, directThreads, setDirectThreads, testimonials, setTestimonials, faqs, setFaqs, brand, setBrand, adminProfile, setAdminProfile, onExit, onViewSite, notifItems, notifSeen, onMarkSeen }) {
+export function AdminDashboard({ courses, setCourses, students, setStudents, onRemoveStudent, applicants, setApplicants, onAcceptApplicant, cohorts, setCohorts, tasks, setTasks, resources, onAddResource, onEditResource, onRemoveResource, community, setCommunity, notices, setNotices, directThreads, setDirectThreads, testimonials, setTestimonials, faqs, setFaqs, brand, setBrand, adminProfile, setAdminProfile, onExit, onViewSite, notifItems, notifSeen, onMarkSeen }) {
   const [tab, setTab] = useState("overview");
   const navItems = [
     { id: "overview", icon: Sparkles, label: "Overview" }, { id: "profile", icon: UserCircle, label: "My Profile" }, { id: "applicants", icon: ClipboardCheck, label: "Applicants" },
@@ -795,7 +806,7 @@ export function AdminDashboard({ courses, setCourses, students, setStudents, app
         {tab === "cohorts" && <CohortsTab cohorts={cohorts} setCohorts={setCohorts} courses={courses} students={students} />}
         {tab === "courses" && <CoursesTab courses={courses} setCourses={setCourses} testimonials={testimonials} />}
         {tab === "meetings" && <AdminMeetingsTab courses={courses} setCourses={setCourses} cohorts={cohorts} />}
-        {tab === "students" && <StudentsTab students={students} setStudents={setStudents} applicants={applicants} courses={courses} cohorts={cohorts} />}
+        {tab === "students" && <StudentsTab students={students} setStudents={setStudents} onRemove={onRemoveStudent} applicants={applicants} courses={courses} cohorts={cohorts} />}
         {tab === "gradebook" && <GradebookTab students={students} courses={courses} cohorts={cohorts} />}
         {tab === "tasks" && <TasksTab tasks={tasks} setTasks={setTasks} students={students} courses={courses} />}
         {tab === "library" && <LibraryTab resources={resources} onAdd={onAddResource} onEdit={onEditResource} onRemove={onRemoveResource} courses={courses} />}
