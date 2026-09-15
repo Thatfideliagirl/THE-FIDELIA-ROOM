@@ -86,28 +86,80 @@ function sanitizeHtml(html) {
 }
 export function RichTextEditor({ value, onChange, minRows = 8 }) {
   const ref = useRef(null);
+  const wrapRef = useRef(null);
+  const [slashMenu, setSlashMenu] = useState(null);
   useEffect(() => { if (ref.current && document.activeElement !== ref.current) ref.current.innerHTML = value || ""; }, [value]);
-  function exec(cmd, arg) { document.execCommand(cmd, false, arg); ref.current?.focus(); onChange(sanitizeHtml(ref.current.innerHTML)); }
+  function emitChange() { onChange(sanitizeHtml(ref.current.innerHTML)); }
+  // formatBlock needs the tag wrapped in angle brackets ("<h3>", not "H3")
+  // to apply reliably across browsers -- without it, Firefox in particular
+  // just silently does nothing, which is what made "Heading" look broken.
+  function exec(cmd, arg) { document.execCommand(cmd, false, arg); ref.current?.focus(); emitChange(); }
+  // Notion-style "/" menu: typing "/" at the start of a word opens a list of
+  // block types: choosing one deletes the "/" and applies that format,
+  // instead of needing the toolbar for everything.
+  function checkSlash() {
+    const sel = window.getSelection();
+    if (!sel?.rangeCount || !ref.current) { setSlashMenu(null); return; }
+    const range = sel.getRangeAt(0);
+    if (!ref.current.contains(range.startContainer) || range.startContainer.nodeType !== 3) { setSlashMenu(null); return; }
+    const textBefore = range.startContainer.textContent.slice(0, range.startOffset);
+    if (/(^|\s)\/$/.test(textBefore)) {
+      const rect = range.getBoundingClientRect(); const wrapRect = wrapRef.current.getBoundingClientRect();
+      setSlashMenu({ top: rect.bottom - wrapRect.top + 4, left: rect.left - wrapRect.left });
+    } else setSlashMenu(null);
+  }
+  function removeSlash() {
+    const sel = window.getSelection(); if (!sel?.rangeCount) return;
+    const range = sel.getRangeAt(0); const node = range.startContainer;
+    if (node.nodeType === 3 && range.startOffset > 0 && node.textContent[range.startOffset - 1] === "/") {
+      const r = document.createRange(); r.setStart(node, range.startOffset - 1); r.setEnd(node, range.startOffset); r.deleteContents();
+    }
+  }
+  function applySlash(action) { removeSlash(); action(); setSlashMenu(null); emitChange(); ref.current?.focus(); }
+  const slashOptions = [
+    { label: "Heading 1", action: () => document.execCommand("formatBlock", false, "<h1>") },
+    { label: "Heading 2", action: () => document.execCommand("formatBlock", false, "<h2>") },
+    { label: "Heading 3", action: () => document.execCommand("formatBlock", false, "<h3>") },
+    { label: "Bullet list", action: () => document.execCommand("insertUnorderedList") },
+    { label: "Numbered list", action: () => document.execCommand("insertOrderedList") },
+    { label: "Quote", action: () => document.execCommand("formatBlock", false, "<blockquote>") },
+    { label: "Bold text", action: () => document.execCommand("bold") },
+    { label: "Normal text", action: () => document.execCommand("formatBlock", false, "<p>") },
+  ];
   const btn = "f-code text-[12px] px-2.5 py-1.5 rounded";
   const btnStyle = { background: "#fff", border: "1px solid #E7DEC9" };
   return (
-    <div>
+    <div ref={wrapRef} style={{ position: "relative" }}>
       <div className="flex items-center gap-1.5 mb-2 p-1.5 rounded-lg flex-wrap" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
         <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("bold")} className={btn} style={{ ...btnStyle, fontWeight: 800 }}>B</button>
         <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("italic")} className={btn} style={{ ...btnStyle, fontStyle: "italic" }}>I</button>
-        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("formatBlock", "H3")} className={btn} style={btnStyle}>Heading</button>
+        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("formatBlock", "<h1>")} className={btn} style={btnStyle}>H1</button>
+        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("formatBlock", "<h2>")} className={btn} style={btnStyle}>H2</button>
+        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("formatBlock", "<h3>")} className={btn} style={btnStyle}>H3</button>
         <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("insertUnorderedList")} className={btn} style={btnStyle}>• List</button>
-        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("formatBlock", "P")} className={btn} style={btnStyle}>Paragraph</button>
+        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("insertOrderedList")} className={btn} style={btnStyle}>1. List</button>
+        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("formatBlock", "<blockquote>")} className={btn} style={btnStyle}>" Quote</button>
+        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("formatBlock", "<p>")} className={btn} style={btnStyle}>Normal</button>
       </div>
       <div
         ref={ref}
         contentEditable
         suppressContentEditableWarning
-        onInput={() => onChange(sanitizeHtml(ref.current.innerHTML))}
-        onBlur={() => onChange(sanitizeHtml(ref.current.innerHTML))}
+        onInput={() => { emitChange(); checkSlash(); }}
+        onKeyUp={checkSlash}
+        onKeyDown={(e) => { if (e.key === "Escape") setSlashMenu(null); }}
+        onBlur={() => { emitChange(); setTimeout(() => setSlashMenu(null), 150); }}
         className="input-field rounded-lg px-3.5 py-2.5"
         style={{ minHeight: minRows * 22, outline: "none", lineHeight: 1.6 }}
       />
+      {slashMenu && (
+        <div style={{ position: "absolute", top: slashMenu.top, left: slashMenu.left, zIndex: 50, background: "#fff", border: "1px solid #E7DEC9", borderRadius: 10, boxShadow: "0 14px 30px -10px rgba(0,0,0,.25)", minWidth: 160, overflow: "hidden" }}>
+          {slashOptions.map((opt) => (
+            <button key={opt.label} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => applySlash(opt.action)} className="block w-full text-left px-3.5 py-2 text-[13px]" style={{ borderBottom: "1px solid #F0E7D6" }}>{opt.label}</button>
+          ))}
+        </div>
+      )}
+      <div className="text-[11px] mt-1.5" style={{ color: "#A79B84" }}>Type / for more formatting options.</div>
     </div>
   );
 }

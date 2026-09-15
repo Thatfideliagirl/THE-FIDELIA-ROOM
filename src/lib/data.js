@@ -47,6 +47,7 @@ export const FONT_STYLE = `
   .rich-content p { margin:0 0 12px; } .rich-content p:empty { min-height:12px; }
   .rich-content ul, .rich-content ol { margin:0 0 12px; padding-left:22px; }
   .rich-content li { margin-bottom:4px; }
+  .rich-content blockquote { margin:0 0 12px; padding:2px 16px; border-left:3px solid var(--accent); color:#71675A; font-style:italic; }
   .rich-content > *:first-child { margin-top:0; }
 `;
 

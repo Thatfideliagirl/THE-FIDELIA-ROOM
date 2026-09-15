@@ -8,7 +8,7 @@ import {
   Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Compass, Home
 } from "lucide-react";
 import { pairKey, moduleStatus, scoreSubmission, AUTO_APPROVE_THRESHOLD } from "./lib/data.js";
-import { SectionHeader, NotifBell, WelcomeTour, SidebarLink, LogoMark, Spine, TextArea, ProgressBar, ResourceDetail, Field, ChangePasswordCard, RichText } from "./components.jsx";
+import { SectionHeader, NotifBell, WelcomeTour, SidebarLink, LogoMark, Spine, TextArea, ProgressBar, ResourceDetail, Field, ChangePasswordCard, RichText, RichTextEditor } from "./components.jsx";
 
 export function LessonView({ course, enrollment, updateEnrollment, onBack, onNext, moduleId }) {
   const [view, setView] = useState("lecture"); // "lecture" | "check" | "meetings"
@@ -117,7 +117,11 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
             <>
               <div className="f-display text-[19px] mb-3" style={{ fontWeight: 700 }}>{module.testType === "written" ? "Written response" : module.testType === "milestone" ? "Milestone project" : `Upload your work${module.proofType === "document" ? " (document)" : ""}`}</div>
               {module.questionPrompt && <p className="text-[14px] mb-4 whitespace-pre-wrap" style={{ color: "#4A4237" }}>{module.questionPrompt}</p>}
-              <TextArea label={module.testType === "written" ? "Your answer" : "Link to your file"} value={proof} onChange={(e) => setProof(e.target.value)} />
+              {module.testType === "written" ? (
+                <div><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Your answer</div><RichTextEditor value={proof} onChange={setProof} minRows={6} /></div>
+              ) : (
+                <TextArea label="Link to your file" value={proof} onChange={(e) => setProof(e.target.value)} />
+              )}
               <button onClick={submitForReview} className="btn-primary rounded-lg px-6 py-3 text-[14px] mt-4">Submit for review</button>
             </>
           )}

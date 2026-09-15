@@ -144,11 +144,18 @@ export default function App() {
     setPage("accountNotFound");
   }
   useEffect(() => {
-    supabase?.auth.getSession().then(({ data }) => loadForSession(data.session));
     // A password-reset link lands here with a real (temporary) session and
     // this specific event, not a normal sign-in -- routing it through
     // loadForSession would just dump them on whatever their account normally
-    // opens to, with no way to actually set the new password.
+    // opens to, with no way to actually set the new password. The bug this
+    // guards against: getSession() below resolves independently of the
+    // PASSWORD_RECOVERY event and was calling loadForSession() regardless,
+    // which won the race often enough to skip the reset screen entirely and
+    // just sign them straight in.
+    const isRecoveryLink = window.location.hash.includes("type=recovery");
+    if (!isRecoveryLink) {
+      supabase?.auth.getSession().then(({ data }) => loadForSession(data.session));
+    }
     const { data: listener } = supabase?.auth.onAuthStateChange((event, session) => {
       if (event === "PASSWORD_RECOVERY") { setPage("resetPassword"); return; }
       loadForSession(session);
