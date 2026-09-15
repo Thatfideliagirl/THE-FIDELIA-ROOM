@@ -22,9 +22,14 @@ import { sendWelcomeEmail, sendAcceptanceEmail } from "./lib/email.js";
 // runs, so a recovery link falls through to a normal sign-in instead of the
 // reset-password screen.
 const isRecoveryLink = typeof window !== "undefined" && (window.location.hash.includes("type=recovery") || window.location.search.includes("type=recovery"));
+// A reset/confirmation link that's expired or was already clicked once
+// (email links are single-use) redirects here with "error=..." in the URL
+// instead of the tokens -- previously this fell through to a plain landing
+// page with no explanation, so it looked like the link "just didn't work".
+const isExpiredAuthLink = typeof window !== "undefined" && (window.location.hash.includes("error=") || window.location.search.includes("error="));
 
 export default function App() {
-  const [page, setPage] = useState(() => (isRecoveryLink ? "resetPassword" : "landing"));
+  const [page, setPage] = useState(() => (isRecoveryLink ? "resetPassword" : isExpiredAuthLink ? "linkExpired" : "landing"));
   const [presetCourseId, setPresetCourseId] = useState(null);
   const [viewCourseId, setViewCourseId] = useState(null);
   const [applyingAsExisting, setApplyingAsExisting] = useState(null);
@@ -311,6 +316,17 @@ export default function App() {
                 </>
               )}
             </div>
+          </div>
+        </div>
+      )}
+      {page === "linkExpired" && (
+        <div className="min-h-screen flex items-center justify-center px-6 text-center">
+          <div className="reveal in max-w-[420px]">
+            <LogoMark height={64} />
+            <div className="f-label text-[13px] mt-6 mb-3 accent-text">LINK EXPIRED</div>
+            <h1 className="f-display text-[26px] mb-4" style={{ fontWeight: 800 }}>That link's no longer valid.</h1>
+            <p className="text-[15px] leading-relaxed mb-8" style={{ color: "#71675A" }}>It's either expired or was already used once — email links only work one time. Head back to sign in and request a fresh one.</p>
+            <button onClick={() => setPage("login")} className="btn-primary rounded-lg py-3 px-6 text-[15px]">Back to sign in</button>
           </div>
         </div>
       )}
