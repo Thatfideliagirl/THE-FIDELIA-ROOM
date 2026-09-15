@@ -152,7 +152,13 @@ export default function App() {
     // PASSWORD_RECOVERY event and was calling loadForSession() regardless,
     // which won the race often enough to skip the reset screen entirely and
     // just sign them straight in.
-    const isRecoveryLink = window.location.hash.includes("type=recovery");
+    // Newer Supabase projects default to the PKCE flow, where a recovery
+    // link carries "?code=...&type=recovery" in the URL's query string
+    // instead of "#access_token=...&type=recovery" in the hash -- checking
+    // only the hash (the older/implicit-flow shape) meant this never
+    // actually triggered on this project, and the original race condition
+    // was still happening exactly as before despite the earlier fix.
+    const isRecoveryLink = window.location.hash.includes("type=recovery") || window.location.search.includes("type=recovery");
     if (!isRecoveryLink) {
       supabase?.auth.getSession().then(({ data }) => loadForSession(data.session));
     }

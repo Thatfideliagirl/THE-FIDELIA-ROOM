@@ -46,6 +46,9 @@ export const FONT_STYLE = `
   .rich-content h1 { font-size:22px; } .rich-content h2 { font-size:20px; } .rich-content h3 { font-size:18px; }
   .rich-content p { margin:0 0 12px; } .rich-content p:empty { min-height:12px; }
   .rich-content ul, .rich-content ol { margin:0 0 12px; padding-left:22px; }
+  .rich-content ul { list-style-type:disc; } .rich-content ol { list-style-type:decimal; }
+  .rich-content ul ul { list-style-type:circle; } .rich-content ol ol { list-style-type:lower-alpha; }
+  .rich-content li { display:list-item; }
   .rich-content li { margin-bottom:4px; }
   .rich-content blockquote { margin:0 0 12px; padding:2px 16px; border-left:3px solid var(--accent); color:#71675A; font-style:italic; }
   .rich-content > *:first-child { margin-top:0; }
