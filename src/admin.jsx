@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from "recharts";
 import { genCode, pairKey, ADMIN_EMAIL } from "./lib/data.js";
-import { Field, SectionHeader, NotifBell, SidebarLink, LogoMark, TextArea, SelectF, ImgField, FileField, ChangePasswordCard, RichTextEditor, RichText } from "./components.jsx";
+import { Field, SectionHeader, NotifBell, SidebarLink, LogoMark, TextArea, SelectF, ImgField, FileField, ChangePasswordCard, RichTextEditor, RichText, stripHtml } from "./components.jsx";
 import { CommunityPanel } from "./student.jsx";
 
 export function ApplicantsTab({ applicants, setApplicants, students, setStudents, courses, cohorts, onAccept }) {
@@ -254,7 +254,7 @@ export function CourseManager({ course, testimonials, setCourses, onBack }) {
           <button onClick={() => setOpenModuleId(m.id)} className="text-left w-full">
             <div className="f-code text-[11px] mb-1 accent-text">{m.testType === "milestone" ? "MILESTONE" : "MODULE"} {String(i + 1).padStart(2, "0")}</div>
             <div className="text-[16px] mb-1 pr-14" style={{ fontWeight: 700 }}>{m.title}</div>
-            <div className="text-[13px] mb-3" style={{ color: "#71675A" }}>{m.brief || "No brief yet."}</div>
+            <div className="text-[13px] mb-3" style={{ color: "#71675A" }}>{stripHtml(m.brief) || "No brief yet."}</div>
             <div className="flex items-center gap-1.5 text-[12px] accent-text" style={{ fontWeight: 700 }}><Pencil size={12} /> Edit module</div>
           </button>
         </div>

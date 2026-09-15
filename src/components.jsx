@@ -11,6 +11,8 @@ import {
 import { LOGO_SRC, HERO_SRC, CREATOR_SRC, HOWITWORKS_SRC } from "./assets/brandImages.js";
 import { moduleStatus } from "./lib/data.js";
 import { changePassword } from "./lib/auth.js";
+import { useEditor, EditorContent } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
 
 // lucide-react dropped trademarked brand marks — small inline stand-ins so the footer keeps working.
 export function Instagram({ size = 16, color = "currentColor" }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="1" fill={color} stroke="none" /></svg>; }
@@ -84,84 +86,92 @@ function sanitizeHtml(html) {
   })(doc.body);
   return doc.body.innerHTML;
 }
+// Built on Tiptap/ProseMirror rather than raw contentEditable + execCommand.
+// The first version used execCommand directly, which turned out to corrupt
+// content whenever two block types were combined in one session (a list
+// after a heading, a quote after a list, etc.) -- a known, long-standing
+// unreliability of that browser API, confirmed by testing it directly.
+// Tiptap edits a real document model with proper transactions instead of
+// raw DOM selection hacks, so combining formats behaves predictably.
 export function RichTextEditor({ value, onChange, minRows = 8 }) {
-  const ref = useRef(null);
   const wrapRef = useRef(null);
   const [slashMenu, setSlashMenu] = useState(null);
-  useEffect(() => { if (ref.current && document.activeElement !== ref.current) ref.current.innerHTML = value || ""; }, [value]);
-  function emitChange() { onChange(sanitizeHtml(ref.current.innerHTML)); }
-  // formatBlock needs the tag wrapped in angle brackets ("<h3>", not "H3")
-  // to apply reliably across browsers -- without it, Firefox in particular
-  // just silently does nothing, which is what made "Heading" look broken.
-  function exec(cmd, arg) { document.execCommand(cmd, false, arg); ref.current?.focus(); emitChange(); }
-  // Notion-style "/" menu: typing "/" at the start of a word opens a list of
-  // block types: choosing one deletes the "/" and applies that format,
-  // instead of needing the toolbar for everything.
-  function checkSlash() {
-    const sel = window.getSelection();
-    if (!sel?.rangeCount || !ref.current) { setSlashMenu(null); return; }
-    const range = sel.getRangeAt(0);
-    if (!ref.current.contains(range.startContainer) || range.startContainer.nodeType !== 3) { setSlashMenu(null); return; }
-    const textBefore = range.startContainer.textContent.slice(0, range.startOffset);
-    if (/(^|\s)\/$/.test(textBefore)) {
-      const rect = range.getBoundingClientRect(); const wrapRect = wrapRef.current.getBoundingClientRect();
-      setSlashMenu({ top: rect.bottom - wrapRect.top + 4, left: rect.left - wrapRect.left });
+  const editor = useEditor({
+    extensions: [StarterKit.configure({ heading: { levels: [1, 2, 3] } })],
+    content: value || "",
+    onUpdate: ({ editor }) => { onChange(sanitizeHtml(editor.getHTML())); checkSlash(editor); },
+    onSelectionUpdate: ({ editor }) => checkSlash(editor),
+  });
+  useEffect(() => {
+    if (editor && !editor.isFocused && value !== editor.getHTML()) editor.commands.setContent(value || "", false);
+  }, [value, editor]);
+  useEffect(() => () => editor?.destroy(), [editor]);
+
+  // Notion-style "/" menu: typing "/" right after whitespace or at the
+  // start of a block opens a list of block types.
+  function checkSlash(ed) {
+    const { state } = ed; const { $from } = state.selection;
+    const charBefore = $from.nodeBefore?.isText ? $from.nodeBefore.text.slice(-1) : "";
+    if (charBefore === "/" && ed.view.hasFocus()) {
+      const coords = ed.view.coordsAtPos($from.pos); const wrapRect = wrapRef.current.getBoundingClientRect();
+      setSlashMenu({ top: coords.bottom - wrapRect.top + 4, left: coords.left - wrapRect.left });
     } else setSlashMenu(null);
   }
-  function removeSlash() {
-    const sel = window.getSelection(); if (!sel?.rangeCount) return;
-    const range = sel.getRangeAt(0); const node = range.startContainer;
-    if (node.nodeType === 3 && range.startOffset > 0 && node.textContent[range.startOffset - 1] === "/") {
-      const r = document.createRange(); r.setStart(node, range.startOffset - 1); r.setEnd(node, range.startOffset); r.deleteContents();
-    }
+  // Deleting the "/" and applying the format as two separate .run() calls
+  // left a stale position behind for the wrap-style commands (blockquote
+  // wraps the block rather than just relabeling it, which shifts positions
+  // downstream) -- doing both in one continuous chain, one transaction,
+  // fixed it, confirmed by testing this exact case directly.
+  function applySlash(chainFn) {
+    const pos = editor.state.selection.$from.pos;
+    chainFn(editor.chain().focus().deleteRange({ from: pos - 1, to: pos })).run();
+    setSlashMenu(null);
   }
-  function applySlash(action) { removeSlash(); action(); setSlashMenu(null); emitChange(); ref.current?.focus(); }
   const slashOptions = [
-    { label: "Heading 1", action: () => document.execCommand("formatBlock", false, "<h1>") },
-    { label: "Heading 2", action: () => document.execCommand("formatBlock", false, "<h2>") },
-    { label: "Heading 3", action: () => document.execCommand("formatBlock", false, "<h3>") },
-    { label: "Bullet list", action: () => document.execCommand("insertUnorderedList") },
-    { label: "Numbered list", action: () => document.execCommand("insertOrderedList") },
-    { label: "Quote", action: () => document.execCommand("formatBlock", false, "<blockquote>") },
-    { label: "Bold text", action: () => document.execCommand("bold") },
-    { label: "Normal text", action: () => document.execCommand("formatBlock", false, "<p>") },
+    { label: "Heading 1", chain: (c) => c.toggleHeading({ level: 1 }) },
+    { label: "Heading 2", chain: (c) => c.toggleHeading({ level: 2 }) },
+    { label: "Heading 3", chain: (c) => c.toggleHeading({ level: 3 }) },
+    { label: "Bullet list", chain: (c) => c.toggleBulletList() },
+    { label: "Numbered list", chain: (c) => c.toggleOrderedList() },
+    { label: "Quote", chain: (c) => c.toggleBlockquote() },
+    { label: "Bold text", chain: (c) => c.toggleBold() },
+    { label: "Normal text", chain: (c) => c.setParagraph() },
   ];
+  if (!editor) return null;
   const btn = "f-code text-[12px] px-2.5 py-1.5 rounded";
-  const btnStyle = { background: "#fff", border: "1px solid #E7DEC9" };
+  const btnStyle = (active) => ({ background: active ? "var(--accent)" : "#fff", color: active ? "#FAF6EC" : "#262019", border: "1px solid #E7DEC9" });
   return (
     <div ref={wrapRef} style={{ position: "relative" }}>
       <div className="flex items-center gap-1.5 mb-2 p-1.5 rounded-lg flex-wrap" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
-        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("bold")} className={btn} style={{ ...btnStyle, fontWeight: 800 }}>B</button>
-        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("italic")} className={btn} style={{ ...btnStyle, fontStyle: "italic" }}>I</button>
-        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("formatBlock", "<h1>")} className={btn} style={btnStyle}>H1</button>
-        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("formatBlock", "<h2>")} className={btn} style={btnStyle}>H2</button>
-        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("formatBlock", "<h3>")} className={btn} style={btnStyle}>H3</button>
-        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("insertUnorderedList")} className={btn} style={btnStyle}>• List</button>
-        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("insertOrderedList")} className={btn} style={btnStyle}>1. List</button>
-        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("formatBlock", "<blockquote>")} className={btn} style={btnStyle}>" Quote</button>
-        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("formatBlock", "<p>")} className={btn} style={btnStyle}>Normal</button>
+        <button type="button" onClick={() => editor.chain().focus().toggleBold().run()} className={btn} style={{ ...btnStyle(editor.isActive("bold")), fontWeight: 800 }}>B</button>
+        <button type="button" onClick={() => editor.chain().focus().toggleItalic().run()} className={btn} style={{ ...btnStyle(editor.isActive("italic")), fontStyle: "italic" }}>I</button>
+        <button type="button" onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} className={btn} style={btnStyle(editor.isActive("heading", { level: 1 }))}>H1</button>
+        <button type="button" onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} className={btn} style={btnStyle(editor.isActive("heading", { level: 2 }))}>H2</button>
+        <button type="button" onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} className={btn} style={btnStyle(editor.isActive("heading", { level: 3 }))}>H3</button>
+        <button type="button" onClick={() => editor.chain().focus().toggleBulletList().run()} className={btn} style={btnStyle(editor.isActive("bulletList"))}>• List</button>
+        <button type="button" onClick={() => editor.chain().focus().toggleOrderedList().run()} className={btn} style={btnStyle(editor.isActive("orderedList"))}>1. List</button>
+        <button type="button" onClick={() => editor.chain().focus().toggleBlockquote().run()} className={btn} style={btnStyle(editor.isActive("blockquote"))}>" Quote</button>
+        <button type="button" onClick={() => editor.chain().focus().setParagraph().run()} className={btn} style={btnStyle(editor.isActive("paragraph") && !editor.isActive("bulletList") && !editor.isActive("orderedList"))}>Normal</button>
       </div>
-      <div
-        ref={ref}
-        contentEditable
-        suppressContentEditableWarning
-        onInput={() => { emitChange(); checkSlash(); }}
-        onKeyUp={checkSlash}
-        onKeyDown={(e) => { if (e.key === "Escape") setSlashMenu(null); }}
-        onBlur={() => { emitChange(); setTimeout(() => setSlashMenu(null), 150); }}
-        className="input-field rounded-lg px-3.5 py-2.5"
-        style={{ minHeight: minRows * 22, outline: "none", lineHeight: 1.6 }}
-      />
+      <EditorContent editor={editor} className="input-field rich-content rounded-lg px-3.5 py-2.5" style={{ minHeight: minRows * 22 }} onKeyDown={(e) => { if (e.key === "Escape") setSlashMenu(null); }} />
       {slashMenu && (
         <div style={{ position: "absolute", top: slashMenu.top, left: slashMenu.left, zIndex: 50, background: "#fff", border: "1px solid #E7DEC9", borderRadius: 10, boxShadow: "0 14px 30px -10px rgba(0,0,0,.25)", minWidth: 160, overflow: "hidden" }}>
           {slashOptions.map((opt) => (
-            <button key={opt.label} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => applySlash(opt.action)} className="block w-full text-left px-3.5 py-2 text-[13px]" style={{ borderBottom: "1px solid #F0E7D6" }}>{opt.label}</button>
+            <button key={opt.label} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => applySlash(opt.chain)} className="block w-full text-left px-3.5 py-2 text-[13px]" style={{ borderBottom: "1px solid #F0E7D6" }}>{opt.label}</button>
           ))}
         </div>
       )}
       <div className="text-[11px] mt-1.5" style={{ color: "#A79B84" }}>Type / for more formatting options.</div>
     </div>
   );
+}
+// For short plain-text previews (card summaries, list rows) where rendering
+// full rich HTML would look wrong at that size -- strips tags down to the
+// plain words, so a rich-text field doesn't leak raw "<div>" markup into a
+// caption that was never meant to render HTML.
+export function stripHtml(html) {
+  if (!html) return "";
+  return new DOMParser().parseFromString(html, "text/html").body.textContent.trim();
 }
 // The student-facing display side -- just renders that same sanitized HTML,
 // growing with however much content is there instead of a fixed-height box.
