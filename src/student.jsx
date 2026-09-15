@@ -8,7 +8,7 @@ import {
   Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Compass
 } from "lucide-react";
 import { pairKey, moduleStatus, scoreSubmission, AUTO_APPROVE_THRESHOLD } from "./lib/data.js";
-import { SectionHeader, NotifBell, WelcomeTour, SidebarLink, LogoMark, Spine, TextArea, ProgressBar, ResourceDetail, Field } from "./components.jsx";
+import { SectionHeader, NotifBell, WelcomeTour, SidebarLink, LogoMark, Spine, TextArea, ProgressBar, ResourceDetail, Field, ChangePasswordCard, FormattedText } from "./components.jsx";
 
 export function LessonView({ course, enrollment, updateEnrollment, onBack, onNext, moduleId }) {
   const [view, setView] = useState("lecture"); // "lecture" | "check" | "meetings"
@@ -57,7 +57,7 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
       {view === "lecture" && lectureStep === "brief" && (
         <div className="card rounded-2xl p-8">
           <div className="f-label text-[11px] mb-3" style={{ color: "#A79B84" }}>BEFORE YOU START</div>
-          <p className="text-[17px] leading-relaxed mb-6 whitespace-pre-wrap" style={{ color: "#4A4237" }}>{module.brief}</p>
+          <FormattedText text={module.brief} className="text-[17px] leading-relaxed mb-6" style={{ color: "#4A4237" }} />
           <div className="flex justify-end"><button onClick={() => setLectureStep("content")} className="btn-primary rounded-lg px-6 py-3 text-[14px] flex items-center gap-2">Next <ArrowRight size={15} /></button></div>
         </div>
       )}
@@ -65,7 +65,7 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
       {view === "lecture" && lectureStep === "content" && (
         <div className="card rounded-2xl p-8">
           <div className="f-label text-[11px] mb-3" style={{ color: "#A79B84" }}>{module.testType === "milestone" ? "PROJECT OVERVIEW" : "LECTURE NOTES"}</div>
-          <p className="text-[15px] leading-relaxed mb-5 whitespace-pre-wrap" style={{ color: "#4A4237" }}>{module.notes || "Lecture content coming soon."}</p>
+          <FormattedText text={module.notes || "Lecture content coming soon."} className="text-[15px] leading-relaxed mb-5" style={{ color: "#4A4237" }} />
           <div className="flex items-center gap-3 mb-2 flex-wrap">
             {module.videoUrl && <a href={module.videoUrl} target="_blank" rel="noreferrer" className="btn-soft rounded-full px-4 py-2 text-[13px] flex items-center gap-1.5" style={{ fontWeight: 700 }}><PlayCircle size={14} /> Watch lecture</a>}
             {module.slideUrl && <a href={module.slideUrl} target="_blank" rel="noreferrer" className="btn-soft rounded-full px-4 py-2 text-[13px] flex items-center gap-1.5" style={{ fontWeight: 700 }}><FileText size={14} /> View slides</a>}
@@ -433,6 +433,7 @@ function ProfilePage({ student, setStudents, cohort }) {
         <TextArea label="Bio" value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Tell the Room a bit about yourself…" />
         <div className="flex items-center gap-3 mt-4"><button onClick={save} className="btn-primary rounded-lg px-6 py-2.5 text-[14px]">Save profile</button>{saved && <span className="text-[13px] accent-text" style={{ fontWeight: 700 }}>Saved.</span>}</div>
       </div>
+      <ChangePasswordCard email={student.email} />
     </div>
   );
 }

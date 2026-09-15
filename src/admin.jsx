@@ -8,8 +8,8 @@ import {
   Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from "recharts";
-import { genCode, pairKey } from "./lib/data.js";
-import { Field, SectionHeader, NotifBell, SidebarLink, LogoMark, TextArea, SelectF, ImgField, FileField } from "./components.jsx";
+import { genCode, pairKey, ADMIN_EMAIL } from "./lib/data.js";
+import { Field, SectionHeader, NotifBell, SidebarLink, LogoMark, TextArea, SelectF, ImgField, FileField, ChangePasswordCard } from "./components.jsx";
 import { CommunityPanel } from "./student.jsx";
 
 export function ApplicantsTab({ applicants, setApplicants, students, setStudents, courses, cohorts, onAccept }) {
@@ -156,6 +156,7 @@ export function ModuleEditor({ course, module, setCourses, onBack }) {
         <Field label="Module title" value={title} onChange={(e) => setTitle(e.target.value)} />
         <TextArea label="Short brief (shown in course path)" value={brief} onChange={(e) => setBrief(e.target.value)} rows={2} />
         <TextArea label="Lecture notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={14} />
+        <div className="text-[12px] -mt-2" style={{ color: "#A79B84" }}>Formatting: start a line with # for a heading, - for a bullet, wrap text in **bold** or *italic*. Renders styled on the student side.</div>
         <div className="grid grid-cols-2 gap-3"><Field label="Video link (max ~50MB if uploading elsewhere)" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://…" /><Field label="Slide deck link (optional if uploading a file below)" value={slideUrl} onChange={(e) => setSlideUrl(e.target.value)} placeholder="https://…" /></div>
         <FileField label="Or upload a slide deck file (PDF, PPT, etc.)" value={slideFile} onChange={setSlideFile} accept=".pdf,.ppt,.pptx,.key" />
       </div>
@@ -549,14 +550,17 @@ export function ResourceForm({ courses, initial, onSave, onClose }) {
   );
 }
 export function LibraryTab({ resources, onAdd, onEdit, onRemove, courses }) {
-  const [showAdd, setShowAdd] = useState(false); const [editingId, setEditingId] = useState(null);
+  const [showAdd, setShowAdd] = useState(false); const [editingId, setEditingId] = useState(null); const [copiedId, setCopiedId] = useState(null);
   const folders = [...new Set(resources.map((r) => r.folder))];
+  function copyLink(id) {
+    navigator.clipboard?.writeText(`${window.location.origin}/?r=${id}`).then(() => { setCopiedId(id); setTimeout(() => setCopiedId(null), 2000); });
+  }
   return (
     <>
       <SectionHeader eyebrow="MANAGE" title="Resource library" action={<button onClick={() => setShowAdd((s) => !s)} className="btn-primary rounded-full px-5 py-2.5 text-[14px] flex items-center gap-1.5"><Plus size={16} /> Add resource</button>} />
       {showAdd && <ResourceForm courses={courses} onSave={onAdd} onClose={() => setShowAdd(false)} />}
       {folders.map((f) => <div key={f} className="mb-6"><div className="f-label text-[12px] mb-3" style={{ color: "#71675A" }}>{f.toUpperCase()}</div><div className="flex flex-col gap-2">{resources.filter((r) => r.folder === f).map((r) => (
-        <div key={r.id}><div className="card rounded-lg px-5 py-3 flex items-center justify-between text-[14px]"><span className="flex items-center gap-2">{r.title} {r.isPublic && <span className="f-code text-[9px] tint-badge px-2 py-0.5 rounded-full">PUBLIC</span>}{r.visibility === "all" && !r.isPublic && <span className="f-code text-[9px] tint-badge px-2 py-0.5 rounded-full">ALL COURSES</span>}</span><div className="flex items-center gap-3"><button onClick={() => setEditingId(editingId === r.id ? null : r.id)} className="f-label text-[10px] accent-text flex items-center gap-1"><Pencil size={11} /> EDIT</button><button onClick={() => onRemove(r.id)}><Trash2 size={14} color="#B04A3A" /></button></div></div>{editingId === r.id && <ResourceForm courses={courses} initial={r} onSave={(data) => onEdit(r.id, data)} onClose={() => setEditingId(null)} />}</div>
+        <div key={r.id}><div className="card rounded-lg px-5 py-3 flex items-center justify-between text-[14px]"><span className="flex items-center gap-2">{r.title} {r.isPublic && <span className="f-code text-[9px] tint-badge px-2 py-0.5 rounded-full">PUBLIC</span>}{r.visibility === "all" && !r.isPublic && <span className="f-code text-[9px] tint-badge px-2 py-0.5 rounded-full">ALL COURSES</span>}</span><div className="flex items-center gap-3">{r.isPublic && <button onClick={() => copyLink(r.id)} className="f-label text-[10px] accent-text flex items-center gap-1"><Send size={11} /> {copiedId === r.id ? "COPIED!" : "COPY LINK"}</button>}<button onClick={() => setEditingId(editingId === r.id ? null : r.id)} className="f-label text-[10px] accent-text flex items-center gap-1"><Pencil size={11} /> EDIT</button><button onClick={() => onRemove(r.id)}><Trash2 size={14} color="#B04A3A" /></button></div></div>{editingId === r.id && <ResourceForm courses={courses} initial={r} onSave={(data) => onEdit(r.id, data)} onClose={() => setEditingId(null)} />}</div>
       ))}</div></div>)}
     </>
   );
@@ -693,6 +697,7 @@ export function AdminProfileTab({ adminProfile, setAdminProfile }) {
         <div className="mt-4"><TextArea label="Bio (shown on your landing page)" value={bio} onChange={(e) => setBio(e.target.value)} /></div>
         <div className="flex items-center gap-3 mt-4"><button onClick={save} className="btn-primary rounded-lg px-6 py-2.5 text-[14px]">Save profile</button>{saved && <span className="text-[13px] accent-text" style={{ fontWeight: 700 }}>Saved.</span>}</div>
       </div>
+      <div className="max-w-[520px]"><ChangePasswordCard email={ADMIN_EMAIL} /></div>
     </>
   );
 }

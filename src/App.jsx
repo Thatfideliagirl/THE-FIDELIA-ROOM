@@ -5,7 +5,7 @@ import {
 } from "./lib/data.js";
 import {
   Landing, CoursesIndex, CourseDetail, ResourcesPage, ApplicationForm,
-  SignInScreen, InReviewScreen, CodeRedeemScreen, LogoMark, Field,
+  SignInScreen, InReviewScreen, CodeRedeemScreen, LogoMark, Field, ResourceDetail,
 } from "./components.jsx";
 import { MyCourses } from "./student.jsx";
 import { AdminDashboard } from "./admin.jsx";
@@ -20,6 +20,11 @@ export default function App() {
   const [viewCourseId, setViewCourseId] = useState(null);
   const [applyingAsExisting, setApplyingAsExisting] = useState(null);
   const [pendingConfirmEmail, setPendingConfirmEmail] = useState("");
+  // A resource's "copy shareable link" produces a URL like /?r=<id> -- read
+  // that on first load so anyone opening a shared link lands directly on
+  // that resource, layered over the normal public site behind it (rather
+  // than a bare, isolated page), so they see the rest of FJ Room too.
+  const [sharedResourceId, setSharedResourceId] = useState(() => new URLSearchParams(window.location.search).get("r"));
   const [courses, setCourses] = useState([]);
   const [cohorts, setCohorts] = useState([]);
   const [students, setStudents] = useState(seedStudents);
@@ -260,6 +265,9 @@ export default function App() {
       )}
       {page === "landing" && (isAdminSession || liveStudent) && (
         <button onClick={() => setPage(isAdminSession ? "adminDash" : "studentDash")} className="fixed z-[999] f-label text-[11px] px-4 py-2 rounded-full" style={{ top: 16, left: 16, background: "var(--accent)", color: "#FAF6EC", fontWeight: 700, boxShadow: "0 10px 22px -10px rgba(0,0,0,.4)" }}>BACK TO DASHBOARD</button>
+      )}
+      {sharedResourceId && resources.find((r) => r.id === sharedResourceId) && (
+        <ResourceDetail resource={resources.find((r) => r.id === sharedResourceId)} onClose={() => { setSharedResourceId(null); window.history.replaceState({}, "", window.location.pathname); }} />
       )}
       {page === "landing" && <Landing courses={courses} resources={resources} testimonials={testimonials} faqs={faqs} brand={brand} onSignIn={() => setPage("login")} onSignUp={(courseId) => { setPresetCourseId(typeof courseId === "string" ? courseId : null); setApplyingAsExisting(null); setPage("signup"); }} onViewCourses={() => setPage("courses")} onViewResources={() => setPage("resources")} onViewCourseDetail={(id) => { setViewCourseId(id); setPage("courseDetail"); }} />}
       {page === "courses" && <CoursesIndex courses={courses} onBack={() => setPage("landing")} onOpen={(id) => { setViewCourseId(id); setPage("courseDetail"); }} />}

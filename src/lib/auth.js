@@ -85,6 +85,22 @@ export async function signOut() {
   await supabase.auth.signOut();
 }
 
+// Changing your own password from inside your profile: re-verify the old
+// password first (signInWithPassword against your own email), then apply
+// the new one -- same safety check as any "change password" flow, without
+// needing the email-link route this app already has for "forgot password".
+export async function changePassword(email, oldPassword, newPassword) {
+  try {
+    const { error: reauthError } = await supabase.auth.signInWithPassword({ email, password: oldPassword });
+    if (reauthError) return { error: reauthError.message.toLowerCase().includes("invalid") ? "wrong-password" : reauthError.message };
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) return { error: error.message };
+    return {};
+  } catch {
+    return { error: "network" };
+  }
+}
+
 export function isAdminEmail(email) {
   return (email || "").toLowerCase() === ADMIN_EMAIL.toLowerCase();
 }

@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { LOGO_SRC, HERO_SRC, CREATOR_SRC, HOWITWORKS_SRC } from "./assets/brandImages.js";
 import { moduleStatus } from "./lib/data.js";
+import { changePassword } from "./lib/auth.js";
 
 // lucide-react dropped trademarked brand marks — small inline stand-ins so the footer keeps working.
 export function Instagram({ size = 16, color = "currentColor" }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="1" fill={color} stroke="none" /></svg>; }
@@ -61,6 +62,78 @@ export function CourseImage({ src, ratio = "16/9", radius = 20, icon: Icon = Gra
   );
 }
 export function Field({ label, ...props }) { return <label className="block">{label && <div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>{label}</div>}<input className="input-field rounded-lg px-3.5 py-2.5" {...props} /></label>; }
+
+// Lightweight formatting for lecture notes/briefs -- not a rich-text editor,
+// just a small set of plain-text conventions (typed straight into the
+// existing textarea) rendered nicely on the student side: "# Heading",
+// "**bold**", "*italic*", "- bullet". Deliberately not Notion-style slash
+// commands or a WYSIWYG editor -- this reads the exact same plain text an
+// admin already types, just displayed with structure instead of as one flat
+// paragraph.
+export function FormattedText({ text, className = "", style = {} }) {
+  if (!text) return null;
+  const lines = text.split("\n");
+  const blocks = []; let listBuffer = [];
+  const flushList = () => { if (listBuffer.length) { blocks.push({ type: "ul", items: listBuffer }); listBuffer = []; } };
+  lines.forEach((line) => {
+    const trimmed = line.trim();
+    if (/^#{1,3}\s+/.test(trimmed)) { flushList(); blocks.push({ type: "h", level: trimmed.match(/^#+/)[0].length, text: trimmed.replace(/^#{1,3}\s+/, "") }); }
+    else if (/^[-*]\s+/.test(trimmed)) { listBuffer.push(trimmed.replace(/^[-*]\s+/, "")); }
+    else { flushList(); blocks.push({ type: "p", text: line }); }
+  });
+  flushList();
+  function inline(str) {
+    const parts = []; let rest = str; let key = 0;
+    const regex = /(\*\*(.+?)\*\*|\*(.+?)\*)/;
+    while (rest.length) {
+      const m = rest.match(regex);
+      if (!m) { parts.push(rest); break; }
+      if (m.index > 0) parts.push(rest.slice(0, m.index));
+      parts.push(m[2] !== undefined ? <strong key={key++}>{m[2]}</strong> : <em key={key++}>{m[3]}</em>);
+      rest = rest.slice(m.index + m[0].length);
+    }
+    return parts;
+  }
+  const headingSize = { 1: "20px", 2: "18px", 3: "16px" };
+  return (
+    <div className={className} style={style}>
+      {blocks.map((b, i) => {
+        if (b.type === "h") return <div key={i} className="f-display" style={{ fontWeight: 800, fontSize: headingSize[b.level] || "16px", margin: i === 0 ? "0 0 10px" : "18px 0 10px" }}>{inline(b.text)}</div>;
+        if (b.type === "ul") return <ul key={i} style={{ margin: "0 0 12px", paddingLeft: 20 }}>{b.items.map((it, j) => <li key={j} style={{ marginBottom: 4 }}>{inline(it)}</li>)}</ul>;
+        return b.text.trim() ? <p key={i} style={{ margin: "0 0 12px" }}>{inline(b.text)}</p> : <div key={i} style={{ height: 4 }} />;
+      })}
+    </div>
+  );
+}
+
+// Shared by both the student and admin profile pages -- same "old password,
+// new password" re-verification flow either way.
+export function ChangePasswordCard({ email }) {
+  const [oldPw, setOldPw] = useState(""); const [newPw, setNewPw] = useState("");
+  const [saving, setSaving] = useState(false); const [error, setError] = useState(""); const [done, setDone] = useState(false);
+  async function submit() {
+    if (newPw.length < 6) { setError("New password needs at least 6 characters."); return; }
+    setSaving(true); setError(""); setDone(false);
+    const { error: err } = await changePassword(email, oldPw, newPw);
+    setSaving(false);
+    if (err) { setError(err === "wrong-password" ? "Your current password doesn't match." : err); return; }
+    setOldPw(""); setNewPw(""); setDone(true);
+  }
+  return (
+    <div className="card rounded-2xl p-8 mt-6">
+      <div className="f-label text-[12px] mb-4" style={{ color: "#71675A" }}>CHANGE PASSWORD</div>
+      <div className="grid grid-cols-2 gap-4">
+        <Field label="Current password" type="password" value={oldPw} onChange={(e) => setOldPw(e.target.value)} />
+        <Field label="New password" type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="At least 6 characters" />
+      </div>
+      {error && <div className="text-[13px] mt-3" style={{ color: "#B04A3A" }}>{error}</div>}
+      <div className="flex items-center gap-3 mt-4">
+        <button disabled={saving || !oldPw || newPw.length < 6} onClick={submit} className="btn-primary rounded-lg px-6 py-2.5 text-[14px]">{saving ? "Updating…" : "Update password"}</button>
+        {done && <span className="text-[13px] accent-text" style={{ fontWeight: 700 }}>Password updated.</span>}
+      </div>
+    </div>
+  );
+}
 // Generic file upload (PDF, slides, documents, images) — stored as { name, dataUrl }. In-browser only until Supabase is wired up.
 export function FileField({ label, value, onChange, accept }) {
   function pick(e) { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = () => onChange({ name: f.name, dataUrl: r.result }); r.readAsDataURL(f); }
@@ -278,6 +351,11 @@ export function CourseDetail({ course, testimonials, onBack, onApply }) {
 }
 // Shown when a student clicks "View" on a resource — full details before deciding to download.
 export function ResourceDetail({ resource, onClose }) {
+  const [copied, setCopied] = useState(false);
+  function copyLink() {
+    const link = `${window.location.origin}/?r=${resource.id}`;
+    navigator.clipboard?.writeText(link).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
+  }
   return (
     <div className="fixed inset-0 flex items-center justify-center p-6" style={{ background: "rgba(38,32,25,.5)", zIndex: 999 }} onClick={onClose}>
       <div className="card modal-in rounded-2xl p-8 max-w-[520px] w-full" onClick={(e) => e.stopPropagation()}>
@@ -285,11 +363,14 @@ export function ResourceDetail({ resource, onClose }) {
         <div className="f-display text-[22px] mb-2" style={{ fontWeight: 800 }}>{resource.title}</div>
         <div className="f-label text-[11px] mb-5" style={{ color: "#A79B84" }}>{(resource.type || "RESOURCE").toUpperCase()} · {resource.folder}</div>
         <p className="text-[14px] leading-relaxed mb-7 whitespace-pre-wrap" style={{ color: "#4A4237" }}>{resource.description}</p>
-        {resource.kind === "file" && resource.file ? (
-          <a href={resource.file.dataUrl} download={resource.file.name} className="btn-primary rounded-full px-6 py-3 text-[14px] inline-flex items-center gap-2"><Download size={15} /> Download {resource.file.name}</a>
-        ) : (
-          <a href={resource.url} target="_blank" rel="noreferrer" className="btn-primary rounded-full px-6 py-3 text-[14px] inline-flex items-center gap-2"><Download size={15} /> Go to link</a>
-        )}
+        <div className="flex items-center gap-3 flex-wrap">
+          {resource.kind === "file" && resource.file ? (
+            <a href={resource.file.dataUrl} download={resource.file.name} className="btn-primary rounded-full px-6 py-3 text-[14px] inline-flex items-center gap-2"><Download size={15} /> Download {resource.file.name}</a>
+          ) : (
+            <a href={resource.url} target="_blank" rel="noreferrer" className="btn-primary rounded-full px-6 py-3 text-[14px] inline-flex items-center gap-2"><Download size={15} /> Go to link</a>
+          )}
+          {resource.isPublic && <button onClick={copyLink} className="btn-soft rounded-full px-5 py-3 text-[14px] inline-flex items-center gap-2" style={{ fontWeight: 700 }}>{copied ? "Link copied!" : "Copy shareable link"}</button>}
+        </div>
       </div>
     </div>
   );
