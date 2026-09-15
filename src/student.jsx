@@ -12,7 +12,7 @@ import { SectionHeader, NotifBell, WelcomeTour, SidebarLink, LogoMark, Spine, Te
 
 export function LessonView({ course, enrollment, updateEnrollment, onBack, onNext, moduleId }) {
   const [view, setView] = useState("lecture"); // "lecture" | "check" | "meetings"
-  const [lectureStep, setLectureStep] = useState("brief"); // "brief" | "content"
+  const [lectureStep, setLectureStep] = useState("brief"); // "brief" | "content" | "summary"
   const [answers, setAnswers] = useState({}); const [result, setResult] = useState(null); const [proof, setProof] = useState("");
   const currentIndex = Math.min(enrollment.completedModuleIds.length, course.modules.length - 1);
   const requestedIndex = moduleId != null ? course.modules.findIndex((m) => m.id === moduleId) : -1;
@@ -73,6 +73,17 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
           </div>
           <div className="flex items-center justify-between mt-6">
             {module.brief ? <button onClick={() => setLectureStep("brief")} className="text-[13px]" style={{ color: "#A79B84" }}>Back</button> : <span />}
+            <button onClick={() => setLectureStep("summary")} className="btn-primary rounded-lg px-6 py-3 text-[14px] flex items-center gap-2">Next: Summary <ArrowRight size={15} /></button>
+          </div>
+        </div>
+      )}
+
+      {view === "lecture" && lectureStep === "summary" && (
+        <div className="card rounded-2xl p-8">
+          <div className="f-label text-[11px] mb-3" style={{ color: "#A79B84" }}>SUMMARY</div>
+          <RichText html={module.summary || "No summary yet for this module."} className="rich-content text-[17px] leading-relaxed mb-6" style={{ color: "#4A4237" }} />
+          <div className="flex items-center justify-between mt-6">
+            <button onClick={() => setLectureStep("content")} className="text-[13px]" style={{ color: "#A79B84" }}>Back</button>
             <button onClick={() => setView("check")} className="btn-primary rounded-lg px-6 py-3 text-[14px] flex items-center gap-2">Next: {module.testType === "milestone" ? "Milestone Project" : "Quick Check"} <ArrowRight size={15} /></button>
           </div>
         </div>
