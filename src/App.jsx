@@ -172,7 +172,16 @@ export default function App() {
       supabase?.auth.getSession().then(({ data }) => loadForSession(data.session));
     }
     const { data: listener } = supabase?.auth.onAuthStateChange((event, session) => {
-      if (event === "PASSWORD_RECOVERY") { setPage("resetPassword"); return; }
+      // Establishing the recovery link's temporary session fires its own
+      // auth event (not only "PASSWORD_RECOVERY" -- versions/timing vary,
+      // and a plain SIGNED_IN/INITIAL_SESSION can fire right alongside it).
+      // Routing that through loadForSession() signed the user straight into
+      // their dashboard the instant the link was opened, before they ever
+      // got a chance to type a new password -- the reset screen would flash
+      // and immediately get replaced. While handling a recovery link, every
+      // auth event is ignored here; only the explicit "Continue" button
+      // after a successful save is allowed to route them onward.
+      if (isRecoveryLink) return;
       loadForSession(session);
     }) || { data: null };
     return () => listener?.subscription.unsubscribe();
