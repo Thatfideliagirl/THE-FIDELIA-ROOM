@@ -103,6 +103,26 @@ export default function App() {
   // silently closing on failure.
   useEffect(() => { fetchResources().then(setResources).catch((e) => console.error("fetchResources failed", e)); }, []);
 
+  // Live sync: a student applying, submitting a quick check, or an admin
+  // action in a different tab/device previously only showed up here after a
+  // manual refresh. Supabase Realtime pushes a change notification the
+  // instant any row in these tables is inserted/updated/deleted, and the
+  // simplest correct reaction is just refetching that table -- these fetches
+  // are cheap, and it sidesteps any risk of a hand-patched local update
+  // drifting from what's actually in the database. The admin notification
+  // bell and dashboard counts are computed directly from this same state, so
+  // they go live for free, no separate wiring needed.
+  useEffect(() => {
+    if (!supabase) return;
+    const channel = supabase
+      .channel("live-sync")
+      .on("postgres_changes", { event: "*", schema: "public", table: "students" }, () => { fetchStudents().then(setStudents).catch((e) => console.error("realtime fetchStudents failed", e)); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "applicants" }, () => { fetchApplicants().then(setApplicants).catch((e) => console.error("realtime fetchApplicants failed", e)); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "resources" }, () => { fetchResources().then(setResources).catch((e) => console.error("realtime fetchResources failed", e)); })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
   // Courses and branding/admin-profile are real now too -- both fetched on
   // load regardless of login (the public landing/courses pages need them).
   // syncCourses mirrors syncStudents/syncApplicants: any item whose reference
