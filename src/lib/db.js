@@ -73,6 +73,10 @@ export async function updateApplicant(id, applicant) {
   if (error) throw error;
   return applicantOut(data);
 }
+export async function deleteApplicant(id) {
+  const { error } = await supabase.from("applicants").delete().eq("id", id);
+  if (error) throw error;
+}
 
 export async function fetchStudents() {
   const { data, error } = await supabase.from("students").select("*").order("created_at", { ascending: true });
