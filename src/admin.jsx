@@ -138,7 +138,7 @@ function MeetingsEditor({ meetings, setMeetings }) {
       {meetings.length === 0 && <div className="text-[13px]" style={{ color: "#A79B84" }}>No classes scheduled for this module yet.</div>}
       {meetings.map((mt, i) => (
         <div key={mt.id} className="rounded-xl p-4 flex flex-col gap-3" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
-          <div className="grid grid-cols-[1fr_0.85fr_0.75fr_1.5fr_auto] gap-3 items-end">
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_0.85fr_0.75fr_1.5fr_auto] gap-3 items-end">
             <Field label="Label" value={mt.label} onChange={(e) => updateMeeting(i, "label", e.target.value)} placeholder="e.g. Tuesday class" />
             <Field label="Date" type="date" value={mt.date ? mt.date.split("T")[0] : ""} onChange={(e) => updateMeetingDatePart(i, "date", e.target.value)} />
             <Field label="Time" type="time" value={mt.date && mt.date.includes("T") ? mt.date.split("T")[1] : ""} onChange={(e) => updateMeetingDatePart(i, "time", e.target.value)} />
@@ -373,7 +373,7 @@ export function AdminMeetingsTab({ courses, setCourses, cohorts }) {
   return (
     <>
       <SectionHeader eyebrow="MANAGE" title="Virtual Meetings" action={<button onClick={addMeeting} disabled={coursesWithModules.length === 0} className="btn-primary rounded-full px-5 py-2.5 text-[14px] flex items-center gap-1.5"><Plus size={16} /> Add meeting</button>} />
-      <div className="flex items-center gap-2 mb-5">
+      <div className="flex items-center gap-2 mb-5 flex-wrap">
         <span className="f-label text-[11px]" style={{ color: "#A79B84" }}>FILTER</span>
         <SelectF value={cohortId} onChange={(e) => { setCohortId(e.target.value); setCourseFilterId("all"); }} options={[{ value: "all", label: "All cohorts" }, ...cohorts.map((c) => ({ value: c.id, label: c.name }))]} />
         <SelectF value={courseFilterId} onChange={(e) => setCourseFilterId(e.target.value)} options={[{ value: "all", label: "All courses" }, ...filterCourses.map((c) => ({ value: c.id, label: c.title }))]} />
@@ -389,7 +389,7 @@ export function AdminMeetingsTab({ courses, setCourses, cohorts }) {
                 <SelectF label="Course" value={mt.courseId} onChange={(e) => updateMeetingCourse(mt.id, e.target.value)} options={coursesWithModules.map((c) => ({ value: c.id, label: c.title }))} />
                 <SelectF label="Which module is this?" value={mt.moduleId} onChange={(e) => updateMeeting(mt.id, "moduleId", Number(e.target.value))} options={(course?.modules || []).map((m, i) => ({ value: m.id, label: `Module ${i + 1} — ${m.title}` }))} />
               </div>
-              <div className="grid grid-cols-[1fr_0.85fr_0.75fr_1.5fr_auto] gap-3 items-end">
+              <div className="grid grid-cols-1 sm:grid-cols-[1fr_0.85fr_0.75fr_1.5fr_auto] gap-3 items-end">
                 <Field label="Label" value={mt.label} onChange={(e) => updateMeeting(mt.id, "label", e.target.value)} placeholder="e.g. Tuesday class" />
                 <Field label="Date" type="date" value={mt.date ? mt.date.split("T")[0] : ""} onChange={(e) => updateMeetingDatePart(mt.id, "date", e.target.value)} />
                 <Field label="Time" type="time" value={mt.date && mt.date.includes("T") ? mt.date.split("T")[1] : ""} onChange={(e) => updateMeetingDatePart(mt.id, "time", e.target.value)} />

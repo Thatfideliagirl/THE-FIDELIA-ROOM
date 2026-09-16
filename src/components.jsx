@@ -364,9 +364,9 @@ export function DashboardShell({ sidebar, children, maxWidth = 1040 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   return (
     <div className="min-h-screen md:flex">
-      <div className="flex md:hidden items-center justify-between px-4 py-3 sticky top-0 z-30" style={{ background: "#FAF6EC", borderBottom: "1px solid #E7DEC9" }}>
+      <div className="flex md:hidden items-center gap-3 px-4 py-3 sticky top-0 z-30" style={{ background: "#FAF6EC", borderBottom: "1px solid #E7DEC9" }}>
+        <button onClick={() => setMobileOpen(true)} className="p-2 -ml-2" aria-label="Open menu"><Menu size={22} color="#4A4237" /></button>
         <LogoMark height={30} />
-        <button onClick={() => setMobileOpen(true)} className="p-2 -mr-2" aria-label="Open menu"><Menu size={22} color="#4A4237" /></button>
       </div>
       {mobileOpen && <div className="md:hidden fixed inset-0 z-40" style={{ background: "rgba(38,32,25,.35)" }} onClick={() => setMobileOpen(false)} />}
       <div
