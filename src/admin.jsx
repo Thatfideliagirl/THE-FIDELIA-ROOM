@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from "recharts";
 import { genCode, pairKey, ADMIN_EMAIL } from "./lib/data.js";
-import { Field, SectionHeader, NotifBell, SidebarLink, LogoMark, TextArea, SelectF, ImgField, FileField, ChangePasswordCard, RichTextEditor, RichText, stripHtml } from "./components.jsx";
+import { Field, SectionHeader, NotifBell, SidebarLink, LogoMark, TextArea, SelectF, ImgField, FileField, ChangePasswordCard, RichTextEditor, RichText, stripHtml, DashboardShell } from "./components.jsx";
 import { CommunityPanel } from "./student.jsx";
 
 export function ApplicantsTab({ applicants, setApplicants, onRemove, students, setStudents, courses, cohorts, onAccept }) {
@@ -78,7 +78,7 @@ export function CohortsTab({ cohorts, setCohorts, courses, students }) {
       {showAdd && (
         <div className="card rounded-xl p-6 mb-6 flex flex-col gap-3">
           <Field label="Cohort name" value={name} onChange={(e) => setName(e.target.value)} />
-          <div className="grid grid-cols-2 gap-3"><Field label="Start date" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} /><Field label="End date" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} /></div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Field label="Start date" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} /><Field label="End date" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} /></div>
           <div><div className="f-label text-[11px] mb-2" style={{ color: "#71675A" }}>COURSES AVAILABLE IN THIS COHORT</div><div className="flex flex-wrap gap-2">{courses.map((c) => <button key={c.id} onClick={() => toggleCourse(c.id)} className="f-label text-[11px] px-3 py-1.5 rounded-full" style={{ background: courseIds.includes(c.id) ? "var(--accent)" : "#F0E7D6", color: courseIds.includes(c.id) ? "#FAF6EC" : "#71675A" }}>{c.title}</button>)}</div></div>
           <button onClick={add} className="btn-primary rounded-lg px-5 py-2.5 text-[14px] self-start">Create cohort</button>
         </div>
@@ -104,7 +104,7 @@ export function CohortsTab({ cohorts, setCohorts, courses, students }) {
             {isEditing && (
               <div className="mt-6 pt-6 flex flex-col gap-3" style={{ borderTop: "1px solid #F0E7D6" }}>
                 <Field label="Cohort name" value={name} onChange={(e) => setName(e.target.value)} />
-                <div className="grid grid-cols-2 gap-3"><Field label="Start date" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} /><Field label="End date" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} /></div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Field label="Start date" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} /><Field label="End date" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} /></div>
                 <div><div className="f-label text-[11px] mb-2" style={{ color: "#71675A" }}>COURSES AVAILABLE IN THIS COHORT</div><div className="flex flex-wrap gap-2">{courses.map((c) => <button key={c.id} onClick={() => toggleCourse(c.id)} className="f-label text-[11px] px-3 py-1.5 rounded-full" style={{ background: courseIds.includes(c.id) ? "var(--accent)" : "#F0E7D6", color: courseIds.includes(c.id) ? "#FAF6EC" : "#71675A" }}>{c.title}</button>)}</div></div>
                 <div className="flex items-center gap-3"><button onClick={saveEdit} className="btn-primary rounded-lg px-5 py-2.5 text-[14px]">Save changes</button><button onClick={() => setEditingId(null)} className="text-[13px]" style={{ color: "#A79B84" }}>Cancel</button></div>
               </div>
@@ -147,7 +147,7 @@ function MeetingsEditor({ meetings, setMeetings }) {
           </div>
           <div className="pt-3" style={{ borderTop: "1px dashed #E7DEC9" }}>
             <div className="f-label text-[10px] mb-2" style={{ color: "#A79B84" }}>VIRTUAL RECORDING (after class, if there is one)</div>
-            <div className="grid grid-cols-2 gap-3 items-end">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
               <Field label="Recording link" value={mt.recordingLink || ""} onChange={(e) => updateMeeting(i, "recordingLink", e.target.value)} placeholder="https://…" />
               <FileField label="Or upload a document (minutes, transcript)" value={mt.recordingFile || null} onChange={(v) => updateMeeting(i, "recordingFile", v)} accept=".pdf,.doc,.docx,.txt" />
             </div>
@@ -180,7 +180,7 @@ export function ModuleEditor({ course, module, setCourses, onBack }) {
         <Field label="Module title" value={title} onChange={(e) => setTitle(e.target.value)} />
         <div><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Short brief (shown in course path)</div><RichTextEditor value={brief} onChange={setBrief} minRows={2} /></div>
         <div><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Lecture notes</div><RichTextEditor value={notes} onChange={setNotes} minRows={12} /></div>
-        <div className="grid grid-cols-2 gap-3"><Field label="Video link (max ~50MB if uploading elsewhere)" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://…" /><Field label="Slide deck link (optional if uploading a file below)" value={slideUrl} onChange={(e) => setSlideUrl(e.target.value)} placeholder="https://…" /></div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Field label="Video link (max ~50MB if uploading elsewhere)" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://…" /><Field label="Slide deck link (optional if uploading a file below)" value={slideUrl} onChange={(e) => setSlideUrl(e.target.value)} placeholder="https://…" /></div>
         <FileField label="Or upload a slide deck file (PDF, PPT, etc.)" value={slideFile} onChange={setSlideFile} accept=".pdf,.ppt,.pptx,.key" />
       </div>
 
@@ -256,7 +256,7 @@ export function CourseManager({ course, testimonials, setCourses, onBack }) {
           <Field label="Tagline (short)" value={tagline} onChange={(e) => setTagline(e.target.value)} />
           <Field label="Who it's for" value={audience} onChange={(e) => setAudience(e.target.value)} />
           <TextArea label="Full description" value={description} onChange={(e) => setDescription(e.target.value)} />
-          <div className="grid grid-cols-2 gap-3"><SelectF label="Level" value={level} onChange={(e) => setLevel(e.target.value)} options={[{ value: "Beginner", label: "Beginner" }, { value: "Intermediate", label: "Intermediate" }, { value: "Advanced", label: "Advanced" }]} /><Field label="Duration (weeks)" type="number" value={durationWeeks} onChange={(e) => setDurationWeeks(e.target.value)} /></div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><SelectF label="Level" value={level} onChange={(e) => setLevel(e.target.value)} options={[{ value: "Beginner", label: "Beginner" }, { value: "Intermediate", label: "Intermediate" }, { value: "Advanced", label: "Advanced" }]} /><Field label="Duration (weeks)" type="number" value={durationWeeks} onChange={(e) => setDurationWeeks(e.target.value)} /></div>
           <div>
             <div className="f-label text-[11px] mb-2" style={{ color: "#71675A" }}>WHAT YOU'LL LEARN (shown as bullet points on the course page)</div>
             <div className="flex flex-col gap-2">{outcomes.map((o, i) => <div key={i} className="flex items-center gap-2"><input className="input-field rounded-lg px-3.5 py-2 text-[14px]" value={o} onChange={(e) => setOutcomes((prev) => prev.map((x, idx) => idx === i ? e.target.value : x))} /><button onClick={() => setOutcomes((prev) => prev.filter((_, idx) => idx !== i))}><X size={16} color="#A79B84" /></button></div>)}</div>
@@ -302,7 +302,7 @@ export function AddCourseForm({ onAdd, onClose }) {
       <Field label="Tagline (short)" value={tagline} onChange={(e) => setTagline(e.target.value)} />
       <Field label="Who it's for" value={audience} onChange={(e) => setAudience(e.target.value)} />
       <TextArea label="Full description" value={description} onChange={(e) => setDescription(e.target.value)} />
-      <div className="grid grid-cols-2 gap-3"><SelectF label="Level" value={level} onChange={(e) => setLevel(e.target.value)} options={[{ value: "Beginner", label: "Beginner" }, { value: "Intermediate", label: "Intermediate" }, { value: "Advanced", label: "Advanced" }]} /><Field label="Duration (weeks)" type="number" value={durationWeeks} onChange={(e) => setDurationWeeks(e.target.value)} /></div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><SelectF label="Level" value={level} onChange={(e) => setLevel(e.target.value)} options={[{ value: "Beginner", label: "Beginner" }, { value: "Intermediate", label: "Intermediate" }, { value: "Advanced", label: "Advanced" }]} /><Field label="Duration (weeks)" type="number" value={durationWeeks} onChange={(e) => setDurationWeeks(e.target.value)} /></div>
       <div className="flex gap-3 mt-1"><button onClick={() => { if (title) { onAdd({ title, tagline, audience, description, durationWeeks: Number(durationWeeks), level, image, outcomes: [], applicationQuestions: ["Tell us why you want to join this course."], testimonialIds: [] }); onClose(); } }} className="btn-primary rounded-lg px-5 py-2.5 text-[14px]">Create course</button><button onClick={onClose} className="text-[14px]" style={{ color: "#A79B84" }}>Cancel</button></div>
     </div>
   );
@@ -385,7 +385,7 @@ export function AdminMeetingsTab({ courses, setCourses, cohorts }) {
           const course = courses.find((c) => c.id === mt.courseId);
           return (
             <div key={mt.id} className="card rounded-2xl p-5 flex flex-col gap-3">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <SelectF label="Course" value={mt.courseId} onChange={(e) => updateMeetingCourse(mt.id, e.target.value)} options={coursesWithModules.map((c) => ({ value: c.id, label: c.title }))} />
                 <SelectF label="Which module is this?" value={mt.moduleId} onChange={(e) => updateMeeting(mt.id, "moduleId", Number(e.target.value))} options={(course?.modules || []).map((m, i) => ({ value: m.id, label: `Module ${i + 1} — ${m.title}` }))} />
               </div>
@@ -398,7 +398,7 @@ export function AdminMeetingsTab({ courses, setCourses, cohorts }) {
               </div>
               <div className="pt-3" style={{ borderTop: "1px dashed #E7DEC9" }}>
                 <div className="f-label text-[10px] mb-2" style={{ color: "#A79B84" }}>VIRTUAL RECORDING (after class, if there is one)</div>
-                <div className="grid grid-cols-2 gap-3 items-end">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
                   <Field label="Recording link" value={mt.recordingLink || ""} onChange={(e) => updateMeeting(mt.id, "recordingLink", e.target.value)} placeholder="https://…" />
                   <FileField label="Or upload a document (minutes, transcript)" value={mt.recordingFile || null} onChange={(v) => updateMeeting(mt.id, "recordingFile", v)} accept=".pdf,.doc,.docx,.txt" />
                 </div>
@@ -459,7 +459,7 @@ export function StudentDetail({ student, applicant, setStudents, courses, cohort
           <button onClick={onClose}><X size={18} color="#A79B84" /></button>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-5 mb-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
         <div><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>STUDENT ID</div><div className="text-[14px] f-code">{student.studentId}</div></div>
         <div className="flex-1"><SelectF label="Cohort" value={cohortId} onChange={(e) => saveCohort(e.target.value)} options={cohorts.map((c) => ({ value: c.id, label: c.name }))} /></div>
       </div>
@@ -497,8 +497,12 @@ export function StudentsTab({ students, setStudents, onRemove, applicants, cours
       <SectionHeader eyebrow="ROSTER" title="Students" action={<button onClick={exportCsv} className="btn-soft rounded-full px-5 py-2.5 text-[14px] flex items-center gap-1.5" style={{ fontWeight: 700 }}><Download size={14} /> Export CSV</button>} />
       {selectedStudent && <StudentDetail student={selectedStudent} applicant={selectedApplicant} setStudents={setStudents} courses={courses} cohorts={cohorts} onClose={() => setSelected(null)} onDelete={() => { onRemove(selectedStudent.id); setSelected(null); }} />}
       <div className="card rounded-2xl overflow-hidden">
-        <div className="grid grid-cols-5 px-6 py-3 f-label text-[11px]" style={{ background: "#F0E7D6", color: "#71675A" }}><div>STUDENT ID</div><div>NAME</div><div>COHORT</div><div>STATUS</div><div>COURSES</div></div>
-        {students.map((s) => <button key={s.id} onClick={() => setSelected(s.id)} className="w-full grid grid-cols-5 px-6 py-4 items-center text-[14px] text-left" style={{ borderTop: "1px solid #F0E7D6" }}><div className="f-code text-[11px]" style={{ color: "#71675A" }}>{s.studentId}</div><div style={{ fontWeight: 700 }}>{s.name}</div><div style={{ color: "#4A4237" }}>{cohorts.find((c) => c.id === s.cohortId)?.name || "—"}</div><span className="f-code text-[10px] px-2.5 py-1 rounded-full self-start tint-badge">{s.accountStatus.toUpperCase()}</span><div style={{ color: "#4A4237" }}>{s.enrollments.length}</div></button>)}
+        <div className="overflow-x-auto">
+          <div className="min-w-[600px]">
+            <div className="grid grid-cols-5 px-6 py-3 f-label text-[11px]" style={{ background: "#F0E7D6", color: "#71675A" }}><div>STUDENT ID</div><div>NAME</div><div>COHORT</div><div>STATUS</div><div>COURSES</div></div>
+            {students.map((s) => <button key={s.id} onClick={() => setSelected(s.id)} className="w-full grid grid-cols-5 px-6 py-4 items-center text-[14px] text-left" style={{ borderTop: "1px solid #F0E7D6" }}><div className="f-code text-[11px]" style={{ color: "#71675A" }}>{s.studentId}</div><div style={{ fontWeight: 700 }}>{s.name}</div><div style={{ color: "#4A4237" }}>{cohorts.find((c) => c.id === s.cohortId)?.name || "—"}</div><span className="f-code text-[10px] px-2.5 py-1 rounded-full self-start tint-badge">{s.accountStatus.toUpperCase()}</span><div style={{ color: "#4A4237" }}>{s.enrollments.length}</div></button>)}
+          </div>
+        </div>
       </div>
     </>
   );
@@ -514,7 +518,7 @@ export function TaskForm({ students, courses, initial, onSave, onClose }) {
       <Field label="Task title" value={title} onChange={(e) => setTitle(e.target.value)} />
       <TextArea label="Full description" value={description} onChange={(e) => setDescription(e.target.value)} />
       <Field label="Tools needed (optional)" value={tools} onChange={(e) => setTools(e.target.value)} placeholder="e.g. Calendly, a laptop" />
-      <div className="grid grid-cols-2 gap-3"><SelectF label="Course" value={courseId} onChange={(e) => setCourseId(e.target.value)} options={courses.map((c) => ({ value: c.id, label: c.title }))} /><Field label="Due in (days)" type="number" value={dueInDays} onChange={(e) => setDueInDays(e.target.value)} /></div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><SelectF label="Course" value={courseId} onChange={(e) => setCourseId(e.target.value)} options={courses.map((c) => ({ value: c.id, label: c.title }))} /><Field label="Due in (days)" type="number" value={dueInDays} onChange={(e) => setDueInDays(e.target.value)} /></div>
       <SelectF label="Required proof type" value={proofType} onChange={(e) => setProofType(e.target.value)} options={[{ value: "link", label: "Link" }, { value: "image", label: "Image / screenshot" }, { value: "document", label: "Document" }, { value: "text", label: "Written text" }]} />
       <div><div className="f-label text-[11px] mb-2" style={{ color: "#71675A" }}>ASSIGN TO</div><div className="flex flex-wrap gap-2">{eligible.map((s) => <button key={s.id} onClick={() => toggle(s.id)} className="f-label text-[11px] px-3 py-1.5 rounded-full" style={{ background: assigned.includes(s.id) ? "var(--accent)" : "#F0E7D6", color: assigned.includes(s.id) ? "#FAF6EC" : "#71675A" }}>{s.name}</button>)}</div></div>
       <div className="flex gap-3 mt-1"><button onClick={() => { if (title) onSave({ title, description, tools, courseId, dueInDays: Number(dueInDays), proofType, assigned }); }} className="btn-primary rounded-lg px-5 py-2.5 text-[14px]">Save task</button><button onClick={onClose} className="text-[14px]" style={{ color: "#A79B84" }}>Cancel</button></div>
@@ -659,7 +663,7 @@ export function AdminChatTab({ students, directThreads, setDirectThreads }) {
     <>
       <SectionHeader eyebrow="TALK TO STUDENTS" title="Chat" />
       <div className="card rounded-2xl flex" style={{ height: 480 }}>
-        <div className="w-[220px] shrink-0 overflow-y-auto" style={{ borderRight: "1px solid #E7DEC9" }}>{students.map((s) => { const unread = (directThreads[pairKey("admin", s.id)] || []).filter((m) => m.from !== "admin").length; return <button key={s.id} onClick={() => setActiveId(s.id)} className="w-full text-left px-5 py-3.5 text-[14px] flex items-center justify-between" style={{ background: activeId === s.id ? "color-mix(in srgb, var(--accent) 14%, white)" : "transparent", fontWeight: activeId === s.id ? 700 : 500 }}>{s.name}{unread > 0 && <span className="f-code text-[9px] rounded-full px-1.5 py-0.5" style={{ background: "var(--accent)", color: "#FAF6EC" }}>{unread}</span>}</button>; })}</div>
+        <div className="w-[140px] sm:w-[220px] shrink-0 overflow-y-auto" style={{ borderRight: "1px solid #E7DEC9" }}>{students.map((s) => { const unread = (directThreads[pairKey("admin", s.id)] || []).filter((m) => m.from !== "admin").length; return <button key={s.id} onClick={() => setActiveId(s.id)} className="w-full text-left px-5 py-3.5 text-[14px] flex items-center justify-between" style={{ background: activeId === s.id ? "color-mix(in srgb, var(--accent) 14%, white)" : "transparent", fontWeight: activeId === s.id ? 700 : 500 }}>{s.name}{unread > 0 && <span className="f-code text-[9px] rounded-full px-1.5 py-0.5" style={{ background: "var(--accent)", color: "#FAF6EC" }}>{unread}</span>}</button>; })}</div>
         <div className="flex-1 flex flex-col">{!activeId ? <div className="flex-1 flex items-center justify-center text-[14px]" style={{ color: "#A79B84" }}>Select a conversation to open it.</div> : <><div className="flex-1 overflow-y-auto p-6 flex flex-col gap-3">{thread.map((m, i) => <div key={i} className="max-w-[75%] px-4 py-2.5 rounded-xl text-[14px]" style={{ alignSelf: m.from === "admin" ? "flex-end" : "flex-start", background: m.from === "admin" ? "var(--accent)" : "#F0E7D6", color: m.from === "admin" ? "#FAF6EC" : "#262019" }}>{m.text}</div>)}</div><div className="flex items-center gap-2 p-4" style={{ borderTop: "1px solid #E7DEC9" }}><input className="input-field rounded-full px-4 py-2.5" placeholder="Reply…" value={msg} onChange={(e) => setMsg(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} /><button onClick={send} className="btn-primary rounded-full p-2.5 shrink-0"><Send size={16} /></button></div></>}</div>
       </div>
     </>
@@ -753,8 +757,12 @@ export function GradebookTab({ students, courses, cohorts }) {
         {cohorts.map((co) => <button key={co.id} onClick={() => setCohortFilter(co.id)} className="f-label text-[11px] px-3.5 py-1.5 rounded-full" style={{ background: cohortFilter === co.id ? "var(--accent)" : "#F0E7D6", color: cohortFilter === co.id ? "#FAF6EC" : "#71675A" }}>{co.name}</button>)}
       </div>
       <div className="card rounded-2xl overflow-hidden">
-        <div className="grid grid-cols-4 px-6 py-3 f-label text-[11px]" style={{ background: "#F0E7D6", color: "#71675A" }}><div>STUDENT</div><div>COURSE</div><div>PROGRESS</div><div>CERTIFICATE ELIGIBLE (90%+)</div></div>
-        {rows.map((r, i) => <div key={i} className="grid grid-cols-4 px-6 py-4 items-center text-[14px]" style={{ borderTop: "1px solid #F0E7D6" }}><div style={{ fontWeight: 700 }}>{r.student}</div><div>{r.course}</div><div>{r.pct}%</div><div>{r.eligible ? <span className="f-code text-[10px] tint-badge px-2 py-1 rounded-full">YES</span> : <span className="f-code text-[10px]" style={{ color: "#A79B84" }}>NOT YET</span>}</div></div>)}
+        <div className="overflow-x-auto">
+          <div className="min-w-[640px]">
+            <div className="grid grid-cols-4 px-6 py-3 f-label text-[11px]" style={{ background: "#F0E7D6", color: "#71675A" }}><div>STUDENT</div><div>COURSE</div><div>PROGRESS</div><div>CERTIFICATE ELIGIBLE (90%+)</div></div>
+            {rows.map((r, i) => <div key={i} className="grid grid-cols-4 px-6 py-4 items-center text-[14px]" style={{ borderTop: "1px solid #F0E7D6" }}><div style={{ fontWeight: 700 }}>{r.student}</div><div>{r.course}</div><div>{r.pct}%</div><div>{r.eligible ? <span className="f-code text-[10px] tint-badge px-2 py-1 rounded-full">YES</span> : <span className="f-code text-[10px]" style={{ color: "#A79B84" }}>NOT YET</span>}</div></div>)}
+          </div>
+        </div>
         {rows.length === 0 && <div className="px-6 py-8 text-[13px]" style={{ color: "#A79B84" }}>No enrollments in this cohort yet.</div>}
       </div>
     </>
@@ -792,7 +800,7 @@ export function OverviewTab({ courses, students, applicants, tasks, cohorts, set
         <button onClick={() => setCourseFilter("all")} className="f-label text-[11px] px-3.5 py-1.5 rounded-full" style={{ background: courseFilter === "all" ? "#4A4237" : "#F0E7D6", color: courseFilter === "all" ? "#FAF6EC" : "#71675A" }}>All courses</button>
         {filterCourses.map((c) => <button key={c.id} onClick={() => setCourseFilter(c.id)} className="f-label text-[11px] px-3.5 py-1.5 rounded-full" style={{ background: courseFilter === c.id ? "#4A4237" : "#F0E7D6", color: courseFilter === c.id ? "#FAF6EC" : "#71675A" }}>{c.title}</button>)}
       </div>
-      <div className="grid grid-cols-5 gap-4 mb-8">{[{ label: "PENDING APPLICANTS", value: pendingApplicants }, { label: "ACTIVE ENROLLMENTS", value: activeEnrollments }, { label: "TASKS IN REVIEW", value: inReview }, { label: "TASKS COMPLETED", value: completedTasks }, { label: "COURSES LIVE", value: courses.filter((c) => c.status === "live").length }].map((s, i) => <div key={i} className="card rounded-2xl p-5"><div className="f-label text-[10px] mb-2" style={{ color: "#A79B84" }}>{s.label}</div><div className="f-display text-[26px] accent-text" style={{ fontWeight: 800 }}>{s.value}</div></div>)}</div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mb-8">{[{ label: "PENDING APPLICANTS", value: pendingApplicants }, { label: "ACTIVE ENROLLMENTS", value: activeEnrollments }, { label: "TASKS IN REVIEW", value: inReview }, { label: "TASKS COMPLETED", value: completedTasks }, { label: "COURSES LIVE", value: courses.filter((c) => c.status === "live").length }].map((s, i) => <div key={i} className="card rounded-2xl p-5"><div className="f-label text-[10px] mb-2" style={{ color: "#A79B84" }}>{s.label}</div><div className="f-display text-[26px] accent-text" style={{ fontWeight: 800 }}>{s.value}</div></div>)}</div>
       <div className="grid md:grid-cols-3 gap-5 mb-8">
         <div className="card rounded-2xl p-6 md:col-span-2">
           <div className="f-label text-[12px] mb-4" style={{ color: "#71675A" }}>MODULES COMPLETED PER ENROLLMENT</div>
@@ -819,17 +827,18 @@ export function AdminDashboard({ courses, setCourses, students, setStudents, onR
     { id: "community", icon: Users, label: "Community" }, { id: "notice", icon: Megaphone, label: "Notice Board" },
     { id: "branding", icon: Settings, label: "Branding" },
   ];
+  const sidebar = (
+    <>
+      <div className="flex items-center justify-between mb-1 px-2"><LogoMark height={38} /><button onClick={onExit} title="Sign out"><LogOut size={16} color="#A79B84" /></button></div>
+      <div className="f-label text-[11px] mb-4 px-2" style={{ color: "#A79B84" }}>ADMIN</div>
+      <div className="px-2 mb-3"><NotifBell items={notifItems} seen={notifSeen} onMarkSeen={onMarkSeen} /></div>
+      <div className="flex flex-col gap-1 flex-1">{navItems.map((n) => <SidebarLink key={n.id} icon={n.icon} label={n.label} active={tab === n.id} onClick={() => setTab(n.id)} />)}</div>
+      <button onClick={onViewSite} className="flex items-center gap-2 px-4 py-2.5 text-[14px] mt-4" style={{ color: "#A79B84", fontWeight: 600 }}><Home size={16} /> Home page</button>
+      <button onClick={onExit} className="flex items-center gap-2 px-4 py-2.5 text-[14px]" style={{ color: "#A79B84", fontWeight: 600 }}><LogOut size={16} /> Sign out</button>
+    </>
+  );
   return (
-    <div className="min-h-screen flex">
-      <aside className="w-[250px] shrink-0 px-5 py-6 flex flex-col overflow-y-auto" style={{ borderRight: "1px solid #E7DEC9" }}>
-        <div className="flex items-center justify-between mb-1 px-2"><LogoMark height={38} /><button onClick={onExit} title="Sign out"><LogOut size={16} color="#A79B84" /></button></div>
-        <div className="f-label text-[11px] mb-4 px-2" style={{ color: "#A79B84" }}>ADMIN</div>
-        <div className="px-2 mb-3"><NotifBell items={notifItems} seen={notifSeen} onMarkSeen={onMarkSeen} /></div>
-        <div className="flex flex-col gap-1 flex-1">{navItems.map((n) => <SidebarLink key={n.id} icon={n.icon} label={n.label} active={tab === n.id} onClick={() => setTab(n.id)} />)}</div>
-        <button onClick={onViewSite} className="flex items-center gap-2 px-4 py-2.5 text-[14px] mt-4" style={{ color: "#A79B84", fontWeight: 600 }}><Home size={16} /> Home page</button>
-        <button onClick={onExit} className="flex items-center gap-2 px-4 py-2.5 text-[14px]" style={{ color: "#A79B84", fontWeight: 600 }}><LogOut size={16} /> Sign out</button>
-      </aside>
-      <main className="flex-1 px-10 md:px-16 py-12 max-w-[1040px]">
+    <DashboardShell sidebar={sidebar}>
         {tab === "overview" && <OverviewTab courses={courses} students={students} applicants={applicants} tasks={tasks} cohorts={cohorts} setTab={setTab} />}
         {tab === "profile" && <AdminProfileTab adminProfile={adminProfile} setAdminProfile={setAdminProfile} />}
         {tab === "applicants" && <ApplicantsTab applicants={applicants} setApplicants={setApplicants} onRemove={onRemoveApplicant} students={students} setStudents={setStudents} courses={courses} cohorts={cohorts} onAccept={onAcceptApplicant} />}
@@ -847,8 +856,7 @@ export function AdminDashboard({ courses, setCourses, students, setStudents, onR
         {tab === "community" && <AdminCommunityTab community={community} setCommunity={setCommunity} students={students} cohorts={cohorts} />}
         {tab === "notice" && <AdminNoticeTab notices={notices} setNotices={setNotices} cohorts={cohorts} students={students} />}
         {tab === "branding" && <BrandingTab brand={brand} setBrand={setBrand} />}
-      </main>
-    </div>
+    </DashboardShell>
   );
 }
 

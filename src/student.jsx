@@ -8,7 +8,7 @@ import {
   Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Compass, Home
 } from "lucide-react";
 import { pairKey, moduleStatus, scoreSubmission, AUTO_APPROVE_THRESHOLD } from "./lib/data.js";
-import { SectionHeader, NotifBell, WelcomeTour, SidebarLink, LogoMark, Spine, TextArea, ProgressBar, ResourceDetail, Field, ChangePasswordCard, RichText, RichTextEditor } from "./components.jsx";
+import { SectionHeader, NotifBell, WelcomeTour, SidebarLink, LogoMark, Spine, TextArea, ProgressBar, ResourceDetail, Field, ChangePasswordCard, RichText, RichTextEditor, DashboardShell } from "./components.jsx";
 
 export function LessonView({ course, enrollment, updateEnrollment, onBack, onNext, moduleId }) {
   const [view, setView] = useState("lecture"); // "lecture" | "check" | "meetings"
@@ -166,23 +166,24 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
   function sendMsg() { if (!msg.trim()) return; setDirectThreads((p) => ({ ...p, [key]: [...(p[key] || []), { from: student.id, text: msg }] })); setMsg(""); }
   const openTask = openTaskId ? myTasks.find((t) => t.id === openTaskId) : null;
 
+  const sidebar = (
+    <>
+      <button onClick={onBack} className="flex items-center gap-1.5 text-[13px] mb-6 px-2" style={{ color: "#71675A" }}><ArrowLeft size={14} /> My Courses</button>
+      <div className="mb-6 px-2"><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>COURSE</div><div className="f-display text-[16px]" style={{ fontWeight: 700 }}>{course.title}</div></div>
+      <div className="flex flex-col gap-1 flex-1">
+        <SidebarLink icon={BookOpen} label="Your path" active={tab === "path"} onClick={() => { setTab("path"); setOpenModuleId(null); }} />
+        <SidebarLink icon={PlayCircle} label="Virtual Meetings" active={tab === "meetings"} onClick={() => setTab("meetings")} />
+        <SidebarLink icon={Library} label="Resource library" active={tab === "library"} onClick={() => setTab("library")} />
+        <SidebarLink icon={ListChecks} label="Tasks" active={tab === "tasks"} onClick={() => { setTab("tasks"); setOpenTaskId(null); }} />
+        <SidebarLink icon={Award} label="Certificate" active={tab === "certificate"} onClick={() => setTab("certificate")} />
+        <SidebarLink icon={MessageCircle} label="Chat" active={tab === "chat"} onClick={() => setTab("chat")} />
+        <SidebarLink icon={Users} label="Community" active={tab === "community"} onClick={() => setTab("community")} />
+        <SidebarLink icon={Megaphone} label="Notice Board" active={tab === "notice"} onClick={() => setTab("notice")} />
+      </div>
+    </>
+  );
   return (
-    <div className="min-h-screen flex">
-      <aside className="w-[250px] shrink-0 px-5 py-6 flex flex-col" style={{ borderRight: "1px solid #E7DEC9" }}>
-        <button onClick={onBack} className="flex items-center gap-1.5 text-[13px] mb-6 px-2" style={{ color: "#71675A" }}><ArrowLeft size={14} /> My Courses</button>
-        <div className="mb-6 px-2"><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>COURSE</div><div className="f-display text-[16px]" style={{ fontWeight: 700 }}>{course.title}</div></div>
-        <div className="flex flex-col gap-1 flex-1">
-          <SidebarLink icon={BookOpen} label="Your path" active={tab === "path"} onClick={() => { setTab("path"); setOpenModuleId(null); }} />
-          <SidebarLink icon={PlayCircle} label="Virtual Meetings" active={tab === "meetings"} onClick={() => setTab("meetings")} />
-          <SidebarLink icon={Library} label="Resource library" active={tab === "library"} onClick={() => setTab("library")} />
-          <SidebarLink icon={ListChecks} label="Tasks" active={tab === "tasks"} onClick={() => { setTab("tasks"); setOpenTaskId(null); }} />
-          <SidebarLink icon={Award} label="Certificate" active={tab === "certificate"} onClick={() => setTab("certificate")} />
-          <SidebarLink icon={MessageCircle} label="Chat" active={tab === "chat"} onClick={() => setTab("chat")} />
-          <SidebarLink icon={Users} label="Community" active={tab === "community"} onClick={() => setTab("community")} />
-          <SidebarLink icon={Megaphone} label="Notice Board" active={tab === "notice"} onClick={() => setTab("notice")} />
-        </div>
-      </aside>
-      <main className="flex-1 px-10 md:px-16 py-10 max-w-[880px] relative">
+    <DashboardShell sidebar={sidebar} maxWidth={880}>
         <div className="flex justify-end mb-4"><NotifBell items={notifItems} seen={notifSeen} onMarkSeen={onMarkSeen} /></div>
 
         {tab === "path" && openModuleId === null && (
@@ -252,7 +253,7 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
           <>
             <SectionHeader eyebrow="TALK TO YOUR TUTOR" title="Chat" />
             <div className="card rounded-2xl flex" style={{ height: 480 }}>
-              <div className="w-[220px] shrink-0 overflow-y-auto" style={{ borderRight: "1px solid #E7DEC9" }}><button onClick={() => setActivePeer("admin")} className="w-full text-left px-5 py-3.5 text-[14px]" style={{ background: activePeer === "admin" ? "color-mix(in srgb, var(--accent) 14%, white)" : "transparent", fontWeight: 700 }}>Fidelia (Tutor)</button>{peers.map((p) => <button key={p.id} onClick={() => setActivePeer(p.id)} className="w-full text-left px-5 py-3.5 text-[14px]" style={{ background: activePeer === p.id ? "color-mix(in srgb, var(--accent) 14%, white)" : "transparent", fontWeight: 600 }}>{p.name}</button>)}</div>
+              <div className="w-[140px] sm:w-[220px] shrink-0 overflow-y-auto" style={{ borderRight: "1px solid #E7DEC9" }}><button onClick={() => setActivePeer("admin")} className="w-full text-left px-5 py-3.5 text-[14px]" style={{ background: activePeer === "admin" ? "color-mix(in srgb, var(--accent) 14%, white)" : "transparent", fontWeight: 700 }}>Fidelia (Tutor)</button>{peers.map((p) => <button key={p.id} onClick={() => setActivePeer(p.id)} className="w-full text-left px-5 py-3.5 text-[14px]" style={{ background: activePeer === p.id ? "color-mix(in srgb, var(--accent) 14%, white)" : "transparent", fontWeight: 600 }}>{p.name}</button>)}</div>
               <div className="flex-1 flex flex-col"><div className="flex-1 overflow-y-auto p-6 flex flex-col gap-3">{thread.length === 0 && <div className="text-[14px]" style={{ color: "#A79B84" }}>No messages yet — say hello.</div>}{thread.map((m, i) => <div key={i} className="max-w-[75%] px-4 py-2.5 rounded-xl text-[14px]" style={{ alignSelf: m.from === student.id ? "flex-end" : "flex-start", background: m.from === student.id ? "var(--accent)" : "#F0E7D6", color: m.from === student.id ? "#FAF6EC" : "#262019" }}>{m.text}</div>)}</div><div className="flex items-center gap-2 p-4" style={{ borderTop: "1px solid #E7DEC9" }}><input className="input-field rounded-full px-4 py-2.5" placeholder="Write a message…" value={msg} onChange={(e) => setMsg(e.target.value)} onKeyDown={(e) => e.key === "Enter" && sendMsg()} /><button onClick={sendMsg} className="btn-primary rounded-full p-2.5 shrink-0"><Send size={16} /></button></div></div>
             </div>
           </>
@@ -265,8 +266,7 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
             <button onClick={() => toggleSeenNotice(a.id)} className="rounded-full px-3.5 py-1.5 text-[12px] flex items-center gap-1.5" style={{ background: seen ? "var(--accent)" : "#F0E7D6", color: seen ? "#FAF6EC" : "#71675A", fontWeight: 700 }}><Check size={12} /> {seen ? "You've seen this" : "Mark as seen"}</button>
           </div>
         ); })}</div></>}
-      </main>
-    </div>
+    </DashboardShell>
   );
 }
 export function TaskDetailStudent({ task, student, allStudents, setTasks, onBack }) {
@@ -361,20 +361,22 @@ export function MyCourses({ student, setStudents, courses, cohorts, applicants, 
     </div>
   );
 
+  const sidebar = (
+    <>
+      <div className="flex items-center justify-between mb-8 px-2"><LogoMark height={40} /><button onClick={onExit} title="Sign out"><LogOut size={17} color="#A79B84" /></button></div>
+      <div className="flex flex-col gap-1 flex-1">
+        <div data-tour="nav-courses"><SidebarLink icon={BookOpen} label="My courses" active={tab === "courses"} onClick={() => setTab("courses")} /></div>
+        <div data-tour="nav-explore"><SidebarLink icon={Compass} label="Explore More Courses" active={tab === "explore"} onClick={() => setTab("explore")} /></div>
+        <div data-tour="nav-profile"><SidebarLink icon={UserCircle} label="Profile" active={tab === "profile"} onClick={() => setTab("profile")} /></div>
+      </div>
+      <button onClick={onViewSite} className="flex items-center gap-2 px-4 py-2.5 text-[14px]" style={{ color: "#A79B84", fontWeight: 600 }}><Home size={16} /> Home page</button>
+      <button onClick={onExit} className="flex items-center gap-2 px-4 py-2.5 text-[14px]" style={{ color: "#A79B84", fontWeight: 600 }}><LogOut size={16} /> Sign out</button>
+    </>
+  );
   return (
-    <div className="min-h-screen flex">
+    <>
       {showTour && <WelcomeTour onDone={dismissTour} />}
-      <aside className="w-[250px] shrink-0 px-5 py-6 flex flex-col" style={{ borderRight: "1px solid #E7DEC9" }}>
-        <div className="flex items-center justify-between mb-8 px-2"><LogoMark height={40} /><button onClick={onExit} title="Sign out"><LogOut size={17} color="#A79B84" /></button></div>
-        <div className="flex flex-col gap-1 flex-1">
-          <div data-tour="nav-courses"><SidebarLink icon={BookOpen} label="My courses" active={tab === "courses"} onClick={() => setTab("courses")} /></div>
-          <div data-tour="nav-explore"><SidebarLink icon={Compass} label="Explore More Courses" active={tab === "explore"} onClick={() => setTab("explore")} /></div>
-          <div data-tour="nav-profile"><SidebarLink icon={UserCircle} label="Profile" active={tab === "profile"} onClick={() => setTab("profile")} /></div>
-        </div>
-        <button onClick={onViewSite} className="flex items-center gap-2 px-4 py-2.5 text-[14px]" style={{ color: "#A79B84", fontWeight: 600 }}><Home size={16} /> Home page</button>
-        <button onClick={onExit} className="flex items-center gap-2 px-4 py-2.5 text-[14px]" style={{ color: "#A79B84", fontWeight: 600 }}><LogOut size={16} /> Sign out</button>
-      </aside>
-      <main className="flex-1 px-10 md:px-16 py-10 max-w-[880px]">
+      <DashboardShell sidebar={sidebar} maxWidth={880}>
         <div className="flex justify-end mb-4" data-tour="notif-bell"><NotifBell items={notifItems} seen={notifSeen} onMarkSeen={onMarkSeen} /></div>
         {tab === "courses" && (
           <>
@@ -424,8 +426,8 @@ export function MyCourses({ student, setStudents, courses, cohorts, applicants, 
           </>
         )}
         {tab === "profile" && <ProfilePage student={student} setStudents={setStudents} cohort={cohort} />}
-      </main>
-    </div>
+      </DashboardShell>
+    </>
   );
 }
 
@@ -440,7 +442,7 @@ function ProfilePage({ student, setStudents, cohort }) {
       <div className="mb-8"><div className="f-label text-[12px] mb-2 accent-text">YOUR PROFILE</div><h1 className="f-display text-[30px]" style={{ fontWeight: 800 }}>Profile details.</h1></div>
       <div className="card rounded-2xl p-8">
         <div className="flex items-center gap-5 mb-6"><div className="rounded-full overflow-hidden flex items-center justify-center shrink-0" style={{ width: 76, height: 76, background: "color-mix(in srgb, var(--accent) 14%, white)" }}>{photo ? <img src={photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <UserCircle size={34} color="var(--accent)" />}</div><label className="btn-soft rounded-full px-4 py-2 text-[13px] cursor-pointer" style={{ fontWeight: 600 }}>Change photo<input type="file" accept="image/*" onChange={onPhotoPick} style={{ display: "none" }} /></label></div>
-        <div className="grid grid-cols-2 gap-4 mb-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
           <div><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>NAME</div><div className="text-[14px]" style={{ fontWeight: 600 }}>{student.name}</div></div>
           <div><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>STUDENT ID</div><div className="text-[14px] f-code">{student.studentId}</div></div>
           <div><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>EMAIL</div><div className="text-[14px]" style={{ fontWeight: 600 }}>{student.email}</div></div>

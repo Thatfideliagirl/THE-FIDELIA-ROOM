@@ -6,7 +6,7 @@ import {
   ChevronDown, Sparkles, Plus, Check, Send, X, Heart, MessageSquare,
   FileText, Download, GraduationCap, Mail, Phone, Award,
   UserCircle, FolderPlus, Folder, UploadCloud, ClipboardCheck, HelpCircle as HelpIcon,
-  Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign
+  Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Menu
 } from "lucide-react";
 import { LOGO_SRC, HERO_SRC, CREATOR_SRC, HOWITWORKS_SRC } from "./assets/brandImages.js";
 import { moduleStatus } from "./lib/data.js";
@@ -304,7 +304,7 @@ export function ChangePasswordCard({ email }) {
   return (
     <div className="card rounded-2xl p-8 mt-6">
       <div className="f-label text-[12px] mb-4" style={{ color: "#71675A" }}>CHANGE PASSWORD</div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Field label="Current password" type="password" value={oldPw} onChange={(e) => setOldPw(e.target.value)} />
         <Field label="New password" type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="At least 6 characters" />
       </div>
@@ -349,6 +349,38 @@ export function SelectF({ label, options, ...props }) { return <label className=
 export function ImgField({ label, value, onChange }) {
   function pick(e) { const f = e.target.files?.[0]; if (f) { const r = new FileReader(); r.onload = () => onChange(r.result); r.readAsDataURL(f); } }
   return <div><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>{label}</div><div className="flex items-center gap-3"><div className="rounded-lg overflow-hidden flex items-center justify-center shrink-0" style={{ width: 68, height: 68, background: "#F0E7D6" }}>{value ? <img src={value} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <FolderPlus size={20} color="#A79B84" />}</div><label className="btn-soft rounded-full px-4 py-2 text-[13px] cursor-pointer" style={{ fontWeight: 600 }}>Upload image<input type="file" accept="image/*" onChange={pick} style={{ display: "none" }} /></label></div></div>;
+}
+// Shared shell for every sidebar+content dashboard screen (admin, and both
+// student dashboards). The sidebar was a fixed 250px column with no mobile
+// behavior at all -- on a real phone width that alone left almost no room
+// for the actual content, which is what "everything jam-packed" was. Below
+// the md breakpoint the sidebar becomes a slide-out drawer behind a
+// hamburger button instead of a permanent column; at md and above it's
+// exactly the same fixed sidebar as before. sidebar is passed as already-
+// built JSX (unchanged from each screen) so nothing about the existing
+// nav items, active-tab logic, or WelcomeTour's data-tour targeting has to
+// change -- only how it's positioned/hidden does.
+export function DashboardShell({ sidebar, children, maxWidth = 1040 }) {
+  const [mobileOpen, setMobileOpen] = useState(false);
+  return (
+    <div className="min-h-screen md:flex">
+      <div className="flex md:hidden items-center justify-between px-4 py-3 sticky top-0 z-30" style={{ background: "#FAF6EC", borderBottom: "1px solid #E7DEC9" }}>
+        <LogoMark height={30} />
+        <button onClick={() => setMobileOpen(true)} className="p-2 -mr-2" aria-label="Open menu"><Menu size={22} color="#4A4237" /></button>
+      </div>
+      {mobileOpen && <div className="md:hidden fixed inset-0 z-40" style={{ background: "rgba(38,32,25,.35)" }} onClick={() => setMobileOpen(false)} />}
+      <div
+        className={`w-[250px] shrink-0 px-5 py-6 flex flex-col overflow-y-auto fixed md:static inset-y-0 left-0 z-50 transition-transform duration-200 ${mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}
+        style={{ borderRight: "1px solid #E7DEC9", background: "#FAF6EC" }}
+        onClick={(e) => { if (e.target.closest("button")) setMobileOpen(false); }}
+      >
+        {sidebar}
+      </div>
+      <main className="flex-1 px-4 md:px-10 lg:px-16 py-6 md:py-12 w-full" style={{ maxWidth }}>
+        {children}
+      </main>
+    </div>
+  );
 }
 export function SectionHeader({ eyebrow, title, action }) { return <div className="flex items-center justify-between mb-8 flex-wrap gap-4"><div><div className="f-label text-[13px] mb-2 accent-text">{eyebrow}</div><h1 className="f-display text-[32px]" style={{ fontWeight: 800 }}>{title}</h1></div>{action}</div>; }
 export function SidebarLink({ icon: Icon, label, active, onClick }) { return <button onClick={onClick} className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-[15px] w-full text-left transition-colors ${active ? "side-active" : ""}`} style={{ color: active ? undefined : "#4A4237", fontWeight: active ? 700 : 500 }}><Icon size={18} strokeWidth={1.8} /> {label}</button>; }
