@@ -11,6 +11,7 @@ import {
 import { LOGO_SRC, HERO_SRC, CREATOR_SRC, HOWITWORKS_SRC } from "./assets/brandImages.js";
 import { moduleStatus } from "./lib/data.js";
 import { changePassword } from "./lib/auth.js";
+import { uploadFile } from "./lib/storage.js";
 import { useEditor, EditorContent, NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
 import { Node as TiptapNode } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
@@ -317,14 +318,29 @@ export function ChangePasswordCard({ email }) {
 }
 // Generic file upload (PDF, slides, documents, images) — stored as { name, dataUrl }. In-browser only until Supabase is wired up.
 export function FileField({ label, value, onChange, accept }) {
-  function pick(e) { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = () => onChange({ name: f.name, dataUrl: r.result }); r.readAsDataURL(f); }
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  async function pick(e) {
+    const f = e.target.files?.[0]; if (!f) return;
+    setUploading(true); setError("");
+    try {
+      const url = await uploadFile(f);
+      onChange({ name: f.name, dataUrl: url });
+    } catch (err) {
+      console.error("uploadFile failed", err);
+      setError("Upload failed — check your connection and try again.");
+    } finally {
+      setUploading(false);
+    }
+  }
   return (
     <div>
       {label && <div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>{label}</div>}
       <div className="flex items-center gap-3 flex-wrap">
         {value && <div className="flex items-center gap-2 text-[13px] rounded-lg px-3 py-2" style={{ background: "#F0E7D6" }}><FileText size={14} color="#71675A" /> {value.name}<button onClick={() => onChange(null)}><X size={13} color="#A79B84" /></button></div>}
-        <label className="btn-soft rounded-full px-4 py-2 text-[13px] cursor-pointer" style={{ fontWeight: 600 }}>{value ? "Replace file" : "Upload file"}<input type="file" accept={accept} onChange={pick} style={{ display: "none" }} /></label>
+        <label className="btn-soft rounded-full px-4 py-2 text-[13px]" style={{ fontWeight: 600, cursor: uploading ? "default" : "pointer", opacity: uploading ? 0.7 : 1 }}>{uploading ? "Uploading…" : value ? "Replace file" : "Upload file"}<input type="file" accept={accept} onChange={pick} style={{ display: "none" }} disabled={uploading} /></label>
       </div>
+      {error && <div className="text-[12px] mt-1.5" style={{ color: "#B04A3A" }}>{error}</div>}
     </div>
   );
 }
