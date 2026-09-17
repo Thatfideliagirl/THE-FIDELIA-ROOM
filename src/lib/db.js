@@ -142,6 +142,62 @@ export async function deleteCohort(id) {
   if (error) throw error;
 }
 
+// Testimonials, FAQs, notices, tasks, and community posts all follow the
+// same opaque-jsonb-blob-per-row shape as courses/cohorts above -- each is
+// just a flat list of small objects the UI already treats as plain data,
+// so this reuses that exact pattern instead of inventing five new ones.
+const blobOut = (row) => ({ id: row.id, ...row.data });
+async function fetchBlobs(table) {
+  const { data, error } = await supabase.from(table).select("*").order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data || []).map(blobOut);
+}
+async function upsertBlob(table, item) {
+  const { id, ...rest } = item;
+  const { data, error } = await supabase.from(table).upsert({ id: String(id), data: rest, updated_at: new Date().toISOString() }).select().single();
+  if (error) throw error;
+  return blobOut(data);
+}
+async function deleteBlob(table, id) {
+  const { error } = await supabase.from(table).delete().eq("id", String(id));
+  if (error) throw error;
+}
+
+export async function fetchTestimonials() { return fetchBlobs("testimonials"); }
+export async function upsertTestimonial(t) { return upsertBlob("testimonials", t); }
+export async function deleteTestimonial(id) { return deleteBlob("testimonials", id); }
+
+export async function fetchFaqs() { return fetchBlobs("faqs"); }
+export async function upsertFaq(f) { return upsertBlob("faqs", f); }
+export async function deleteFaq(id) { return deleteBlob("faqs", id); }
+
+export async function fetchNotices() { return fetchBlobs("notices"); }
+export async function upsertNotice(n) { return upsertBlob("notices", n); }
+
+export async function fetchTasks() { return fetchBlobs("tasks"); }
+export async function upsertTask(t) { return upsertBlob("tasks", t); }
+export async function deleteTask(id) { return deleteBlob("tasks", id); }
+
+export async function fetchCommunityPosts() { return fetchBlobs("community_posts"); }
+export async function upsertCommunityPost(p) { return upsertBlob("community_posts", p); }
+
+// Direct messages are the one exception to the blob shape above -- a
+// thread is an ever-growing list of individual messages, not a single
+// object to replace wholesale, so each message is its own row keyed by
+// its thread (pairKey(a, b) from lib/data.js), and reads are grouped back
+// into the same { [threadKey]: [...messages] } shape the UI already uses.
+export async function fetchDirectMessages() {
+  const { data, error } = await supabase.from("direct_messages").select("*").order("created_at", { ascending: true });
+  if (error) throw error;
+  const grouped = {};
+  (data || []).forEach((row) => { (grouped[row.thread_key] ||= []).push({ from: row.from_id, text: row.text }); });
+  return grouped;
+}
+export async function insertDirectMessage({ threadKey, from, text }) {
+  const { error } = await supabase.from("direct_messages").insert({ thread_key: threadKey, from_id: String(from), text });
+  if (error) throw error;
+}
+
 // Branding and the admin's own profile are both single-object, single-admin
 // settings -- one row in site_settings covers both rather than two tables.
 export async function fetchSettings() {

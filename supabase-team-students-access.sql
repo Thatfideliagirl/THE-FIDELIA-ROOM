@@ -15,20 +15,35 @@
 -- the one that already exists for you, covering anyone you've
 -- actually added to your team. Which tabs a teammate can actually
 -- SEE is still controlled entirely by the toggles on your Team tab.
+--
+-- The membership check goes through a small helper function rather
+-- than querying team_members directly, because team_members has its
+-- own security rule (owner-only) that would otherwise block that
+-- very check for anyone who isn't you.
 -- ============================================================
 
+create or replace function public.is_team_member()
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists (select 1 from team_members where auth_user_id = auth.uid());
+$$;
+grant execute on function public.is_team_member() to authenticated;
+
 create policy "team_members_select_students" on students for select to authenticated
-  using (exists (select 1 from team_members tm where tm.auth_user_id = auth.uid()));
+  using (public.is_team_member());
 create policy "team_members_insert_students" on students for insert to authenticated
-  with check (exists (select 1 from team_members tm where tm.auth_user_id = auth.uid()));
+  with check (public.is_team_member());
 create policy "team_members_update_students" on students for update to authenticated
-  using (exists (select 1 from team_members tm where tm.auth_user_id = auth.uid()));
+  using (public.is_team_member());
 create policy "team_members_delete_students" on students for delete to authenticated
-  using (exists (select 1 from team_members tm where tm.auth_user_id = auth.uid()));
+  using (public.is_team_member());
 
 create policy "team_members_select_applicants" on applicants for select to authenticated
-  using (exists (select 1 from team_members tm where tm.auth_user_id = auth.uid()));
+  using (public.is_team_member());
 create policy "team_members_update_applicants" on applicants for update to authenticated
-  using (exists (select 1 from team_members tm where tm.auth_user_id = auth.uid()));
+  using (public.is_team_member());
 create policy "team_members_delete_applicants" on applicants for delete to authenticated
-  using (exists (select 1 from team_members tm where tm.auth_user_id = auth.uid()));
+  using (public.is_team_member());

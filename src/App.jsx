@@ -11,7 +11,7 @@ import { MyCourses } from "./student.jsx";
 import { AdminDashboard } from "./admin.jsx";
 import { supabase } from "./lib/supabaseClient.js";
 import { signIn, signOut, signUpApplicant, sendPasswordReset, isAdminEmail } from "./lib/auth.js";
-import { fetchApplicants, insertApplicant, updateApplicant, deleteApplicant, fetchStudents, insertStudent, updateStudent, deleteStudent, fetchResources, insertResource, updateResource, deleteResource, fetchCourses, upsertCourse, fetchCohorts, upsertCohort, deleteCohort, fetchSettings, updateSettings } from "./lib/db.js";
+import { fetchApplicants, insertApplicant, updateApplicant, deleteApplicant, fetchStudents, insertStudent, updateStudent, deleteStudent, fetchResources, insertResource, updateResource, deleteResource, fetchCourses, upsertCourse, fetchCohorts, upsertCohort, deleteCohort, fetchSettings, updateSettings, fetchTestimonials, upsertTestimonial, deleteTestimonial, fetchFaqs, upsertFaq, deleteFaq, fetchNotices, upsertNotice, fetchTasks, upsertTask, deleteTask, fetchCommunityPosts, upsertCommunityPost, fetchDirectMessages, insertDirectMessage } from "./lib/db.js";
 import { sendWelcomeEmail, sendAcceptanceEmail } from "./lib/email.js";
 import { checkTeamInvite, signUpTeamMember, getMyTeamAccess, logActivity } from "./lib/team.js";
 
@@ -161,6 +161,44 @@ export default function App() {
       const next = typeof updater === "function" ? updater(prev) : updater;
       next.forEach((item) => { const before = prev.find((x) => x.id === item.id); if (before !== item) upsertCohort(item).catch(reportSaveError("upsertCohort failed")); });
       prev.forEach((item) => { if (!next.find((x) => x.id === item.id)) deleteCohort(item.id).catch(reportSaveError("deleteCohort failed")); });
+      return next;
+    });
+  }
+  // Shared by testimonials/faqs/notices/tasks/community below -- same
+  // add-or-edit-or-delete diffing as syncCohorts, just generalized since
+  // five near-identical copies of that block would just be noise.
+  function makeBlobSync(setState, upsertFn, deleteFn, label) {
+    return (updater) => {
+      setState((prev) => {
+        const next = typeof updater === "function" ? updater(prev) : updater;
+        next.forEach((item) => { const before = prev.find((x) => x.id === item.id); if (before !== item) upsertFn(item).catch(reportSaveError(`${label} save failed`)); });
+        if (deleteFn) prev.forEach((item) => { if (!next.find((x) => x.id === item.id)) deleteFn(item.id).catch(reportSaveError(`${label} delete failed`)); });
+        return next;
+      });
+    };
+  }
+  useEffect(() => { fetchTestimonials().then(setTestimonials).catch((e) => console.error("fetchTestimonials failed", e)); }, []);
+  const syncTestimonials = makeBlobSync(setTestimonials, upsertTestimonial, deleteTestimonial, "Testimonial");
+  useEffect(() => { fetchFaqs().then(setFaqs).catch((e) => console.error("fetchFaqs failed", e)); }, []);
+  const syncFaqs = makeBlobSync(setFaqs, upsertFaq, deleteFaq, "FAQ");
+  useEffect(() => { fetchNotices().then(setNotices).catch((e) => console.error("fetchNotices failed", e)); }, []);
+  const syncNotices = makeBlobSync(setNotices, upsertNotice, null, "Notice");
+  useEffect(() => { fetchTasks().then(setTasks).catch((e) => console.error("fetchTasks failed", e)); }, []);
+  const syncTasks = makeBlobSync(setTasks, upsertTask, deleteTask, "Task");
+  useEffect(() => { fetchCommunityPosts().then(setCommunity).catch((e) => console.error("fetchCommunityPosts failed", e)); }, []);
+  const syncCommunity = makeBlobSync(setCommunity, upsertCommunityPost, null, "Community post");
+  // Direct messages are pure appends in every call site (sendMsg/send just
+  // push one new message onto the thread's array), so instead of diffing
+  // whole objects like the blob tables above, this just inserts whatever's
+  // new past each thread's previous length.
+  useEffect(() => { fetchDirectMessages().then(setDirectThreads).catch((e) => console.error("fetchDirectMessages failed", e)); }, []);
+  function syncDirectThreads(updater) {
+    setDirectThreads((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      Object.keys(next).forEach((key) => {
+        const newMsgs = (next[key] || []).slice((prev[key] || []).length);
+        newMsgs.forEach((m) => insertDirectMessage({ threadKey: key, from: m.from, text: m.text }).catch(reportSaveError("Message send failed")));
+      });
       return next;
     });
   }
@@ -485,13 +523,13 @@ export default function App() {
       )}
       {page === "studentDash" && liveStudent && pendingEnrollment && <CodeRedeemScreen student={liveStudent} enrollment={pendingEnrollment} onRedeem={() => redeemCode(pendingEnrollment.id)} onExit={handleSignOut} />}
       {page === "studentDash" && liveStudent && !pendingEnrollment && (
-        <MyCourses student={liveStudent} setStudents={syncStudents} courses={courses} cohorts={cohorts} applicants={applicants} tasks={tasks} setTasks={setTasks} resources={resources} community={community} setCommunity={setCommunity} notices={notices.filter((n) => n.cohortId === "all" || n.cohortId === liveStudent.cohortId)} setNotices={setNotices} directThreads={directThreads} setDirectThreads={setDirectThreads} allStudents={students} onExit={handleSignOut} onViewSite={() => setPage("landing")} onApplyMore={(courseId) => { setApplyingAsExisting(liveStudent); setPresetCourseId(courseId || null); setPage("signup"); }} notifItems={studentNotifItems} notifSeen={studentNotifSeen} onMarkSeen={setStudentNotifSeen} />
+        <MyCourses student={liveStudent} setStudents={syncStudents} courses={courses} cohorts={cohorts} applicants={applicants} tasks={tasks} setTasks={syncTasks} resources={resources} community={community} setCommunity={syncCommunity} notices={notices.filter((n) => n.cohortId === "all" || n.cohortId === liveStudent.cohortId)} setNotices={syncNotices} directThreads={directThreads} setDirectThreads={syncDirectThreads} allStudents={students} onExit={handleSignOut} onViewSite={() => setPage("landing")} onApplyMore={(courseId) => { setApplyingAsExisting(liveStudent); setPresetCourseId(courseId || null); setPage("signup"); }} notifItems={studentNotifItems} notifSeen={studentNotifSeen} onMarkSeen={setStudentNotifSeen} />
       )}
       {page === "adminDash" && teamAccess && teamViewMode === "student" && liveStudent && (
-        <MyCourses student={liveStudent} setStudents={syncStudents} courses={courses} cohorts={cohorts} applicants={applicants} tasks={tasks} setTasks={setTasks} resources={resources} community={community} setCommunity={setCommunity} notices={notices.filter((n) => n.cohortId === "all" || n.cohortId === liveStudent.cohortId)} setNotices={setNotices} directThreads={directThreads} setDirectThreads={setDirectThreads} allStudents={students} onExit={handleSignOut} onViewSite={() => setPage("landing")} onApplyMore={(courseId) => { setApplyingAsExisting(liveStudent); setPresetCourseId(courseId || null); setPage("signup"); }} notifItems={studentNotifItems} notifSeen={studentNotifSeen} onMarkSeen={setStudentNotifSeen} onSwitchToTeamAdmin={() => setTeamViewMode("admin")} />
+        <MyCourses student={liveStudent} setStudents={syncStudents} courses={courses} cohorts={cohorts} applicants={applicants} tasks={tasks} setTasks={syncTasks} resources={resources} community={community} setCommunity={syncCommunity} notices={notices.filter((n) => n.cohortId === "all" || n.cohortId === liveStudent.cohortId)} setNotices={syncNotices} directThreads={directThreads} setDirectThreads={syncDirectThreads} allStudents={students} onExit={handleSignOut} onViewSite={() => setPage("landing")} onApplyMore={(courseId) => { setApplyingAsExisting(liveStudent); setPresetCourseId(courseId || null); setPage("signup"); }} notifItems={studentNotifItems} notifSeen={studentNotifSeen} onMarkSeen={setStudentNotifSeen} onSwitchToTeamAdmin={() => setTeamViewMode("admin")} />
       )}
       {page === "adminDash" && !(teamAccess && teamViewMode === "student") && (
-        <AdminDashboard courses={courses} setCourses={syncCourses} students={students} setStudents={syncStudents} onRemoveStudent={removeStudent} applicants={applicants} setApplicants={syncApplicants} onRemoveApplicant={removeApplicant} onAcceptApplicant={acceptApplicant} cohorts={cohorts} setCohorts={syncCohorts} tasks={tasks} setTasks={setTasks} resources={resources} onAddResource={addResource} onEditResource={editResource} onRemoveResource={removeResource} community={community} setCommunity={setCommunity} notices={notices} setNotices={setNotices} directThreads={directThreads} setDirectThreads={setDirectThreads} testimonials={testimonials} setTestimonials={setTestimonials} faqs={faqs} setFaqs={setFaqs} brand={brand} setBrand={syncBrand} adminProfile={adminProfile} setAdminProfile={syncAdminProfile} onExit={handleSignOut} onViewSite={() => setPage("landing")} notifItems={adminNotifItems} notifSeen={adminNotifSeen} onMarkSeen={setAdminNotifSeen} teamAccess={teamAccess} onSwitchToStudent={teamAccess ? () => {
+        <AdminDashboard courses={courses} setCourses={syncCourses} students={students} setStudents={syncStudents} onRemoveStudent={removeStudent} applicants={applicants} setApplicants={syncApplicants} onRemoveApplicant={removeApplicant} onAcceptApplicant={acceptApplicant} cohorts={cohorts} setCohorts={syncCohorts} tasks={tasks} setTasks={syncTasks} resources={resources} onAddResource={addResource} onEditResource={editResource} onRemoveResource={removeResource} community={community} setCommunity={syncCommunity} notices={notices} setNotices={syncNotices} directThreads={directThreads} setDirectThreads={syncDirectThreads} testimonials={testimonials} setTestimonials={syncTestimonials} faqs={faqs} setFaqs={syncFaqs} brand={brand} setBrand={syncBrand} adminProfile={adminProfile} setAdminProfile={syncAdminProfile} onExit={handleSignOut} onViewSite={() => setPage("landing")} notifItems={adminNotifItems} notifSeen={adminNotifSeen} onMarkSeen={setAdminNotifSeen} teamAccess={teamAccess} onSwitchToStudent={teamAccess ? () => {
           if (liveStudent) { setTeamViewMode("student"); return; }
           // Not enrolled anywhere yet -- same "apply" flow any brand-new
           // visitor uses, skipping straight to picking a course since
