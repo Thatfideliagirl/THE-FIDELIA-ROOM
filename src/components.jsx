@@ -721,19 +721,28 @@ export function CodeRedeemScreen({ student, enrollment, onRedeem, onExit }) {
     </div>
   );
 }
-const TOUR_STEPS = [
+const STUDENT_TOUR_STEPS = [
   { target: null, t: "Welcome to the Room.", d: "Quick tour of where everything actually lives — 30 seconds." },
   { target: "nav-courses", t: "My Courses", d: "Every course you're enrolled in. Click one to resume right where you left off." },
   { target: "nav-explore", t: "Explore More Courses", d: "Apply for another course here, up to two per cohort." },
   { target: "nav-profile", t: "Profile", d: "Your photo, bio, and details — edit them any time." },
   { target: "notif-bell", t: "Notifications", d: "Grading updates, replies, and anything else that needs your attention shows up here." },
 ];
+// Shown to a team member the first time they sign in -- their sidebar only
+// ever shows whatever tabs they've actually been given, so this points at
+// the stable things that are always there instead of any specific tab.
+export const TEAM_TOUR_STEPS = [
+  { target: null, t: "Welcome to the Room.", d: "You're in — here's where everything is, 30 seconds." },
+  { target: "nav-sidebar", t: "Your dashboard", d: "This only shows the tabs you've actually been given access to. If something's missing, ask whoever added you." },
+  { target: "notif-bell", t: "Notifications", d: "New applicants, submissions, and anything else that needs attention shows up here." },
+  { target: "nav-account", t: "My Account", d: "Your photo, bio, and password live here — update them any time." },
+];
 // A real spotlight tour: dims the page and cuts a highlighted hole around the actual sidebar element for each step,
 // with a tooltip anchored next to it — rather than a generic centered "Next, Next, Next" modal.
-export function WelcomeTour({ onDone }) {
+export function WelcomeTour({ onDone, steps = STUDENT_TOUR_STEPS }) {
   const [step, setStep] = useState(0);
   const [rect, setRect] = useState(null);
-  const s = TOUR_STEPS[step];
+  const s = steps[step];
 
   useEffect(() => {
     function measure() {
@@ -760,12 +769,12 @@ export function WelcomeTour({ onDone }) {
       <div style={spotStyle} />
       <div style={cardStyle}>
         <div className="card modal-in rounded-2xl p-7" style={{ maxWidth: 340 }}>
-          <div className="f-label text-[11px] mb-3 accent-text">STEP {step + 1} OF {TOUR_STEPS.length}</div>
+          <div className="f-label text-[11px] mb-3 accent-text">STEP {step + 1} OF {steps.length}</div>
           <div className="f-display text-[21px] mb-2" style={{ fontWeight: 800 }}>{s.t}</div>
           <div className="text-[14px] mb-6" style={{ color: "#71675A" }}>{s.d}</div>
           <div className="flex items-center justify-between">
             <button onClick={onDone} className="text-[13px]" style={{ color: "#A79B84" }}>Skip tour</button>
-            <button onClick={() => step < TOUR_STEPS.length - 1 ? setStep(step + 1) : onDone()} className="btn-primary rounded-full px-6 py-2.5 text-[14px]" style={{ fontWeight: 700 }}>{step < TOUR_STEPS.length - 1 ? "Next" : "Let's go"}</button>
+            <button onClick={() => step < steps.length - 1 ? setStep(step + 1) : onDone()} className="btn-primary rounded-full px-6 py-2.5 text-[14px]" style={{ fontWeight: 700 }}>{step < steps.length - 1 ? "Next" : "Let's go"}</button>
           </div>
         </div>
       </div>

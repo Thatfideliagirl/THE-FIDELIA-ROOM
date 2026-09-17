@@ -57,7 +57,7 @@ export async function getMyTeamAccess() {
   if (error) throw error;
   if (!data || !data[0]) return null;
   const row = data[0];
-  return { id: row.id, name: row.name, email: row.email, roleLabel: row.role_label, permissions: row.permissions || [], photo: row.photo || null, bio: row.bio || "" };
+  return { id: row.id, name: row.name, email: row.email, roleLabel: row.role_label, permissions: row.permissions || [], photo: row.photo || null, bio: row.bio || "", seenTour: !!row.seen_tour };
 }
 
 // A team member updating their own photo/bio -- goes through a
@@ -66,6 +66,13 @@ export async function getMyTeamAccess() {
 // permissions or role.
 export async function updateMyTeamProfile({ photo, bio }) {
   const { error } = await supabase.rpc("update_my_team_profile", { new_photo: photo, new_bio: bio });
+  if (error) throw error;
+}
+
+// Marks the welcome tour dismissed for the caller's own row -- same
+// security-definer pattern, so this can never touch anyone else's.
+export async function markTourSeen() {
+  const { error } = await supabase.rpc("mark_my_tour_seen");
   if (error) throw error;
 }
 

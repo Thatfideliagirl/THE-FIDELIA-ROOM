@@ -9,9 +9,9 @@ import {
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from "recharts";
 import { genCode, pairKey, ADMIN_EMAIL, TEAM_PERMISSION_TABS } from "./lib/data.js";
-import { Field, SectionHeader, NotifBell, SidebarLink, LogoMark, TextArea, SelectF, ImgField, FileField, ChangePasswordCard, RichTextEditor, RichText, DashboardShell } from "./components.jsx";
+import { Field, SectionHeader, NotifBell, SidebarLink, LogoMark, TextArea, SelectF, ImgField, FileField, ChangePasswordCard, RichTextEditor, RichText, DashboardShell, WelcomeTour, TEAM_TOUR_STEPS } from "./components.jsx";
 import { CommunityPanel } from "./student.jsx";
-import { fetchTeamMembers, addTeamMember, updateTeamMember, removeTeamMember, fetchTeamActivity, updateMyTeamProfile } from "./lib/team.js";
+import { fetchTeamMembers, addTeamMember, updateTeamMember, removeTeamMember, fetchTeamActivity, updateMyTeamProfile, markTourSeen } from "./lib/team.js";
 
 export function ApplicantsTab({ applicants, setApplicants, onRemove, students, setStudents, courses, cohorts, onAccept }) {
   const [openId, setOpenId] = useState(null); const [cohortInput, setCohortInput] = useState(cohorts[0]?.id);
@@ -1013,15 +1013,20 @@ export function AdminDashboard({ courses, setCourses, students, setStudents, onR
     <>
       <div className="flex items-center justify-between mb-1 px-2"><LogoMark height={38} /><button onClick={onExit} title="Sign out"><LogOut size={16} color="#A79B84" /></button></div>
       <div className="f-label text-[11px] mb-4 px-2" style={{ color: "#A79B84" }}>{teamAccess ? teamAccess.roleLabel.toUpperCase() : "ADMIN"}</div>
-      <div className="px-2 mb-3"><NotifBell items={notifItems} seen={notifSeen} onMarkSeen={onMarkSeen} /></div>
-      <div className="flex flex-col gap-1 flex-1">{navItems.map((n) => <SidebarLink key={n.id} icon={n.icon} label={n.label} active={tab === n.id} onClick={() => setTab(n.id)} />)}</div>
+      <div className="px-2 mb-3" data-tour="notif-bell"><NotifBell items={notifItems} seen={notifSeen} onMarkSeen={onMarkSeen} /></div>
+      <div className="flex flex-col gap-1 flex-1" data-tour="nav-sidebar">{navItems.map((n) => <div key={n.id} data-tour={n.id === "account" ? "nav-account" : undefined}><SidebarLink icon={n.icon} label={n.label} active={tab === n.id} onClick={() => setTab(n.id)} /></div>)}</div>
       {onSwitchToStudent && <button onClick={onSwitchToStudent} className="flex items-center gap-2 px-4 py-2.5 text-[14px] mt-4" style={{ color: "var(--accent)", fontWeight: 700 }}><Repeat size={16} /> Switch to student view</button>}
       <button onClick={onViewSite} className={`flex items-center gap-2 px-4 py-2.5 text-[14px] ${onSwitchToStudent ? "" : "mt-4"}`} style={{ color: "#A79B84", fontWeight: 600 }}><Home size={16} /> Home page</button>
       <button onClick={onExit} className="flex items-center gap-2 px-4 py-2.5 text-[14px]" style={{ color: "#A79B84", fontWeight: 600 }}><LogOut size={16} /> Sign out</button>
     </>
   );
+  function dismissTeamTour() {
+    markTourSeen().catch((e) => console.error("markTourSeen failed", e));
+    onUpdateTeamAccess?.({ seenTour: true });
+  }
   return (
     <DashboardShell sidebar={sidebar}>
+        {teamAccess && !teamAccess.seenTour && <WelcomeTour steps={TEAM_TOUR_STEPS} onDone={dismissTeamTour} />}
         {tab === "overview" && <OverviewTab courses={courses} students={students} applicants={applicants} tasks={tasks} cohorts={cohorts} setTab={setTab} />}
         {tab === "profile" && <AdminProfileTab adminProfile={adminProfile} setAdminProfile={setAdminProfile} />}
         {tab === "account" && teamAccess && <TeamAccountTab teamAccess={teamAccess} onUpdate={onUpdateTeamAccess} />}
