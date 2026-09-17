@@ -66,6 +66,10 @@ export default function App() {
   // shows at all (only when they also have a real student enrollment).
   const [teamAccess, setTeamAccess] = useState(null);
   const [teamViewMode, setTeamViewMode] = useState("admin"); // "admin" | "student"
+  // The signed-in user's own Supabase auth id -- needed when a team member
+  // applies for a course themselves (they already have a login, so that
+  // application must link to their existing account, not create a new one).
+  const [currentAuthUserId, setCurrentAuthUserId] = useState(null);
   const [adminNotifSeen, setAdminNotifSeen] = useState([]);
   const [studentNotifSeen, setStudentNotifSeen] = useState([]);
 
@@ -181,7 +185,8 @@ export default function App() {
   }
 
   async function loadForSession(session) {
-    if (!session) { setStudents([]); setApplicants([]); return; }
+    if (!session) { setStudents([]); setApplicants([]); setCurrentAuthUserId(null); return; }
+    setCurrentAuthUserId(session.user.id);
     const [studs, apps] = await Promise.all([fetchStudents(), fetchApplicants()]);
     setStudents(studs); setApplicants(apps);
     const email = session.user.email;
@@ -289,6 +294,16 @@ export default function App() {
   async function submitApplication(data) {
     try {
       const { password, ...rest } = data;
+      if (applyingAsExisting?.isTeamMember) {
+        // A team member applying for their first course -- they already
+        // have a login (their team account), so this links straight to
+        // it instead of going through signUpApplicant's create-a-new-
+        // account flow, which would just fail with "already registered".
+        const saved = await insertApplicant({ ...rest, status: "pending", studentRef: null, authUserId: currentAuthUserId });
+        setApplicants((prev) => [...prev, saved]);
+        setActiveApplicant(saved); setApplyingAsExisting(null); setPage("inReview");
+        return null;
+      }
       if (applyingAsExisting) {
         const saved = await insertApplicant({ ...rest, status: "pending", studentRef: applyingAsExisting.id });
         setApplicants((prev) => [...prev, saved]);
@@ -382,9 +397,9 @@ export default function App() {
       {page === "courses" && <CoursesIndex courses={courses} onBack={() => setPage("landing")} onOpen={(id) => { setViewCourseId(id); setPage("courseDetail"); }} />}
       {page === "courseDetail" && viewCourse && <CourseDetail course={viewCourse} testimonials={testimonials} onBack={() => setPage("courses")} onApply={(id) => { setPresetCourseId(id); setApplyingAsExisting(null); setPage("signup"); }} />}
       {page === "resources" && <ResourcesPage resources={resources} onBack={() => setPage("landing")} />}
-      {page === "signup" && <ApplicationForm courses={courses} cohorts={cohorts} presetCourseId={presetCourseId} existingUser={applyingAsExisting} onSubmit={submitApplication} onCancel={() => setPage(applyingAsExisting ? "studentDash" : "landing")} />}
+      {page === "signup" && <ApplicationForm courses={courses} cohorts={cohorts} presetCourseId={presetCourseId} existingUser={applyingAsExisting} onSubmit={submitApplication} onCancel={() => setPage(applyingAsExisting ? (applyingAsExisting.isTeamMember ? "adminDash" : "studentDash") : "landing")} />}
       {page === "login" && <SignInScreen students={students} applicants={applicants} onBack={() => setPage("landing")} onSignIn={handleSignIn} onForgotPassword={handleForgotPassword} onEnterStudent={(s) => { setActiveStudent(s); setPage("studentDash"); }} onEnterApplicant={(a) => { setActiveApplicant(a); setPage("inReview"); }} onEnterAdmin={() => setPage("adminDash")} />}
-      {page === "inReview" && liveApplicant && <InReviewScreen applicant={liveApplicant} onExit={handleSignOut} />}
+      {page === "inReview" && liveApplicant && <InReviewScreen applicant={liveApplicant} onExit={teamAccess ? () => setPage("adminDash") : handleSignOut} exitLabel={teamAccess ? "BACK TO DASHBOARD" : "SIGN OUT"} />}
       {page === "resetPassword" && (
         <div className="min-h-screen flex items-center justify-center px-6">
           <div className="reveal in w-full max-w-[420px]">
@@ -476,7 +491,17 @@ export default function App() {
         <MyCourses student={liveStudent} setStudents={syncStudents} courses={courses} cohorts={cohorts} applicants={applicants} tasks={tasks} setTasks={setTasks} resources={resources} community={community} setCommunity={setCommunity} notices={notices.filter((n) => n.cohortId === "all" || n.cohortId === liveStudent.cohortId)} setNotices={setNotices} directThreads={directThreads} setDirectThreads={setDirectThreads} allStudents={students} onExit={handleSignOut} onViewSite={() => setPage("landing")} onApplyMore={(courseId) => { setApplyingAsExisting(liveStudent); setPresetCourseId(courseId || null); setPage("signup"); }} notifItems={studentNotifItems} notifSeen={studentNotifSeen} onMarkSeen={setStudentNotifSeen} onSwitchToTeamAdmin={() => setTeamViewMode("admin")} />
       )}
       {page === "adminDash" && !(teamAccess && teamViewMode === "student") && (
-        <AdminDashboard courses={courses} setCourses={syncCourses} students={students} setStudents={syncStudents} onRemoveStudent={removeStudent} applicants={applicants} setApplicants={syncApplicants} onRemoveApplicant={removeApplicant} onAcceptApplicant={acceptApplicant} cohorts={cohorts} setCohorts={syncCohorts} tasks={tasks} setTasks={setTasks} resources={resources} onAddResource={addResource} onEditResource={editResource} onRemoveResource={removeResource} community={community} setCommunity={setCommunity} notices={notices} setNotices={setNotices} directThreads={directThreads} setDirectThreads={setDirectThreads} testimonials={testimonials} setTestimonials={setTestimonials} faqs={faqs} setFaqs={setFaqs} brand={brand} setBrand={syncBrand} adminProfile={adminProfile} setAdminProfile={syncAdminProfile} onExit={handleSignOut} onViewSite={() => setPage("landing")} notifItems={adminNotifItems} notifSeen={adminNotifSeen} onMarkSeen={setAdminNotifSeen} teamAccess={teamAccess} onSwitchToStudent={teamAccess && liveStudent ? () => setTeamViewMode("student") : null} onUpdateTeamAccess={(patch) => setTeamAccess((prev) => prev ? { ...prev, ...patch } : prev)} />
+        <AdminDashboard courses={courses} setCourses={syncCourses} students={students} setStudents={syncStudents} onRemoveStudent={removeStudent} applicants={applicants} setApplicants={syncApplicants} onRemoveApplicant={removeApplicant} onAcceptApplicant={acceptApplicant} cohorts={cohorts} setCohorts={syncCohorts} tasks={tasks} setTasks={setTasks} resources={resources} onAddResource={addResource} onEditResource={editResource} onRemoveResource={removeResource} community={community} setCommunity={setCommunity} notices={notices} setNotices={setNotices} directThreads={directThreads} setDirectThreads={setDirectThreads} testimonials={testimonials} setTestimonials={setTestimonials} faqs={faqs} setFaqs={setFaqs} brand={brand} setBrand={syncBrand} adminProfile={adminProfile} setAdminProfile={syncAdminProfile} onExit={handleSignOut} onViewSite={() => setPage("landing")} notifItems={adminNotifItems} notifSeen={adminNotifSeen} onMarkSeen={setAdminNotifSeen} teamAccess={teamAccess} onSwitchToStudent={teamAccess ? () => {
+          if (liveStudent) { setTeamViewMode("student"); return; }
+          // Not enrolled anywhere yet -- same "apply" flow any brand-new
+          // visitor uses, skipping straight to picking a course since
+          // they're already signed in (existingUser mode on the form).
+          const myPendingApplicant = [...applicants].reverse().find((a) => a.email.toLowerCase() === teamAccess.email.toLowerCase() && a.status === "pending");
+          if (myPendingApplicant) { setActiveApplicant(myPendingApplicant); setPage("inReview"); return; }
+          setApplyingAsExisting({ isTeamMember: true, name: teamAccess.name, email: teamAccess.email, cohortId: null, enrollments: [] });
+          setPresetCourseId(null);
+          setPage("signup");
+        } : null} onUpdateTeamAccess={(patch) => setTeamAccess((prev) => prev ? { ...prev, ...patch } : prev)} />
       )}
     </div>
   );

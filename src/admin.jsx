@@ -833,7 +833,7 @@ export function OverviewTab({ courses, students, applicants, tasks, cohorts, set
 export function TeamTab() {
   const [members, setMembers] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
-  const [newName, setNewName] = useState(""); const [newEmail, setNewEmail] = useState(""); const [newRole, setNewRole] = useState("Intern");
+  const [newName, setNewName] = useState(""); const [newEmail, setNewEmail] = useState(""); const [newRole, setNewRole] = useState("Intern"); const [newRoleCustom, setNewRoleCustom] = useState("");
   const [addError, setAddError] = useState(""); const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editPermissions, setEditPermissions] = useState([]);
@@ -847,12 +847,13 @@ export function TeamTab() {
     navigator.clipboard?.writeText(`${window.location.origin}/?team=1`).then(() => { setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2000); });
   }
   async function submitAdd() {
-    if (!newName.trim() || !newEmail.trim()) return;
+    const roleLabel = newRole === "__custom__" ? newRoleCustom.trim() : newRole;
+    if (!newName.trim() || !newEmail.trim() || !roleLabel) return;
     setAdding(true); setAddError("");
     try {
-      const saved = await addTeamMember({ name: newName.trim(), email: newEmail.trim().toLowerCase(), roleLabel: newRole, permissions: [] });
+      const saved = await addTeamMember({ name: newName.trim(), email: newEmail.trim().toLowerCase(), roleLabel, permissions: [] });
       setMembers((prev) => [...prev, saved]);
-      setNewName(""); setNewEmail(""); setNewRole("Intern"); setShowAdd(false);
+      setNewName(""); setNewEmail(""); setNewRole("Intern"); setNewRoleCustom(""); setShowAdd(false);
     } catch (e) {
       console.error("addTeamMember failed", e);
       setAddError(e.message?.includes("duplicate") ? "That email is already on your team." : "Couldn't add them — check your connection and try again.");
@@ -893,7 +894,10 @@ export function TeamTab() {
             <Field label="Name" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Their full name" />
             <Field label="Email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="them@email.com" />
           </div>
-          <div style={{ maxWidth: 220 }}><SelectF label="Role label" value={newRole} onChange={(e) => setNewRole(e.target.value)} options={[{ value: "Intern", label: "Intern" }, { value: "Co-founder", label: "Co-founder" }, { value: "Content Strategist", label: "Content Strategist" }, { value: "Tech", label: "Tech" }, { value: "Team member", label: "Team member" }]} /></div>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div style={{ maxWidth: 220 }}><SelectF label="Role label" value={newRole} onChange={(e) => setNewRole(e.target.value)} options={[{ value: "Intern", label: "Intern" }, { value: "Co-founder", label: "Co-founder" }, { value: "Content Strategist", label: "Content Strategist" }, { value: "Tech", label: "Tech" }, { value: "Team member", label: "Team member" }, { value: "__custom__", label: "Other (type your own)" }]} /></div>
+            {newRole === "__custom__" && <div style={{ maxWidth: 220 }}><Field label="Custom role label" value={newRoleCustom} onChange={(e) => setNewRoleCustom(e.target.value)} placeholder="e.g. Social Media Manager" /></div>}
+          </div>
           {addError && <div className="text-[13px]" style={{ color: "#B04A3A" }}>{addError}</div>}
           <button disabled={adding} onClick={submitAdd} className="btn-primary rounded-lg px-5 py-2.5 text-[14px] self-start">{adding ? "Adding…" : "Add to team"}</button>
         </div>
