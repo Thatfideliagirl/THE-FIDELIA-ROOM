@@ -13,6 +13,7 @@ import { supabase } from "./lib/supabaseClient.js";
 import { signIn, signOut, signUpApplicant, sendPasswordReset, isAdminEmail } from "./lib/auth.js";
 import { fetchApplicants, insertApplicant, updateApplicant, deleteApplicant, fetchStudents, insertStudent, updateStudent, deleteStudent, fetchResources, insertResource, updateResource, deleteResource, fetchCourses, upsertCourse, fetchCohorts, upsertCohort, deleteCohort, fetchSettings, updateSettings } from "./lib/db.js";
 import { sendWelcomeEmail, sendAcceptanceEmail } from "./lib/email.js";
+import { checkTeamInvite, signUpTeamMember, getMyTeamAccess, logActivity } from "./lib/team.js";
 
 // Captured the instant this module evaluates -- before Supabase's own client
 // (imported above) gets any chance to run its background session-detection
@@ -27,9 +28,13 @@ const isRecoveryLink = typeof window !== "undefined" && (window.location.hash.in
 // instead of the tokens -- previously this fell through to a plain landing
 // page with no explanation, so it looked like the link "just didn't work".
 const isExpiredAuthLink = typeof window !== "undefined" && (window.location.hash.includes("error=") || window.location.search.includes("error="));
+// The team sign-up link is a fixed "?team=1" address (copyable from the
+// admin's Team tab), separate from the normal student sign-up flow, which
+// asks course-application questions that don't apply to a teammate.
+const isTeamSignupLink = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("team") === "1";
 
 export default function App() {
-  const [page, setPage] = useState(() => (isRecoveryLink ? "resetPassword" : isExpiredAuthLink ? "linkExpired" : "landing"));
+  const [page, setPage] = useState(() => (isRecoveryLink ? "resetPassword" : isExpiredAuthLink ? "linkExpired" : isTeamSignupLink ? "teamSignup" : "landing"));
   const [presetCourseId, setPresetCourseId] = useState(null);
   const [viewCourseId, setViewCourseId] = useState(null);
   const [applyingAsExisting, setApplyingAsExisting] = useState(null);
@@ -55,6 +60,12 @@ export default function App() {
   const [activeStudent, setActiveStudent] = useState(null);
   const [activeApplicant, setActiveApplicant] = useState(null);
   const [isAdminSession, setIsAdminSession] = useState(false);
+  // Set only for a signed-in team member (never the owner) -- their own
+  // name/permissions, fetched from their own team_members row. Drives which
+  // admin tabs render for them, and whether a "switch to student view" link
+  // shows at all (only when they also have a real student enrollment).
+  const [teamAccess, setTeamAccess] = useState(null);
+  const [teamViewMode, setTeamViewMode] = useState("admin"); // "admin" | "student"
   const [adminNotifSeen, setAdminNotifSeen] = useState([]);
   const [studentNotifSeen, setStudentNotifSeen] = useState([]);
 
@@ -133,7 +144,7 @@ export default function App() {
   function syncCourses(updater) {
     setCourses((prev) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
-      next.forEach((item) => { const before = prev.find((x) => x.id === item.id); if (before !== item) upsertCourse(item).catch(reportSaveError("upsertCourse failed")); });
+      next.forEach((item) => { const before = prev.find((x) => x.id === item.id); if (before !== item) { upsertCourse(item).catch(reportSaveError("upsertCourse failed")); if (teamAccess) logActivity(`Edited course "${item.title}"`); } });
       return next;
     });
   }
@@ -157,11 +168,11 @@ export default function App() {
     setAdminProfile((prev) => { const next = typeof updater === "function" ? updater(prev) : updater; updateSettings({ brand, adminProfile: next }).catch(reportSaveError("updateSettings failed")); return next; });
   }
   async function addResource(data) {
-    try { const saved = await insertResource(data); setResources((prev) => [...prev, saved]); return null; }
+    try { const saved = await insertResource(data); setResources((prev) => [...prev, saved]); if (teamAccess) logActivity(`Added a resource to the Library: "${data.title}"`); return null; }
     catch (e) { console.error("insertResource failed", e); return "Couldn't save this resource — check your connection and try again."; }
   }
   async function editResource(id, data) {
-    try { const saved = await updateResource(id, data); setResources((prev) => prev.map((r) => r.id === id ? saved : r)); return null; }
+    try { const saved = await updateResource(id, data); setResources((prev) => prev.map((r) => r.id === id ? saved : r)); if (teamAccess) logActivity(`Edited a Library resource: "${data.title}"`); return null; }
     catch (e) { console.error("updateResource failed", e); return "Couldn't save this resource — check your connection and try again."; }
   }
   async function removeResource(id) {
@@ -174,8 +185,22 @@ export default function App() {
     const [studs, apps] = await Promise.all([fetchStudents(), fetchApplicants()]);
     setStudents(studs); setApplicants(apps);
     const email = session.user.email;
-    if (isAdminEmail(email)) { setIsAdminSession(true); setPage("adminDash"); return; }
+    if (isAdminEmail(email)) { setIsAdminSession(true); setTeamAccess(null); setPage("adminDash"); return; }
     const myStudent = studs.find((s) => s.authUserId === session.user.id || s.email.toLowerCase() === email.toLowerCase());
+    // A team member is checked before the plain student match, since they
+    // may also have a student enrollment -- their own dashboard is where
+    // they should land by default, with the switch-to-student-view link
+    // (rendered only when myStudent exists) as how they reach that side.
+    try {
+      const access = await getMyTeamAccess();
+      if (access) {
+        setTeamAccess(access); setTeamViewMode("admin");
+        if (myStudent) setActiveStudent(myStudent);
+        setPage("adminDash");
+        logActivity("Signed in");
+        return;
+      }
+    } catch (e) { console.error("getMyTeamAccess failed", e); }
     if (myStudent) { setActiveStudent(myStudent); setPage("studentDash"); return; }
     const myApplicant = [...apps].reverse().find((a) => a.email.toLowerCase() === email.toLowerCase());
     if (myApplicant) { setActiveApplicant(myApplicant); setPage(myApplicant.status === "pending" ? "inReview" : "landing"); return; }
@@ -225,8 +250,37 @@ export default function App() {
     if (!result.error) return null;
     return result.error === "unknown" && result.detail ? result.detail : result.error;
   }
+
+  // Team sign-up: a two-step form (check the invite, then set a password)
+  // rather than everything at once, since we don't know who's visiting
+  // until they type their email -- checkTeamInvite is what actually
+  // confirms it's a real invite and supplies the name/role to show them.
+  const [teamStep, setTeamStep] = useState("email"); // "email" | "password"
+  const [teamEmail, setTeamEmail] = useState(""); const [teamName, setTeamName] = useState(""); const [teamRoleLabel, setTeamRoleLabel] = useState("");
+  const [teamPassword, setTeamPassword] = useState(""); const [teamError, setTeamError] = useState(""); const [teamChecking, setTeamChecking] = useState(false); const [teamSubmitting, setTeamSubmitting] = useState(false); const [teamAwaitingConfirm, setTeamAwaitingConfirm] = useState(false);
+  async function submitTeamEmail() {
+    if (!teamEmail.trim()) return;
+    setTeamChecking(true); setTeamError("");
+    try {
+      const invite = await checkTeamInvite(teamEmail.trim());
+      if (!invite) { setTeamError("This email hasn't been invited yet — check with whoever invited you."); return; }
+      setTeamName(invite.name); setTeamRoleLabel(invite.roleLabel); setTeamStep("password");
+    } catch (e) {
+      console.error("checkTeamInvite failed", e);
+      setTeamError("Couldn't reach the server — check your connection and try again.");
+    } finally { setTeamChecking(false); }
+  }
+  async function submitTeamPassword() {
+    if (teamPassword.length < 6) { setTeamError("Needs at least 6 characters."); return; }
+    setTeamSubmitting(true); setTeamError("");
+    const { error, hasSession } = await signUpTeamMember({ name: teamName, email: teamEmail.trim(), password: teamPassword });
+    setTeamSubmitting(false);
+    if (error) { setTeamError(error.toLowerCase().includes("already registered") ? "That email already has an account — try signing in instead." : error); return; }
+    if (hasSession) { supabase.auth.getSession().then(({ data }) => loadForSession(data.session)); }
+    else { setTeamAwaitingConfirm(true); }
+  }
   async function handleForgotPassword(email) { const { error } = await sendPasswordReset(email); return error; }
-  async function handleSignOut() { await signOut(); setActiveStudent(null); setActiveApplicant(null); setIsAdminSession(false); setPage("landing"); }
+  async function handleSignOut() { await signOut(); setActiveStudent(null); setActiveApplicant(null); setIsAdminSession(false); setTeamAccess(null); setTeamViewMode("admin"); setPage("landing"); }
 
   // insertApplicant/insertStudent/updateStudent/updateApplicant throw on failure
   // (a real DB error, or a blocked/dropped connection) -- caught here so a
@@ -314,8 +368,8 @@ export default function App() {
           <button onClick={() => setSaveError("")} className="f-label text-[11px]" style={{ opacity: .85 }}>DISMISS</button>
         </div>
       )}
-      {page === "landing" && (isAdminSession || liveStudent) && (
-        <button onClick={() => setPage(isAdminSession ? "adminDash" : "studentDash")} className="fixed z-[999] f-label text-[11px] px-4 py-2 rounded-full" style={{ top: 16, left: 16, background: "var(--accent)", color: "#FAF6EC", fontWeight: 700, boxShadow: "0 10px 22px -10px rgba(0,0,0,.4)" }}>BACK TO DASHBOARD</button>
+      {page === "landing" && (isAdminSession || teamAccess || liveStudent) && (
+        <button onClick={() => setPage(isAdminSession || teamAccess ? "adminDash" : "studentDash")} className="fixed z-[999] f-label text-[11px] px-4 py-2 rounded-full" style={{ top: 16, left: 16, background: "var(--accent)", color: "#FAF6EC", fontWeight: 700, boxShadow: "0 10px 22px -10px rgba(0,0,0,.4)" }}>BACK TO DASHBOARD</button>
       )}
       {sharedResourceId && resources.find((r) => r.id === sharedResourceId) && (
         <ResourceDetail
@@ -363,6 +417,32 @@ export default function App() {
           </div>
         </div>
       )}
+      {page === "teamSignup" && (
+        <div className="min-h-screen flex items-center justify-center px-6">
+          <div className="reveal in w-full max-w-[400px]">
+            <div className="flex flex-col items-center text-center mb-8"><LogoMark height={80} /><div className="f-label text-[13px] mt-5 mb-1 accent-text">JOIN THE TEAM</div><h2 className="f-display text-[26px]" style={{ fontWeight: 800 }}>{teamAwaitingConfirm ? "Check your email." : "Set up your account."}</h2></div>
+            <div className="card rounded-2xl p-7 flex flex-col gap-4" style={{ boxShadow: "0 20px 50px -24px rgba(38,32,25,0.16)" }}>
+              {teamAwaitingConfirm ? (
+                <p className="text-[14px] text-center" style={{ color: "#71675A" }}>We've sent a confirmation link to <strong>{teamEmail}</strong>. Open it on this device and you'll be signed straight in.</p>
+              ) : teamStep === "email" ? (
+                <>
+                  <p className="text-[13px]" style={{ color: "#71675A" }}>Enter the email address you were invited with.</p>
+                  <Field label="Email" value={teamEmail} onChange={(e) => setTeamEmail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submitTeamEmail()} />
+                  {teamError && <div className="text-[13px]" style={{ color: "#B04A3A" }}>{teamError}</div>}
+                  <button disabled={teamChecking} onClick={submitTeamEmail} className="btn-primary rounded-lg py-3 text-[15px]">{teamChecking ? "Checking…" : "Continue"}</button>
+                </>
+              ) : (
+                <>
+                  <p className="text-[13px]" style={{ color: "#71675A" }}>You've been invited to FJ Room as <strong>{teamRoleLabel}</strong>. Create a password to get started, {teamName.split(" ")[0]}.</p>
+                  <Field label="Password" type="password" value={teamPassword} onChange={(e) => setTeamPassword(e.target.value)} placeholder="At least 6 characters" onKeyDown={(e) => e.key === "Enter" && submitTeamPassword()} />
+                  {teamError && <div className="text-[13px]" style={{ color: "#B04A3A" }}>{teamError}</div>}
+                  <button disabled={teamSubmitting} onClick={submitTeamPassword} className="btn-primary rounded-lg py-3 text-[15px]">{teamSubmitting ? "Creating…" : "Create account"}</button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       {page === "checkEmail" && (
         <div className="min-h-screen flex items-center justify-center px-6 text-center">
           <div className="reveal in max-w-[420px]">
@@ -392,8 +472,11 @@ export default function App() {
       {page === "studentDash" && liveStudent && !pendingEnrollment && (
         <MyCourses student={liveStudent} setStudents={syncStudents} courses={courses} cohorts={cohorts} applicants={applicants} tasks={tasks} setTasks={setTasks} resources={resources} community={community} setCommunity={setCommunity} notices={notices.filter((n) => n.cohortId === "all" || n.cohortId === liveStudent.cohortId)} setNotices={setNotices} directThreads={directThreads} setDirectThreads={setDirectThreads} allStudents={students} onExit={handleSignOut} onViewSite={() => setPage("landing")} onApplyMore={(courseId) => { setApplyingAsExisting(liveStudent); setPresetCourseId(courseId || null); setPage("signup"); }} notifItems={studentNotifItems} notifSeen={studentNotifSeen} onMarkSeen={setStudentNotifSeen} />
       )}
-      {page === "adminDash" && (
-        <AdminDashboard courses={courses} setCourses={syncCourses} students={students} setStudents={syncStudents} onRemoveStudent={removeStudent} applicants={applicants} setApplicants={syncApplicants} onRemoveApplicant={removeApplicant} onAcceptApplicant={acceptApplicant} cohorts={cohorts} setCohorts={syncCohorts} tasks={tasks} setTasks={setTasks} resources={resources} onAddResource={addResource} onEditResource={editResource} onRemoveResource={removeResource} community={community} setCommunity={setCommunity} notices={notices} setNotices={setNotices} directThreads={directThreads} setDirectThreads={setDirectThreads} testimonials={testimonials} setTestimonials={setTestimonials} faqs={faqs} setFaqs={setFaqs} brand={brand} setBrand={syncBrand} adminProfile={adminProfile} setAdminProfile={syncAdminProfile} onExit={handleSignOut} onViewSite={() => setPage("landing")} notifItems={adminNotifItems} notifSeen={adminNotifSeen} onMarkSeen={setAdminNotifSeen} />
+      {page === "adminDash" && teamAccess && teamViewMode === "student" && liveStudent && (
+        <MyCourses student={liveStudent} setStudents={syncStudents} courses={courses} cohorts={cohorts} applicants={applicants} tasks={tasks} setTasks={setTasks} resources={resources} community={community} setCommunity={setCommunity} notices={notices.filter((n) => n.cohortId === "all" || n.cohortId === liveStudent.cohortId)} setNotices={setNotices} directThreads={directThreads} setDirectThreads={setDirectThreads} allStudents={students} onExit={handleSignOut} onViewSite={() => setPage("landing")} onApplyMore={(courseId) => { setApplyingAsExisting(liveStudent); setPresetCourseId(courseId || null); setPage("signup"); }} notifItems={studentNotifItems} notifSeen={studentNotifSeen} onMarkSeen={setStudentNotifSeen} onSwitchToTeamAdmin={() => setTeamViewMode("admin")} />
+      )}
+      {page === "adminDash" && !(teamAccess && teamViewMode === "student") && (
+        <AdminDashboard courses={courses} setCourses={syncCourses} students={students} setStudents={syncStudents} onRemoveStudent={removeStudent} applicants={applicants} setApplicants={syncApplicants} onRemoveApplicant={removeApplicant} onAcceptApplicant={acceptApplicant} cohorts={cohorts} setCohorts={syncCohorts} tasks={tasks} setTasks={setTasks} resources={resources} onAddResource={addResource} onEditResource={editResource} onRemoveResource={removeResource} community={community} setCommunity={setCommunity} notices={notices} setNotices={setNotices} directThreads={directThreads} setDirectThreads={setDirectThreads} testimonials={testimonials} setTestimonials={setTestimonials} faqs={faqs} setFaqs={setFaqs} brand={brand} setBrand={syncBrand} adminProfile={adminProfile} setAdminProfile={syncAdminProfile} onExit={handleSignOut} onViewSite={() => setPage("landing")} notifItems={adminNotifItems} notifSeen={adminNotifSeen} onMarkSeen={setAdminNotifSeen} teamAccess={teamAccess} onSwitchToStudent={teamAccess && liveStudent ? () => setTeamViewMode("student") : null} onUpdateTeamAccess={(patch) => setTeamAccess((prev) => prev ? { ...prev, ...patch } : prev)} />
       )}
     </div>
   );

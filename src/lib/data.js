@@ -2,6 +2,38 @@
 
 export const ADMIN_EMAIL = "fjroomm@gmail.com";
 
+// The full set of admin tabs a team member's access can be built from.
+// "profile" and "team" are deliberately excluded -- profile is always
+// available (it's their own account), and managing the roster itself
+// stays owner-only, matching the SQL policies on team_members.
+export const TEAM_PERMISSION_TABS = [
+  { group: "Content", items: [
+    { id: "overview", label: "Overview" },
+    { id: "courses", label: "Courses" },
+    { id: "cohorts", label: "Cohorts" },
+    { id: "library", label: "Library" },
+    { id: "meetings", label: "Virtual Meetings" },
+  ] },
+  { group: "People", items: [
+    { id: "applicants", label: "Applicants" },
+    { id: "students", label: "Students" },
+    { id: "gradebook", label: "Gradebook" },
+    { id: "tasks", label: "Tasks" },
+  ] },
+  { group: "Community", items: [
+    { id: "certificates", label: "Certificates" },
+    { id: "testimonials", label: "Testimonials" },
+    { id: "faq", label: "FAQ" },
+    { id: "chat", label: "Chat" },
+    { id: "community", label: "Community" },
+    { id: "notice", label: "Notice Board" },
+  ] },
+  { group: "Settings", items: [
+    { id: "branding", label: "Branding" },
+  ] },
+];
+
+
 export const FONT_STYLE = `
   @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;0,9..144,800;0,9..144,900;1,9..144,400;1,9..144,500&family=Work+Sans:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap');
   .lms-root { font-family:'Work Sans',sans-serif; background:#FAF6EC; color:#262019; --accent:#1C6FA0; font-size:16px; }

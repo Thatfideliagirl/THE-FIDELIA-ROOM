@@ -5,7 +5,7 @@ import {
   ChevronDown, Sparkles, Plus, Check, Send, X, Heart, MessageSquare,
   FileText, Download, GraduationCap, Mail, Phone, Award,
   UserCircle, FolderPlus, Folder, UploadCloud, ClipboardCheck, HelpCircle as HelpIcon,
-  Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Compass, Home
+  Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Compass, Home, Repeat
 } from "lucide-react";
 import { pairKey, moduleStatus, scoreSubmission, AUTO_APPROVE_THRESHOLD } from "./lib/data.js";
 import { SectionHeader, NotifBell, WelcomeTour, SidebarLink, LogoMark, Spine, TextArea, ProgressBar, ResourceDetail, Field, ChangePasswordCard, RichText, RichTextEditor, DashboardShell } from "./components.jsx";
@@ -127,7 +127,7 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
           {status === "current" && !pendingHere && (module.testType === "written" || module.testType === "file-upload" || module.testType === "milestone") && (
             <>
               <div className="f-display text-[19px] mb-3" style={{ fontWeight: 700 }}>{module.testType === "written" ? "Written response" : module.testType === "milestone" ? "Milestone project" : `Upload your work${module.proofType === "document" ? " (document)" : ""}`}</div>
-              {module.questionPrompt && <p className="text-[14px] mb-4 whitespace-pre-wrap" style={{ color: "#4A4237" }}>{module.questionPrompt}</p>}
+              {module.questionPrompt && <RichText html={module.questionPrompt} className="rich-content text-[14px] mb-4" style={{ color: "#4A4237" }} />}
               {module.testType === "written" ? (
                 <div><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Your answer</div><RichTextEditor value={proof} onChange={setProof} minRows={6} /></div>
               ) : (
@@ -328,7 +328,7 @@ export function CommunityPost({ post, onLike, onComment }) {
 }
 
 const MAX_COURSES_PER_COHORT = 2;
-export function MyCourses({ student, setStudents, courses, cohorts, applicants, tasks, setTasks, resources, community, setCommunity, notices, setNotices, directThreads, setDirectThreads, allStudents, onExit, onViewSite, onApplyMore, notifItems, notifSeen, onMarkSeen }) {
+export function MyCourses({ student, setStudents, courses, cohorts, applicants, tasks, setTasks, resources, community, setCommunity, notices, setNotices, directThreads, setDirectThreads, allStudents, onExit, onViewSite, onApplyMore, notifItems, notifSeen, onMarkSeen, onSwitchToTeamAdmin }) {
   const [tab, setTab] = useState("courses"); // "courses" | "explore" | "profile"
   const [openEnrollmentId, setOpenEnrollmentId] = useState(null);
   const [redeemEnrollmentId, setRedeemEnrollmentId] = useState(null);
@@ -369,6 +369,7 @@ export function MyCourses({ student, setStudents, courses, cohorts, applicants, 
         <div data-tour="nav-explore"><SidebarLink icon={Compass} label="Explore More Courses" active={tab === "explore"} onClick={() => setTab("explore")} /></div>
         <div data-tour="nav-profile"><SidebarLink icon={UserCircle} label="Profile" active={tab === "profile"} onClick={() => setTab("profile")} /></div>
       </div>
+      {onSwitchToTeamAdmin && <button onClick={onSwitchToTeamAdmin} className="flex items-center gap-2 px-4 py-2.5 text-[14px]" style={{ color: "var(--accent)", fontWeight: 700 }}><Repeat size={16} /> Switch to admin view</button>}
       <button onClick={onViewSite} className="flex items-center gap-2 px-4 py-2.5 text-[14px]" style={{ color: "#A79B84", fontWeight: 600 }}><Home size={16} /> Home page</button>
       <button onClick={onExit} className="flex items-center gap-2 px-4 py-2.5 text-[14px]" style={{ color: "#A79B84", fontWeight: 600 }}><LogOut size={16} /> Sign out</button>
     </>

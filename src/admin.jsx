@@ -5,12 +5,13 @@ import {
   ChevronDown, Sparkles, Plus, Check, Send, X, Heart, MessageSquare,
   FileText, Download, GraduationCap, Mail, Phone, Award,
   UserCircle, FolderPlus, Folder, UploadCloud, ClipboardCheck, HelpCircle as HelpIcon,
-  Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Home
+  Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Home, UserCog, Repeat
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from "recharts";
-import { genCode, pairKey, ADMIN_EMAIL } from "./lib/data.js";
+import { genCode, pairKey, ADMIN_EMAIL, TEAM_PERMISSION_TABS } from "./lib/data.js";
 import { Field, SectionHeader, NotifBell, SidebarLink, LogoMark, TextArea, SelectF, ImgField, FileField, ChangePasswordCard, RichTextEditor, RichText, stripHtml, DashboardShell } from "./components.jsx";
 import { CommunityPanel } from "./student.jsx";
+import { fetchTeamMembers, addTeamMember, updateTeamMember, removeTeamMember, fetchTeamActivity, updateMyTeamProfile } from "./lib/team.js";
 
 export function ApplicantsTab({ applicants, setApplicants, onRemove, students, setStudents, courses, cohorts, onAccept }) {
   const [openId, setOpenId] = useState(null); const [cohortInput, setCohortInput] = useState(cohorts[0]?.id);
@@ -202,7 +203,7 @@ export function ModuleEditor({ course, module, setCourses, onBack }) {
         {(testType === "written" || testType === "file-upload" || testType === "milestone") && (
           <>
             {(testType === "file-upload" || testType === "milestone") && <SelectF label="Required proof type" value={proofType} onChange={(e) => setProofType(e.target.value)} options={[{ value: "document", label: "Document upload" }, { value: "link", label: "Link" }, { value: "image", label: "Image / screenshot link" }]} />}
-            <TextArea label={testType === "written" ? "The question students will answer" : testType === "milestone" ? "Milestone project brief (what they need to build and submit)" : "What students need to submit"} value={questionPrompt} onChange={(e) => setQuestionPrompt(e.target.value)} placeholder={testType === "written" ? "e.g. Write a 3-sentence pitch for your ideal client." : testType === "milestone" ? "e.g. Build a complete mock client onboarding pack and submit it as a shared link." : "e.g. Upload your completed workbook as a PDF."} rows={5} />
+            <div><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>{testType === "written" ? "The question students will answer" : testType === "milestone" ? "Milestone project brief (what they need to build and submit)" : "What students need to submit"}</div><RichTextEditor value={questionPrompt} onChange={setQuestionPrompt} minRows={5} /></div>
             <TextArea label="Marking guide — list the key points a good submission should cover, one per idea (used both for your review and for auto-checking matches)" value={markingGuide} onChange={(e) => setMarkingGuide(e.target.value)} rows={6} />
           </>
         )}
@@ -473,7 +474,7 @@ export function StudentDetail({ student, applicant, setStudents, courses, cohort
             return (
               <div key={e.id} className="rounded-xl p-4" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
                 <div className="flex items-center justify-between mb-1"><div className="text-[13px]" style={{ fontWeight: 700 }}>{course?.title} — {module?.title}</div>{typeof e.pendingReview.autoScore === "number" && <span className="f-code text-[10px] px-2 py-0.5 rounded-full" style={{ background: "#F0E7D6", color: "#71675A" }}>AUTO-CHECK: {e.pendingReview.autoScore}% match</span>}</div>
-                {module?.questionPrompt && <div className="text-[12px] mb-2 whitespace-pre-wrap" style={{ color: "#71675A" }}>{module.questionPrompt}</div>}
+                {module?.questionPrompt && <RichText html={module.questionPrompt} className="rich-content text-[12px] mb-2" style={{ color: "#71675A" }} />}
                 <RichText html={e.pendingReview.proof} className="rich-content text-[14px] mb-3 rounded-lg px-3 py-2.5" style={{ background: "#fff", border: "1px solid #E7DEC9" }} />
                 <div className="flex items-center gap-2"><button onClick={() => decideReview(e.id, true)} className="btn-primary rounded-lg px-4 py-2 text-[12px]">Approve — unlock next module</button><button onClick={() => decideReview(e.id, false)} className="text-[12px]" style={{ color: "#B04A3A" }}>Send back</button></div>
               </div>
@@ -730,11 +731,23 @@ export function BrandingTab({ brand, setBrand }) {
 export function AdminProfileTab({ adminProfile, setAdminProfile }) {
   const [name, setName] = useState(adminProfile.name); const [photo, setPhoto] = useState(adminProfile.photo); const [bio, setBio] = useState(adminProfile.bio || "");
   const [saved, setSaved] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   function onPhotoPick(e) { const f = e.target.files?.[0]; if (f) { const r = new FileReader(); r.onload = () => setPhoto(r.result); r.readAsDataURL(f); } }
   function save() { setAdminProfile((p) => ({ ...p, name, photo, bio })); setSaved(true); setTimeout(() => setSaved(false), 2000); }
+  function copySignupLink() {
+    navigator.clipboard?.writeText(window.location.origin).then(() => { setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2000); });
+  }
   return (
     <>
       <SectionHeader eyebrow="YOUR PROFILE" title="My Profile" />
+      <div className="card rounded-2xl p-6 max-w-[520px] mb-6">
+        <div className="f-label text-[11px] mb-2" style={{ color: "#71675A" }}>YOUR SIGN-UP LINK</div>
+        <div className="text-[13px] mb-4" style={{ color: "#71675A" }}>Share this with anyone applying to a course — it opens your site, where they sign up and apply themselves.</div>
+        <div className="flex items-center justify-between gap-3 rounded-lg px-4 py-3 flex-wrap" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
+          <span className="text-[13px] f-code" style={{ color: "var(--accent)", fontWeight: 700, wordBreak: "break-all" }}>{window.location.origin}</span>
+          <button onClick={copySignupLink} className="btn-soft rounded-full px-4 py-2 text-[12px] shrink-0" style={{ fontWeight: 700 }}>{linkCopied ? "Copied!" : "Copy link"}</button>
+        </div>
+      </div>
       <div className="card rounded-2xl p-8 max-w-[520px]">
         <div className="flex items-center gap-5 mb-6"><div className="rounded-full overflow-hidden flex items-center justify-center shrink-0" style={{ width: 76, height: 76, background: "color-mix(in srgb, var(--accent) 14%, white)" }}>{photo ? <img src={photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <UserCircle size={34} color="var(--accent)" />}</div><label className="btn-soft rounded-full px-4 py-2 text-[13px] cursor-pointer" style={{ fontWeight: 600 }}>Change photo<input type="file" accept="image/*" onChange={onPhotoPick} style={{ display: "none" }} /></label></div>
         <Field label="Name" value={name} onChange={(e) => setName(e.target.value)} />
@@ -814,9 +827,165 @@ export function OverviewTab({ courses, students, applicants, tasks, cohorts, set
   );
 }
 
-export function AdminDashboard({ courses, setCourses, students, setStudents, onRemoveStudent, applicants, setApplicants, onRemoveApplicant, onAcceptApplicant, cohorts, setCohorts, tasks, setTasks, resources, onAddResource, onEditResource, onRemoveResource, community, setCommunity, notices, setNotices, directThreads, setDirectThreads, testimonials, setTestimonials, faqs, setFaqs, brand, setBrand, adminProfile, setAdminProfile, onExit, onViewSite, notifItems, notifSeen, onMarkSeen }) {
-  const [tab, setTab] = useState("overview");
-  const navItems = [
+// Owner-only (matches the RLS policies on team_members/team_activity) --
+// AdminDashboard never shows this tab to a team member at all, regardless
+// of their toggles, so there's no server-side check needed here too.
+export function TeamTab() {
+  const [members, setMembers] = useState(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [newName, setNewName] = useState(""); const [newEmail, setNewEmail] = useState(""); const [newRole, setNewRole] = useState("Intern");
+  const [addError, setAddError] = useState(""); const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editPermissions, setEditPermissions] = useState([]);
+  const [activityId, setActivityId] = useState(null);
+  const [activity, setActivity] = useState([]);
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  useEffect(() => { fetchTeamMembers().then(setMembers).catch((e) => { console.error("fetchTeamMembers failed", e); setMembers([]); }); }, []);
+
+  function copySignupLink() {
+    navigator.clipboard?.writeText(`${window.location.origin}/?team=1`).then(() => { setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2000); });
+  }
+  async function submitAdd() {
+    if (!newName.trim() || !newEmail.trim()) return;
+    setAdding(true); setAddError("");
+    try {
+      const saved = await addTeamMember({ name: newName.trim(), email: newEmail.trim().toLowerCase(), roleLabel: newRole, permissions: [] });
+      setMembers((prev) => [...prev, saved]);
+      setNewName(""); setNewEmail(""); setNewRole("Intern"); setShowAdd(false);
+    } catch (e) {
+      console.error("addTeamMember failed", e);
+      setAddError(e.message?.includes("duplicate") ? "That email is already on your team." : "Couldn't add them — check your connection and try again.");
+    } finally { setAdding(false); }
+  }
+  async function removeMember(id) {
+    setMembers((prev) => prev.filter((m) => m.id !== id));
+    try { await removeTeamMember(id); } catch (e) { console.error("removeTeamMember failed", e); }
+  }
+  function startEditPermissions(m) { setEditingId(m.id); setEditPermissions(m.permissions || []); setActivityId(null); }
+  function togglePermission(id) { setEditPermissions((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]); }
+  async function savePermissions() {
+    const m = members.find((x) => x.id === editingId);
+    try {
+      const saved = await updateTeamMember(editingId, { name: m.name, roleLabel: m.roleLabel, permissions: editPermissions });
+      setMembers((prev) => prev.map((x) => x.id === editingId ? saved : x));
+      setEditingId(null);
+    } catch (e) { console.error("updateTeamMember failed", e); }
+  }
+  async function openActivity(m) {
+    setActivityId(m.id); setEditingId(null); setActivity([]);
+    try { setActivity(await fetchTeamActivity(m.id)); } catch (e) { console.error("fetchTeamActivity failed", e); }
+  }
+
+  if (members === null) return <div className="text-[14px]" style={{ color: "#A79B84" }}>Loading…</div>;
+
+  return (
+    <>
+      <SectionHeader eyebrow="MANAGE" title="Team" action={<button onClick={() => setShowAdd((s) => !s)} className="btn-primary rounded-full px-5 py-2.5 text-[14px] flex items-center gap-1.5"><Plus size={16} /> Add team member</button>} />
+      <div className="card rounded-2xl p-5 mb-6 flex items-center justify-between gap-3 flex-wrap" style={{ background: "color-mix(in srgb, var(--accent) 8%, white)" }}>
+        <div><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>SIGN-UP LINK FOR YOUR TEAM</div><div className="text-[13px] f-code" style={{ color: "var(--accent)", fontWeight: 700, wordBreak: "break-all" }}>{window.location.origin}/?team=1</div></div>
+        <button onClick={copySignupLink} className="btn-soft rounded-full px-4 py-2 text-[12px] shrink-0" style={{ fontWeight: 700 }}>{linkCopied ? "Copied!" : "Copy link"}</button>
+      </div>
+
+      {showAdd && (
+        <div className="card rounded-2xl p-6 mb-6 flex flex-col gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Field label="Name" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Their full name" />
+            <Field label="Email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="them@email.com" />
+          </div>
+          <div style={{ maxWidth: 220 }}><SelectF label="Role label" value={newRole} onChange={(e) => setNewRole(e.target.value)} options={[{ value: "Intern", label: "Intern" }, { value: "Co-founder", label: "Co-founder" }, { value: "Content Strategist", label: "Content Strategist" }, { value: "Tech", label: "Tech" }, { value: "Team member", label: "Team member" }]} /></div>
+          {addError && <div className="text-[13px]" style={{ color: "#B04A3A" }}>{addError}</div>}
+          <button disabled={adding} onClick={submitAdd} className="btn-primary rounded-lg px-5 py-2.5 text-[14px] self-start">{adding ? "Adding…" : "Add to team"}</button>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-3">
+        {members.map((m) => (
+          <div key={m.id} className="card rounded-2xl p-5">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-3">
+                <div className="rounded-full overflow-hidden flex items-center justify-center shrink-0" style={{ width: 44, height: 44, background: "color-mix(in srgb, var(--accent) 14%, white)" }}>{m.photo ? <img src={m.photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <UserCircle size={22} color="var(--accent)" />}</div>
+                <div><div className="text-[15px]" style={{ fontWeight: 700 }}>{m.name} <span className="f-code text-[10px] tint-badge px-2 py-0.5 rounded-full ml-1">{m.roleLabel}</span></div><div className="text-[13px] mt-0.5" style={{ color: "#71675A" }}>{m.email}</div>{m.bio && <div className="text-[12.5px] mt-1" style={{ color: "#A79B84" }}>{m.bio}</div>}</div>
+              </div>
+              <div className="flex items-center gap-4">
+                <button onClick={() => startEditPermissions(m)} className="text-[12.5px]" style={{ color: "var(--accent)", fontWeight: 700 }}>{editingId === m.id ? "Hide" : "Edit access"}</button>
+                <button onClick={() => openActivity(m)} className="text-[12.5px]" style={{ color: "var(--accent)", fontWeight: 700 }}>{activityId === m.id ? "Hide" : "Activity"}</button>
+                <button onClick={() => removeMember(m.id)} className="text-[12.5px]" style={{ color: "#B04A3A", fontWeight: 700 }}>Remove</button>
+              </div>
+            </div>
+            {editingId === m.id && (
+              <div className="mt-5 pt-5" style={{ borderTop: "1px solid #F0E7D6" }}>
+                <div className="flex flex-col">
+                  {TEAM_PERMISSION_TABS.map((group) => (
+                    <div key={group.group}>
+                      <div className="f-label text-[10.5px] mt-3 mb-1" style={{ color: "#A79B84" }}>{group.group.toUpperCase()}</div>
+                      {group.items.map((item) => (
+                        <div key={item.id} className="flex items-center justify-between py-2" style={{ borderBottom: "1px solid #F0E7D6" }}>
+                          <span className="text-[13.5px]">{item.label}</span>
+                          <button onClick={() => togglePermission(item.id)} className="rounded-full" style={{ width: 38, height: 22, background: editPermissions.includes(item.id) ? "#4E7D5C" : "#E7DEC9", position: "relative", transition: "background .15s" }}>
+                            <span style={{ position: "absolute", top: 2, left: editPermissions.includes(item.id) ? 18 : 2, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "left .15s" }} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+                <button onClick={savePermissions} className="btn-primary rounded-lg px-5 py-2 text-[13px] mt-4">Save access</button>
+              </div>
+            )}
+            {activityId === m.id && (
+              <div className="mt-5 pt-5" style={{ borderTop: "1px solid #F0E7D6" }}>
+                {activity.length === 0 && <div className="text-[13px]" style={{ color: "#A79B84" }}>No activity yet.</div>}
+                <div className="flex flex-col">
+                  {activity.map((a) => (
+                    <div key={a.id} className="py-2.5" style={{ borderBottom: "1px solid #F0E7D6" }}>
+                      <div className="text-[13.5px]">{a.action}</div>
+                      <div className="text-[11.5px] mt-0.5" style={{ color: "#A79B84" }}>{new Date(a.created_at).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+        {members.length === 0 && !showAdd && <div className="card rounded-2xl p-8 text-center text-[14px]" style={{ color: "#A79B84" }}>No teammates yet — click "Add team member" to invite your first one.</div>}
+      </div>
+    </>
+  );
+}
+
+// A team member's own account screen -- password change plus their own
+// photo/bio (separate from AdminProfileTab, which is the owner's
+// public-facing profile and doesn't apply to a teammate).
+export function TeamAccountTab({ teamAccess, onUpdate }) {
+  const [photo, setPhoto] = useState(teamAccess.photo); const [bio, setBio] = useState(teamAccess.bio || "");
+  const [saving, setSaving] = useState(false); const [saved, setSaved] = useState(false);
+  function onPhotoPick(e) { const f = e.target.files?.[0]; if (f) { const r = new FileReader(); r.onload = () => setPhoto(r.result); r.readAsDataURL(f); } }
+  async function save() {
+    setSaving(true);
+    try {
+      await updateMyTeamProfile({ photo, bio });
+      onUpdate?.({ photo, bio });
+      setSaved(true); setTimeout(() => setSaved(false), 2000);
+    } catch (e) { console.error("updateMyTeamProfile failed", e); }
+    finally { setSaving(false); }
+  }
+  return (
+    <>
+      <SectionHeader eyebrow="YOUR ACCOUNT" title={teamAccess.name} />
+      <div className="text-[14px] mb-6" style={{ color: "#71675A" }}>Signed in as <strong>{teamAccess.roleLabel}</strong>.</div>
+      <div className="card rounded-2xl p-8 max-w-[520px] mb-6">
+        <div className="flex items-center gap-5 mb-6"><div className="rounded-full overflow-hidden flex items-center justify-center shrink-0" style={{ width: 76, height: 76, background: "color-mix(in srgb, var(--accent) 14%, white)" }}>{photo ? <img src={photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <UserCircle size={34} color="var(--accent)" />}</div><label className="btn-soft rounded-full px-4 py-2 text-[13px] cursor-pointer" style={{ fontWeight: 600 }}>Change photo<input type="file" accept="image/*" onChange={onPhotoPick} style={{ display: "none" }} /></label></div>
+        <TextArea label="Bio" value={bio} onChange={(e) => setBio(e.target.value)} />
+        <div className="flex items-center gap-3 mt-4"><button disabled={saving} onClick={save} className="btn-primary rounded-lg px-6 py-2.5 text-[14px]">{saving ? "Saving…" : "Save profile"}</button>{saved && <span className="text-[13px] accent-text" style={{ fontWeight: 700 }}>Saved.</span>}</div>
+      </div>
+      <div className="max-w-[520px]"><ChangePasswordCard email={teamAccess.email} /></div>
+    </>
+  );
+}
+
+export function AdminDashboard({ courses, setCourses, students, setStudents, onRemoveStudent, applicants, setApplicants, onRemoveApplicant, onAcceptApplicant, cohorts, setCohorts, tasks, setTasks, resources, onAddResource, onEditResource, onRemoveResource, community, setCommunity, notices, setNotices, directThreads, setDirectThreads, testimonials, setTestimonials, faqs, setFaqs, brand, setBrand, adminProfile, setAdminProfile, onExit, onViewSite, notifItems, notifSeen, onMarkSeen, teamAccess, onSwitchToStudent, onUpdateTeamAccess }) {
+  const allNavItems = [
     { id: "overview", icon: Sparkles, label: "Overview" }, { id: "profile", icon: UserCircle, label: "My Profile" }, { id: "applicants", icon: ClipboardCheck, label: "Applicants" },
     { id: "cohorts", icon: Layers, label: "Cohorts" }, { id: "courses", icon: BookOpen, label: "Courses" },
     { id: "meetings", icon: PlayCircle, label: "Virtual Meetings" },
@@ -825,15 +994,25 @@ export function AdminDashboard({ courses, setCourses, students, setStudents, onR
     { id: "certificates", icon: Award, label: "Certificates" }, { id: "testimonials", icon: Star, label: "Testimonials" },
     { id: "faq", icon: HelpIcon, label: "FAQ" }, { id: "chat", icon: MessageCircle, label: "Chat" },
     { id: "community", icon: Users, label: "Community" }, { id: "notice", icon: Megaphone, label: "Notice Board" },
-    { id: "branding", icon: Settings, label: "Branding" },
+    { id: "branding", icon: Settings, label: "Branding" }, { id: "team", icon: UserCog, label: "Team" },
   ];
+  // The owner sees everything, including Team (which only ever renders for
+  // the owner regardless -- RLS on team_members enforces that server-side
+  // too, this is just what's shown). A team member sees only their
+  // toggled-on tabs, plus their own Account tab in place of My Profile
+  // (which is the owner's public-facing bio, not theirs) and never Team.
+  const navItems = teamAccess
+    ? [{ id: "account", icon: UserCircle, label: "My Account" }, ...allNavItems.filter((n) => teamAccess.permissions.includes(n.id))]
+    : allNavItems;
+  const [tab, setTab] = useState(() => navItems[0]?.id || "overview");
   const sidebar = (
     <>
       <div className="flex items-center justify-between mb-1 px-2"><LogoMark height={38} /><button onClick={onExit} title="Sign out"><LogOut size={16} color="#A79B84" /></button></div>
-      <div className="f-label text-[11px] mb-4 px-2" style={{ color: "#A79B84" }}>ADMIN</div>
+      <div className="f-label text-[11px] mb-4 px-2" style={{ color: "#A79B84" }}>{teamAccess ? teamAccess.roleLabel.toUpperCase() : "ADMIN"}</div>
       <div className="px-2 mb-3"><NotifBell items={notifItems} seen={notifSeen} onMarkSeen={onMarkSeen} /></div>
       <div className="flex flex-col gap-1 flex-1">{navItems.map((n) => <SidebarLink key={n.id} icon={n.icon} label={n.label} active={tab === n.id} onClick={() => setTab(n.id)} />)}</div>
-      <button onClick={onViewSite} className="flex items-center gap-2 px-4 py-2.5 text-[14px] mt-4" style={{ color: "#A79B84", fontWeight: 600 }}><Home size={16} /> Home page</button>
+      {onSwitchToStudent && <button onClick={onSwitchToStudent} className="flex items-center gap-2 px-4 py-2.5 text-[14px] mt-4" style={{ color: "var(--accent)", fontWeight: 700 }}><Repeat size={16} /> Switch to student view</button>}
+      <button onClick={onViewSite} className={`flex items-center gap-2 px-4 py-2.5 text-[14px] ${onSwitchToStudent ? "" : "mt-4"}`} style={{ color: "#A79B84", fontWeight: 600 }}><Home size={16} /> Home page</button>
       <button onClick={onExit} className="flex items-center gap-2 px-4 py-2.5 text-[14px]" style={{ color: "#A79B84", fontWeight: 600 }}><LogOut size={16} /> Sign out</button>
     </>
   );
@@ -841,6 +1020,7 @@ export function AdminDashboard({ courses, setCourses, students, setStudents, onR
     <DashboardShell sidebar={sidebar}>
         {tab === "overview" && <OverviewTab courses={courses} students={students} applicants={applicants} tasks={tasks} cohorts={cohorts} setTab={setTab} />}
         {tab === "profile" && <AdminProfileTab adminProfile={adminProfile} setAdminProfile={setAdminProfile} />}
+        {tab === "account" && teamAccess && <TeamAccountTab teamAccess={teamAccess} onUpdate={onUpdateTeamAccess} />}
         {tab === "applicants" && <ApplicantsTab applicants={applicants} setApplicants={setApplicants} onRemove={onRemoveApplicant} students={students} setStudents={setStudents} courses={courses} cohorts={cohorts} onAccept={onAcceptApplicant} />}
         {tab === "cohorts" && <CohortsTab cohorts={cohorts} setCohorts={setCohorts} courses={courses} students={students} />}
         {tab === "courses" && <CoursesTab courses={courses} setCourses={setCourses} testimonials={testimonials} />}
@@ -856,6 +1036,7 @@ export function AdminDashboard({ courses, setCourses, students, setStudents, onR
         {tab === "community" && <AdminCommunityTab community={community} setCommunity={setCommunity} students={students} cohorts={cohorts} />}
         {tab === "notice" && <AdminNoticeTab notices={notices} setNotices={setNotices} cohorts={cohorts} students={students} />}
         {tab === "branding" && <BrandingTab brand={brand} setBrand={setBrand} />}
+        {tab === "team" && !teamAccess && <TeamTab />}
     </DashboardShell>
   );
 }
