@@ -15,6 +15,22 @@
 -- Paste into the project's SQL Editor -> New query -> Run.
 -- ============================================================
 
+-- There's already at least one real duplicate sitting in the table from
+-- before this fix -- the safety rule below can't be added while a
+-- duplicate still exists, so this clears out any exact duplicates first.
+-- For each person+course with more than one pending application, this
+-- keeps the earliest one and removes the extra copies only -- it never
+-- touches an application that's been accepted or declined.
+with ranked as (
+  select id, row_number() over (
+    partition by auth_user_id, course_id
+    order by created_at asc, id asc
+  ) as rn
+  from applicants
+  where auth_user_id is not null and status = 'pending'
+)
+delete from applicants where id in (select id from ranked where rn > 1);
+
 create unique index if not exists applicants_one_pending_per_course
   on applicants (auth_user_id, course_id)
   where auth_user_id is not null and status = 'pending';
