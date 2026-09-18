@@ -11,7 +11,7 @@ import { MyCourses } from "./student.jsx";
 import { AdminDashboard } from "./admin.jsx";
 import { supabase } from "./lib/supabaseClient.js";
 import { signIn, signOut, signUpApplicant, sendPasswordReset, isAdminEmail } from "./lib/auth.js";
-import { fetchApplicants, insertApplicant, updateApplicant, deleteApplicant, fetchStudents, insertStudent, updateStudent, deleteStudent, fetchResources, insertResource, updateResource, deleteResource, fetchCourses, upsertCourse, fetchCohorts, upsertCohort, deleteCohort, fetchSettings, updateSettings, fetchTestimonials, upsertTestimonial, deleteTestimonial, fetchFaqs, upsertFaq, deleteFaq, fetchNotices, upsertNotice, fetchTasks, upsertTask, deleteTask, fetchCommunityPosts, upsertCommunityPost, fetchDirectMessages, insertDirectMessage } from "./lib/db.js";
+import { fetchApplicants, insertApplicant, updateApplicant, deleteApplicant, fetchStudents, insertStudent, updateStudent, deleteStudent, fetchResources, insertResource, updateResource, deleteResource, fetchCourses, upsertCourse, fetchCohorts, upsertCohort, deleteCohort, fetchSettings, updateSettings, fetchTestimonials, upsertTestimonial, deleteTestimonial, fetchFaqs, upsertFaq, deleteFaq, fetchNotices, upsertNotice, fetchTasks, upsertTask, deleteTask, fetchCommunityPosts, upsertCommunityPost, fetchDirectMessages, insertDirectMessage, fetchNotifSeen, saveNotifSeen } from "./lib/db.js";
 import { sendWelcomeEmail, sendAcceptanceEmail } from "./lib/email.js";
 import { checkTeamInvite, signUpTeamMember, getMyTeamAccess, logActivity } from "./lib/team.js";
 
@@ -70,8 +70,24 @@ export default function App() {
   // applies for a course themselves (they already have a login, so that
   // application must link to their existing account, not create a new one).
   const [currentAuthUserId, setCurrentAuthUserId] = useState(null);
-  const [adminNotifSeen, setAdminNotifSeen] = useState([]);
-  const [studentNotifSeen, setStudentNotifSeen] = useState([]);
+  // One shared "already seen" list per signed-in person -- covers both
+  // their admin-side and student-side notifications, since the two
+  // sides' IDs are prefixed differently (ap-/sub-/mod- vs assigned-/
+  // grade-/cert-) and never collide. Persisted per person (see
+  // fetchNotifSeen/syncNotifSeen below) so it survives a refresh or
+  // signing in on another device, instead of resetting every reload.
+  const [notifSeen, setNotifSeen] = useState([]);
+  function syncNotifSeen(updater) {
+    setNotifSeen((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      if (currentAuthUserId) saveNotifSeen(currentAuthUserId, next).catch(reportSaveError("saveNotifSeen failed"));
+      return next;
+    });
+  }
+  useEffect(() => {
+    if (!currentAuthUserId) { setNotifSeen([]); return; }
+    fetchNotifSeen(currentAuthUserId).then(setNotifSeen).catch((e) => console.error("fetchNotifSeen failed", e));
+  }, [currentAuthUserId]);
 
   useEffect(() => { const el = document.createElement("style"); el.innerHTML = FONT_STYLE; document.head.appendChild(el); return () => document.head.removeChild(el); }, []);
 
@@ -536,13 +552,13 @@ export default function App() {
       )}
       {page === "studentDash" && liveStudent && pendingEnrollment && <CodeRedeemScreen student={liveStudent} enrollment={pendingEnrollment} onRedeem={() => redeemCode(pendingEnrollment.id)} onExit={handleSignOut} />}
       {page === "studentDash" && liveStudent && !pendingEnrollment && (
-        <MyCourses student={liveStudent} setStudents={syncStudents} courses={courses} cohorts={cohorts} applicants={applicants} tasks={tasks} setTasks={syncTasks} resources={resources} community={community} setCommunity={syncCommunity} notices={notices.filter((n) => n.cohortId === "all" || n.cohortId === liveStudent.cohortId)} setNotices={syncNotices} directThreads={directThreads} setDirectThreads={syncDirectThreads} allStudents={students} onExit={handleSignOut} onViewSite={() => setPage("landing")} onApplyMore={(courseId) => { setApplyingAsExisting(liveStudent); setPresetCourseId(courseId || null); setPage("signup"); }} notifItems={studentNotifItems} notifSeen={studentNotifSeen} onMarkSeen={setStudentNotifSeen} />
+        <MyCourses student={liveStudent} setStudents={syncStudents} courses={courses} cohorts={cohorts} applicants={applicants} tasks={tasks} setTasks={syncTasks} resources={resources} community={community} setCommunity={syncCommunity} notices={notices.filter((n) => n.cohortId === "all" || n.cohortId === liveStudent.cohortId)} setNotices={syncNotices} directThreads={directThreads} setDirectThreads={syncDirectThreads} allStudents={students} onExit={handleSignOut} onViewSite={() => setPage("landing")} onApplyMore={(courseId) => { setApplyingAsExisting(liveStudent); setPresetCourseId(courseId || null); setPage("signup"); }} notifItems={studentNotifItems} notifSeen={notifSeen} onMarkSeen={syncNotifSeen} />
       )}
       {page === "adminDash" && teamAccess && teamViewMode === "student" && liveStudent && (
-        <MyCourses student={liveStudent} setStudents={syncStudents} courses={courses} cohorts={cohorts} applicants={applicants} tasks={tasks} setTasks={syncTasks} resources={resources} community={community} setCommunity={syncCommunity} notices={notices.filter((n) => n.cohortId === "all" || n.cohortId === liveStudent.cohortId)} setNotices={syncNotices} directThreads={directThreads} setDirectThreads={syncDirectThreads} allStudents={students} onExit={handleSignOut} onViewSite={() => setPage("landing")} onApplyMore={(courseId) => { setApplyingAsExisting(liveStudent); setPresetCourseId(courseId || null); setPage("signup"); }} notifItems={studentNotifItems} notifSeen={studentNotifSeen} onMarkSeen={setStudentNotifSeen} onSwitchToTeamAdmin={() => setTeamViewMode("admin")} />
+        <MyCourses student={liveStudent} setStudents={syncStudents} courses={courses} cohorts={cohorts} applicants={applicants} tasks={tasks} setTasks={syncTasks} resources={resources} community={community} setCommunity={syncCommunity} notices={notices.filter((n) => n.cohortId === "all" || n.cohortId === liveStudent.cohortId)} setNotices={syncNotices} directThreads={directThreads} setDirectThreads={syncDirectThreads} allStudents={students} onExit={handleSignOut} onViewSite={() => setPage("landing")} onApplyMore={(courseId) => { setApplyingAsExisting(liveStudent); setPresetCourseId(courseId || null); setPage("signup"); }} notifItems={studentNotifItems} notifSeen={notifSeen} onMarkSeen={syncNotifSeen} onSwitchToTeamAdmin={() => setTeamViewMode("admin")} />
       )}
       {page === "adminDash" && !(teamAccess && teamViewMode === "student") && (
-        <AdminDashboard courses={courses} setCourses={syncCourses} students={students} setStudents={syncStudents} onRemoveStudent={removeStudent} applicants={applicants} setApplicants={syncApplicants} onRemoveApplicant={removeApplicant} onAcceptApplicant={acceptApplicant} cohorts={cohorts} setCohorts={syncCohorts} tasks={tasks} setTasks={syncTasks} resources={resources} onAddResource={addResource} onEditResource={editResource} onRemoveResource={removeResource} community={community} setCommunity={syncCommunity} notices={notices} setNotices={syncNotices} directThreads={directThreads} setDirectThreads={syncDirectThreads} testimonials={testimonials} setTestimonials={syncTestimonials} faqs={faqs} setFaqs={syncFaqs} brand={brand} setBrand={syncBrand} adminProfile={adminProfile} setAdminProfile={syncAdminProfile} onExit={handleSignOut} onViewSite={() => setPage("landing")} notifItems={adminNotifItems} notifSeen={adminNotifSeen} onMarkSeen={setAdminNotifSeen} teamAccess={teamAccess} onSwitchToStudent={teamAccess ? () => {
+        <AdminDashboard courses={courses} setCourses={syncCourses} students={students} setStudents={syncStudents} onRemoveStudent={removeStudent} applicants={applicants} setApplicants={syncApplicants} onRemoveApplicant={removeApplicant} onAcceptApplicant={acceptApplicant} cohorts={cohorts} setCohorts={syncCohorts} tasks={tasks} setTasks={syncTasks} resources={resources} onAddResource={addResource} onEditResource={editResource} onRemoveResource={removeResource} community={community} setCommunity={syncCommunity} notices={notices} setNotices={syncNotices} directThreads={directThreads} setDirectThreads={syncDirectThreads} testimonials={testimonials} setTestimonials={syncTestimonials} faqs={faqs} setFaqs={syncFaqs} brand={brand} setBrand={syncBrand} adminProfile={adminProfile} setAdminProfile={syncAdminProfile} onExit={handleSignOut} onViewSite={() => setPage("landing")} notifItems={adminNotifItems} notifSeen={notifSeen} onMarkSeen={syncNotifSeen} teamAccess={teamAccess} onSwitchToStudent={teamAccess ? () => {
           if (liveStudent) { setTeamViewMode("student"); return; }
           // Not enrolled anywhere yet -- same "apply" flow any brand-new
           // visitor uses, skipping straight to picking a course since

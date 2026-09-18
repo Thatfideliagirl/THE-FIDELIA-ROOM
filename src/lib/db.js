@@ -198,6 +198,20 @@ export async function insertDirectMessage({ threadKey, from, text }) {
   if (error) throw error;
 }
 
+// Which notification IDs this signed-in person has already dismissed --
+// one shared row per person covers both their admin-side and student-side
+// notifications, since the two sides' IDs are prefixed differently and
+// never collide.
+export async function fetchNotifSeen(viewerKey) {
+  const { data, error } = await supabase.from("notif_seen").select("seen_ids").eq("viewer_key", viewerKey).maybeSingle();
+  if (error) throw error;
+  return data?.seen_ids || [];
+}
+export async function saveNotifSeen(viewerKey, seenIds) {
+  const { error } = await supabase.from("notif_seen").upsert({ viewer_key: viewerKey, seen_ids: seenIds, updated_at: new Date().toISOString() });
+  if (error) throw error;
+}
+
 // Branding and the admin's own profile are both single-object, single-admin
 // settings -- one row in site_settings covers both rather than two tables.
 export async function fetchSettings() {
