@@ -104,7 +104,11 @@ export default function App() {
   // sync wrapper below a single shared place to surface "that didn't actually
   // save" instead of only logging to a console nobody's watching.
   const [saveError, setSaveError] = useState("");
-  function reportSaveError(context) { return (e) => { console.error(context, e); setSaveError("Something didn't save -- check your connection and try that again."); }; }
+  // Showing only a generic "check your connection" message hid the real
+  // cause for every one of these -- Accept's actual error (a duplicate
+  // student code) turned out to have nothing to do with connectivity, and
+  // wouldn't have been found nearly as fast without seeing the real text.
+  function reportSaveError(context) { return (e) => { console.error(context, e); setSaveError(e?.message ? `Didn't save: ${e.message}` : "Something didn't save -- check your connection and try that again."); }; }
   function syncStudents(updater) {
     setStudents((prev) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
