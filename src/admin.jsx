@@ -225,6 +225,7 @@ export function ModuleEditor({ course, module, setCourses, onBack }) {
 }
 export function CourseManager({ course, testimonials, setCourses, onBack }) {
   const [editingDetails, setEditingDetails] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [editingQuestions, setEditingQuestions] = useState(false);
   const [openModuleId, setOpenModuleId] = useState(null);
   const [addingModule, setAddingModule] = useState(false); const [newModTitle, setNewModTitle] = useState("");
@@ -246,6 +247,7 @@ export function CourseManager({ course, testimonials, setCourses, onBack }) {
     }));
   }
   function togglePublish() { setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, status: c.status === "live" ? "draft" : "live" })); }
+  function deleteCourseNow() { setCourses((prev) => prev.filter((c) => c.id !== course.id)); onBack(); }
   function toggleTestimonial(id) { setTestimonialIds((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]); }
   const openModule = openModuleId ? course.modules.find((m) => m.id === openModuleId) : null;
   if (openModule) return <ModuleEditor course={course} module={openModule} setCourses={setCourses} onBack={() => setOpenModuleId(null)} />;
@@ -254,7 +256,15 @@ export function CourseManager({ course, testimonials, setCourses, onBack }) {
       <button onClick={onBack} className="flex items-center gap-1.5 text-[13px] mb-6" style={{ color: "#71675A" }}><ArrowLeft size={14} /> Back to courses</button>
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div><div className="f-label text-[12px] mb-2 accent-text">COURSE MANAGER</div><h1 className="f-display text-[30px]" style={{ fontWeight: 800 }}>{course.title}</h1></div>
-        <div className="flex items-center gap-2"><button onClick={togglePublish} className="f-label text-[11px] px-4 py-2 rounded-full tint-badge">{course.status === "live" ? "PUBLISHED" : "UNPUBLISHED"}</button><button onClick={() => setEditingDetails((s) => !s)} className="btn-soft rounded-full px-4 py-2 text-[13px] flex items-center gap-1.5" style={{ fontWeight: 700 }}><Pencil size={13} /> Edit details</button><button onClick={() => setEditingQuestions((s) => !s)} className="btn-soft rounded-full px-4 py-2 text-[13px] flex items-center gap-1.5" style={{ fontWeight: 700 }}><Pencil size={13} /> Application questions</button></div>
+        <div className="flex items-center gap-2">
+          <button onClick={togglePublish} className="f-label text-[11px] px-4 py-2 rounded-full tint-badge">{course.status === "live" ? "PUBLISHED" : "UNPUBLISHED"}</button>
+          {confirmingDelete ? (
+            <div className="flex items-center gap-2 text-[12px]"><span style={{ color: "#B04A3A" }}>Delete this course?</span><button onClick={deleteCourseNow} className="f-label" style={{ color: "#B04A3A", fontWeight: 700 }}>YES, DELETE</button><button onClick={() => setConfirmingDelete(false)} style={{ color: "#A79B84" }}>Cancel</button></div>
+          ) : (
+            <button onClick={() => setConfirmingDelete(true)} title="Delete this course" className="btn-soft rounded-full px-4 py-2 text-[13px] flex items-center gap-1.5" style={{ fontWeight: 700, color: "#B04A3A" }}><Trash2 size={13} /> Delete course</button>
+          )}
+          <button onClick={() => setEditingDetails((s) => !s)} className="btn-soft rounded-full px-4 py-2 text-[13px] flex items-center gap-1.5" style={{ fontWeight: 700 }}><Pencil size={13} /> Edit details</button><button onClick={() => setEditingQuestions((s) => !s)} className="btn-soft rounded-full px-4 py-2 text-[13px] flex items-center gap-1.5" style={{ fontWeight: 700 }}><Pencil size={13} /> Application questions</button>
+        </div>
       </div>
       {editingDetails && (
         <div className="card rounded-2xl p-7 mb-8 flex flex-col gap-4">

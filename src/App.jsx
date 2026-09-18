@@ -11,7 +11,7 @@ import { MyCourses } from "./student.jsx";
 import { AdminDashboard } from "./admin.jsx";
 import { supabase } from "./lib/supabaseClient.js";
 import { signIn, signOut, signUpApplicant, sendPasswordReset, isAdminEmail } from "./lib/auth.js";
-import { fetchApplicants, insertApplicant, updateApplicant, deleteApplicant, fetchStudents, insertStudent, updateStudent, deleteStudent, fetchResources, insertResource, updateResource, deleteResource, fetchCourses, upsertCourse, fetchCohorts, upsertCohort, deleteCohort, fetchSettings, updateSettings, fetchTestimonials, upsertTestimonial, deleteTestimonial, fetchFaqs, upsertFaq, deleteFaq, fetchNotices, upsertNotice, fetchTasks, upsertTask, deleteTask, fetchCommunityPosts, upsertCommunityPost, fetchDirectMessages, insertDirectMessage, fetchNotifSeen, saveNotifSeen } from "./lib/db.js";
+import { fetchApplicants, insertApplicant, updateApplicant, deleteApplicant, fetchStudents, insertStudent, updateStudent, deleteStudent, fetchResources, insertResource, updateResource, deleteResource, fetchCourses, upsertCourse, deleteCourse, fetchCohorts, upsertCohort, deleteCohort, fetchSettings, updateSettings, fetchTestimonials, upsertTestimonial, deleteTestimonial, fetchFaqs, upsertFaq, deleteFaq, fetchNotices, upsertNotice, fetchTasks, upsertTask, deleteTask, fetchCommunityPosts, upsertCommunityPost, fetchDirectMessages, insertDirectMessage, fetchNotifSeen, saveNotifSeen } from "./lib/db.js";
 import { sendWelcomeEmail, sendAcceptanceEmail } from "./lib/email.js";
 import { checkTeamInvite, signUpTeamMember, getMyTeamAccess, logActivity } from "./lib/team.js";
 
@@ -163,12 +163,15 @@ export default function App() {
   // syncCourses mirrors syncStudents/syncApplicants: any item whose reference
   // changed (existing edit) or that's missing from prev (a brand-new course
   // from addCourse) gets upserted in the background, so every existing
-  // setCourses call site in admin.jsx keeps working unchanged.
+  // setCourses call site in admin.jsx keeps working unchanged. Anything
+  // present in prev but missing from next (CourseManager's delete) gets
+  // deleted in the background too, same as syncCohorts below.
   useEffect(() => { fetchCourses().then(setCourses).catch((e) => console.error("fetchCourses failed", e)); }, []);
   function syncCourses(updater) {
     setCourses((prev) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
       next.forEach((item) => { const before = prev.find((x) => x.id === item.id); if (before !== item) { upsertCourse(item).catch(reportSaveError("upsertCourse failed")); if (teamAccess) logActivity(`Edited course "${item.title}"`); } });
+      prev.forEach((item) => { if (!next.find((x) => x.id === item.id)) { deleteCourse(item.id).catch(reportSaveError("deleteCourse failed")); if (teamAccess) logActivity(`Deleted course "${item.title}"`); } });
       return next;
     });
   }

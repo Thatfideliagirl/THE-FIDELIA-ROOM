@@ -130,6 +130,10 @@ export async function upsertCourse(course) {
   if (error) throw error;
   return courseOut(data);
 }
+export async function deleteCourse(id) {
+  const { error } = await supabase.from("courses").delete().eq("id", id);
+  if (error) throw error;
+}
 
 // Cohorts follow the same opaque-jsonb-blob pattern as courses.
 // Same reasoning as courseOut above -- courseIds/unlockedCourseIds get read
