@@ -328,7 +328,20 @@ export function AdminMeetingsTab({ courses, setCourses, cohorts }) {
     for (const c of courses) for (const m of c.modules) for (const mt of (m.meetings || [])) list.push({ ...mt, courseId: c.id, moduleId: m.id });
     return list;
   });
+  // Courses load asynchronously -- if this tab is opened before that fetch
+  // resolves, the useState initializer above locks draft to empty forever
+  // (it only ever runs once), and every meeting that arrives afterward
+  // stays invisible even though it's really there. This catches it up the
+  // first time real data shows up, without touching draft once it's
+  // actually holding something (never overwrites an in-progress edit).
+  useEffect(() => {
+    if (draft.length > 0) return;
+    const list = [];
+    for (const c of courses) for (const m of c.modules) for (const mt of (m.meetings || [])) list.push({ ...mt, courseId: c.id, moduleId: m.id });
+    if (list.length > 0) setDraft(list);
+  }, [courses]);
   const [savedIds, setSavedIds] = useState(() => new Set());
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   function updateMeeting(id, field, value) { setDraft((d) => d.map((mt) => mt.id !== id ? mt : { ...mt, [field]: value })); }
   function updateMeetingCourse(id, newCourseId) {
@@ -401,7 +414,11 @@ export function AdminMeetingsTab({ courses, setCourses, cohorts }) {
                 <Field label="Date" type="date" value={mt.date ? mt.date.split("T")[0] : ""} onChange={(e) => updateMeetingDatePart(mt.id, "date", e.target.value)} />
                 <Field label="Time" type="time" value={mt.date && mt.date.includes("T") ? mt.date.split("T")[1] : ""} onChange={(e) => updateMeetingDatePart(mt.id, "time", e.target.value)} />
                 <Field label="Meeting link" value={mt.link} onChange={(e) => updateMeeting(mt.id, "link", e.target.value)} placeholder="https://…" />
-                <button onClick={() => removeMeeting(mt.id)} className="mb-2.5"><Trash2 size={16} color="#B04A3A" /></button>
+                {confirmDeleteId === mt.id ? (
+                  <div className="flex items-center gap-2 mb-2.5 text-[12px]"><span style={{ color: "#B04A3A" }}>Delete?</span><button onClick={() => { removeMeeting(mt.id); setConfirmDeleteId(null); }} className="f-label" style={{ color: "#B04A3A", fontWeight: 700 }}>YES</button><button onClick={() => setConfirmDeleteId(null)} style={{ color: "#A79B84" }}>Cancel</button></div>
+                ) : (
+                  <button onClick={() => setConfirmDeleteId(mt.id)} title="Delete this meeting" className="mb-2.5 flex items-center gap-1.5 text-[12px]" style={{ color: "#B04A3A" }}><Trash2 size={16} /> Delete</button>
+                )}
               </div>
               <div className="pt-3" style={{ borderTop: "1px dashed #E7DEC9" }}>
                 <div className="f-label text-[10px] mb-2" style={{ color: "#A79B84" }}>VIRTUAL RECORDING (after class, if there is one)</div>
