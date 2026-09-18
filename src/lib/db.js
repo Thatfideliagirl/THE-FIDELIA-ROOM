@@ -36,7 +36,7 @@ const resourceIn = (r) => ({
 });
 
 export async function fetchResources() {
-  const { data, error } = await supabase.from("resources").select("*").order("created_at", { ascending: true });
+  const { data, error } = await supabase.from("resources").select("*").order("created_at", { ascending: true }).order("id", { ascending: true });
   if (error) throw error;
   return (data || []).map(resourceOut);
 }
@@ -56,7 +56,7 @@ export async function deleteResource(id) {
 }
 
 export async function fetchApplicants() {
-  const { data, error } = await supabase.from("applicants").select("*").order("created_at", { ascending: true });
+  const { data, error } = await supabase.from("applicants").select("*").order("created_at", { ascending: true }).order("id", { ascending: true });
   if (error) throw error;
   return (data || []).map(applicantOut);
 }
@@ -79,7 +79,7 @@ export async function deleteApplicant(id) {
 }
 
 export async function fetchStudents() {
-  const { data, error } = await supabase.from("students").select("*").order("created_at", { ascending: true });
+  const { data, error } = await supabase.from("students").select("*").order("created_at", { ascending: true }).order("id", { ascending: true });
   if (error) throw error;
   return (data || []).map(studentOut);
 }
@@ -120,7 +120,7 @@ export async function deleteStudent(id) {
 // it, exactly like the applicationQuestions gap that broke Accept.
 const courseOut = (row) => ({ id: row.id, modules: [], applicationQuestions: [], ...row.data });
 export async function fetchCourses() {
-  const { data, error } = await supabase.from("courses").select("*").order("created_at", { ascending: true });
+  const { data, error } = await supabase.from("courses").select("*").order("created_at", { ascending: true }).order("id", { ascending: true });
   if (error) throw error;
   return (data || []).map(courseOut);
 }
@@ -142,7 +142,7 @@ export async function deleteCourse(id) {
 // nothing.
 const cohortOut = (row) => ({ id: row.id, courseIds: [], unlockedCourseIds: [], ...row.data });
 export async function fetchCohorts() {
-  const { data, error } = await supabase.from("cohorts").select("*").order("created_at", { ascending: true });
+  const { data, error } = await supabase.from("cohorts").select("*").order("created_at", { ascending: true }).order("id", { ascending: true });
   if (error) throw error;
   return (data || []).map(cohortOut);
 }
@@ -162,8 +162,13 @@ export async function deleteCohort(id) {
 // just a flat list of small objects the UI already treats as plain data,
 // so this reuses that exact pattern instead of inventing five new ones.
 const blobOut = (row) => ({ id: row.id, ...row.data });
+// Ordering by created_at alone left the order undefined (and inconsistent
+// between browsers/devices) whenever two or more rows shared the exact same
+// timestamp -- which several rows inserted by one SQL statement always do,
+// e.g. restoring the original testimonials/FAQs tonight. id is added as a
+// tiebreaker purely to make ties resolve the same way everywhere, every time.
 async function fetchBlobs(table) {
-  const { data, error } = await supabase.from(table).select("*").order("created_at", { ascending: true });
+  const { data, error } = await supabase.from(table).select("*").order("created_at", { ascending: true }).order("id", { ascending: true });
   if (error) throw error;
   return (data || []).map(blobOut);
 }
@@ -202,7 +207,7 @@ export async function upsertCommunityPost(p) { return upsertBlob("community_post
 // its thread (pairKey(a, b) from lib/data.js), and reads are grouped back
 // into the same { [threadKey]: [...messages] } shape the UI already uses.
 export async function fetchDirectMessages() {
-  const { data, error } = await supabase.from("direct_messages").select("*").order("created_at", { ascending: true });
+  const { data, error } = await supabase.from("direct_messages").select("*").order("created_at", { ascending: true }).order("id", { ascending: true });
   if (error) throw error;
   const grouped = {};
   (data || []).forEach((row) => { (grouped[row.thread_key] ||= []).push({ from: row.from_id, text: row.text }); });
