@@ -274,6 +274,7 @@ export function RichTextEditor({ value, onChange, minRows = 8 }) {
   const [slashMenu, setSlashMenu] = useState(null);
   const [linkMenu, setLinkMenu] = useState(null);
   const [linkUrl, setLinkUrl] = useState("");
+  const [imageUploading, setImageUploading] = useState(false);
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ heading: { levels: [1, 2, 3] } }), TextStyle, Color, FontSize, ImageFigure,
@@ -283,11 +284,26 @@ export function RichTextEditor({ value, onChange, minRows = 8 }) {
     onUpdate: ({ editor }) => { onChange(sanitizeHtml(editor.getHTML())); checkSlash(editor); },
     onSelectionUpdate: ({ editor }) => checkSlash(editor),
   });
-  function insertImage(file) {
+  // Uploads to real Storage and inserts a real URL, same fix as slide decks
+  // in storage.js -- embedding the picked file as a base64 "data:" src
+  // directly in the note's HTML made every module's saved size balloon by
+  // the full size of every image ever inserted into it (worse than the
+  // slide-deck case, since notes can hold several images each), so a course
+  // with many modules would hit the exact same slow-save/bloat problem this
+  // was meant to prevent.
+  const [imageError, setImageError] = useState("");
+  async function insertImage(file) {
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => { editor.chain().focus().insertContent({ type: "imageFigure", attrs: { src: reader.result, alt: "", caption: "" } }).run(); };
-    reader.readAsDataURL(file);
+    setImageUploading(true); setImageError("");
+    try {
+      const url = await uploadFile(file);
+      editor.chain().focus().insertContent({ type: "imageFigure", attrs: { src: url, alt: "", caption: "" } }).run();
+    } catch (err) {
+      console.error("image upload failed", err);
+      setImageError("Image upload failed — check your connection and try again.");
+    } finally {
+      setImageUploading(false);
+    }
   }
   useEffect(() => {
     if (editor && !editor.isFocused && value !== editor.getHTML()) editor.commands.setContent(value || "", false);
@@ -389,8 +405,9 @@ export function RichTextEditor({ value, onChange, minRows = 8 }) {
           <button type="button" onClick={() => stepFontSize(1)} className={btn} style={btnStyle(false)} title="Bigger text">A+</button>
         </div>
         <button type="button" onClick={openLinkMenu} className={btn} style={btnStyle(editor.isActive("link") || linkMenu)}>Link</button>
-        <button type="button" onClick={() => imageInputRef.current?.click()} className={btn} style={btnStyle(false)}>+ Image</button>
+        <button type="button" disabled={imageUploading} onClick={() => imageInputRef.current?.click()} className={btn} style={btnStyle(false)}>{imageUploading ? "Uploading…" : "+ Image"}</button>
         <input ref={imageInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => { insertImage(e.target.files?.[0]); e.target.value = ""; }} />
+        {imageError && <span className="text-[12px]" style={{ color: "#B04A3A" }}>{imageError}</span>}
       </div>
       {linkMenu && (
         <div className="flex items-center gap-2 mb-2 p-2 rounded-lg" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
@@ -495,8 +512,25 @@ export function FileField({ label, value, onChange, accept }) {
 export function TextArea({ label, ...props }) { return <label className="block">{label && <div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>{label}</div>}<textarea className="input-field rounded-lg px-3.5 py-2.5 resize-y leading-relaxed" rows={3} {...props} /></label>; }
 export function SelectF({ label, options, ...props }) { return <label className="block">{label && <div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>{label}</div>}<select className="input-field rounded-lg px-3.5 py-2.5" {...props}>{options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>; }
 export function ImgField({ label, value, onChange }) {
-  function pick(e) { const f = e.target.files?.[0]; if (f) { const r = new FileReader(); r.onload = () => onChange(r.result); r.readAsDataURL(f); } }
-  return <div><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>{label}</div><div className="flex items-center gap-3"><div className="rounded-lg overflow-hidden flex items-center justify-center shrink-0" style={{ width: 68, height: 68, background: "#F0E7D6" }}>{value ? <img src={value} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <FolderPlus size={20} color="#A79B84" />}</div><label className="btn-soft rounded-full px-4 py-2 text-[13px] cursor-pointer" style={{ fontWeight: 600 }}>Upload image<input type="file" accept="image/*" onChange={pick} style={{ display: "none" }} /></label></div></div>;
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  // Same fix as slide decks (storage.js) and rich-text images -- a course
+  // photo straight off a phone can be several MB, and embedding it as
+  // base64 bloated the course's saved size by that much every time.
+  async function pick(e) {
+    const f = e.target.files?.[0]; if (!f) return;
+    setUploading(true); setError("");
+    try {
+      const url = await uploadFile(f);
+      onChange(url);
+    } catch (err) {
+      console.error("image upload failed", err);
+      setError("Upload failed — check your connection and try again.");
+    } finally {
+      setUploading(false);
+    }
+  }
+  return <div><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>{label}</div><div className="flex items-center gap-3"><div className="rounded-lg overflow-hidden flex items-center justify-center shrink-0" style={{ width: 68, height: 68, background: "#F0E7D6" }}>{value ? <img src={value} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <FolderPlus size={20} color="#A79B84" />}</div><label className="btn-soft rounded-full px-4 py-2 text-[13px]" style={{ fontWeight: 600, cursor: uploading ? "default" : "pointer", opacity: uploading ? 0.7 : 1 }}>{uploading ? "Uploading…" : "Upload image"}<input type="file" accept="image/*" onChange={pick} style={{ display: "none" }} disabled={uploading} /></label>{error && <span className="text-[12px]" style={{ color: "#B04A3A" }}>{error}</span>}</div></div>;
 }
 // Shared shell for every sidebar+content dashboard screen (admin, and both
 // student dashboards). The sidebar was a fixed 250px column with no mobile
