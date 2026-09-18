@@ -39,9 +39,19 @@ export async function checkTeamInvite(email) {
 // actually carries a real session -- immediately if email confirmation is
 // off, or after they click the confirmation link if it's on.
 export async function signUpTeamMember({ name, email, password }) {
-  const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { name } } });
-  if (error) return { error: error.message };
-  return { error: null, hasSession: !!data.session };
+  try {
+    // Missing emailRedirectTo (unlike signUpApplicant, which always set
+    // this) meant that if the project requires confirming your email, the
+    // confirmation link fell back to whatever Site URL the Supabase
+    // project has configured -- not necessarily this deployment -- so it
+    // could land somewhere broken instead of bringing them back to sign
+    // in here.
+    const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin, data: { name } } });
+    if (error) return { error: error.message };
+    return { error: null, hasSession: !!data.session };
+  } catch {
+    return { error: "network" };
+  }
 }
 
 // A signed-in team member reading their own access -- null if the caller
