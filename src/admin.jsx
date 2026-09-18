@@ -362,24 +362,44 @@ export function AdminMeetingsTab({ courses, setCourses, cohorts }) {
     setDraft((d) => [...d, { id: "mt" + Date.now(), label: `Class ${d.length + 1}`, date: "", link: "", recordingLink: "", recordingFile: null, courseId: defaultCourse.id, moduleId: defaultCourse.modules[0]?.id }]);
   }
   // Delete is immediate — it drops the meeting from wherever it currently lives, no separate save needed.
+  // Only the course that actually contains this meeting gets a new object
+  // reference here -- every other course is returned completely unchanged
+  // (same reference). setCourses (syncCourses in App.jsx) decides what to
+  // save by comparing references, so returning a "new" object for every
+  // course in the roster -- even ones nothing happened to -- fired a
+  // needless save for every single one of them alongside the real one.
+  // With enough courses, that's a burst of simultaneous requests instead
+  // of one, and if any of the unrelated ones failed or got rate-limited,
+  // the real deletion could look like it silently didn't save, even
+  // though it went out fine.
   function removeMeeting(id) {
     setDraft((d) => d.filter((mt) => mt.id !== id));
-    setCourses((prev) => prev.map((c) => ({ ...c, modules: c.modules.map((m) => (m.meetings || []).some((x) => x.id === id) ? { ...m, meetings: m.meetings.filter((x) => x.id !== id) } : m) })));
+    setCourses((prev) => prev.map((c) => {
+      const hasIt = c.modules.some((m) => (m.meetings || []).some((x) => x.id === id));
+      if (!hasIt) return c;
+      return { ...c, modules: c.modules.map((m) => (m.meetings || []).some((x) => x.id === id) ? { ...m, meetings: m.meetings.filter((x) => x.id !== id) } : m) };
+    }));
   }
   // Saving one row removes it from wherever it's currently stored and (re)inserts it at its
   // chosen course/module — this is what lets a row's own module picker move it on save.
+  // Same "only touch what actually changed" fix as removeMeeting above.
   function saveMeeting(id) {
     const mt = draft.find((x) => x.id === id);
     if (!mt) return;
     const { courseId, moduleId, ...meetingFields } = mt;
-    setCourses((prev) => prev.map((c) => ({
-      ...c,
-      modules: c.modules.map((m) => {
-        const withoutThis = (m.meetings || []).filter((x) => x.id !== id);
-        if (c.id === courseId && m.id === moduleId) return { ...m, meetings: [...withoutThis, meetingFields] };
-        return withoutThis.length === (m.meetings || []).length ? m : { ...m, meetings: withoutThis };
-      }),
-    })));
+    setCourses((prev) => prev.map((c) => {
+      const hadIt = c.modules.some((m) => (m.meetings || []).some((x) => x.id === id));
+      const isDestination = c.id === courseId;
+      if (!hadIt && !isDestination) return c;
+      return {
+        ...c,
+        modules: c.modules.map((m) => {
+          const withoutThis = (m.meetings || []).filter((x) => x.id !== id);
+          if (c.id === courseId && m.id === moduleId) return { ...m, meetings: [...withoutThis, meetingFields] };
+          return withoutThis.length === (m.meetings || []).length ? m : { ...m, meetings: withoutThis };
+        }),
+      };
+    }));
     setSavedIds((s) => new Set(s).add(id));
     setTimeout(() => setSavedIds((s) => { const n = new Set(s); n.delete(id); return n; }), 2000);
   }
