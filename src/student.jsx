@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   Lock, CheckCircle2, Circle, ArrowRight, ArrowLeft, BookOpen, Users,
   MessageCircle, ListChecks, Settings, LogOut, Library, ChevronRight,
@@ -10,9 +10,34 @@ import {
 import { pairKey, moduleStatus, scoreSubmission, AUTO_APPROVE_THRESHOLD } from "./lib/data.js";
 import { SectionHeader, NotifBell, WelcomeTour, SidebarLink, LogoMark, Spine, TextArea, ProgressBar, ResourceDetail, Field, ChangePasswordCard, RichText, RichTextEditor, DashboardShell } from "./components.jsx";
 
+// Splits lecture notes into one section per top-level heading (H1/H2/H3) --
+// the same Heading button already in the notes editor, nothing new to mark.
+// Content before the first heading (or a module with no headings at all,
+// e.g. everything written before this existed) still comes through as a
+// single unlabeled section, so nothing that already worked stops working.
+function splitLectureSections(html) {
+  if (!html) return [];
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const sections = [];
+  let current = null;
+  doc.body.childNodes.forEach((node) => {
+    const isHeading = node.nodeType === 1 && /^H[1-3]$/.test(node.tagName);
+    if (isHeading) {
+      current = { heading: node.textContent.trim(), html: "" };
+      sections.push(current);
+    } else {
+      if (!current) { current = { heading: null, html: "" }; sections.push(current); }
+      current.html += node.nodeType === 1 ? node.outerHTML : (node.textContent || "");
+    }
+  });
+  return sections;
+}
+
 export function LessonView({ course, enrollment, updateEnrollment, onBack, onNext, moduleId }) {
   const [view, setView] = useState("lecture"); // "lecture" | "check" | "meetings"
   const [lectureStep, setLectureStep] = useState("brief"); // "brief" | "content" | "summary"
+  const [sectionIdx, setSectionIdx] = useState(0);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [answers, setAnswers] = useState({}); const [result, setResult] = useState(null); const [proof, setProof] = useState("");
   const currentIndex = Math.min(enrollment.completedModuleIds.length, course.modules.length - 1);
   const requestedIndex = moduleId != null ? course.modules.findIndex((m) => m.id === moduleId) : -1;
@@ -24,7 +49,18 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
   const hasNext = enrollment.completedModuleIds.length < course.modules.length;
   const pendingHere = enrollment.pendingReview?.moduleId === module.id;
 
-  useEffect(() => { setView("lecture"); setLectureStep(module.brief ? "brief" : "content"); setAnswers({}); setResult(null); setProof(""); setJustPassed(false); }, [module.id]);
+  useEffect(() => { setView("lecture"); setLectureStep(module.brief ? "brief" : "content"); setSectionIdx(0); setDrawerOpen(false); setAnswers({}); setResult(null); setProof(""); setJustPassed(false); }, [module.id]);
+  const sections = useMemo(() => {
+    const s = splitLectureSections(module.notes);
+    return s.length > 0 ? s : [{ heading: null, html: "" }];
+  }, [module.notes]);
+  const hasDeck = !!(module.slideUrl || module.slideFile);
+  const totalSteps = sections.length + (hasDeck ? 1 : 0);
+  const atDeck = hasDeck && sectionIdx === sections.length;
+  const showSectionNav = sections.length > 1 || hasDeck;
+  function goToSection(i) { setSectionIdx(Math.max(0, Math.min(totalSteps - 1, i))); setDrawerOpen(false); }
+  function nextSection() { if (sectionIdx < totalSteps - 1) goToSection(sectionIdx + 1); else setLectureStep("summary"); }
+  function backSection() { if (sectionIdx > 0) goToSection(sectionIdx - 1); else if (module.brief) setLectureStep("brief"); }
 
   function completeModule() { updateEnrollment({ completedModuleIds: [...new Set([...enrollment.completedModuleIds, module.id])] }); setJustPassed(true); }
   function submitQuiz() { let correct = 0; module.quiz.forEach((q, i) => { if (answers[i] === q.correct) correct++; }); const pct = Math.round((correct / module.quiz.length) * 100); setResult(pct); if (pct >= (module.passPct || 70)) completeModule(); }
@@ -63,17 +99,54 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
       )}
 
       {view === "lecture" && lectureStep === "content" && (
-        <div className="card rounded-2xl p-8">
-          <div className="f-label text-[11px] mb-3" style={{ color: "#A79B84" }}>{module.testType === "milestone" ? "PROJECT OVERVIEW" : "LECTURE NOTES"}</div>
-          <RichText html={module.notes || "Lecture content coming soon."} className="rich-content text-[15px] leading-relaxed mb-5" style={{ color: "#4A4237" }} />
-          <div className="flex items-center gap-3 mb-2 flex-wrap">
-            {module.videoUrl && <a href={module.videoUrl} target="_blank" rel="noreferrer" className="btn-soft rounded-full px-4 py-2 text-[13px] flex items-center gap-1.5" style={{ fontWeight: 700 }}><PlayCircle size={14} /> Watch lecture</a>}
-            {module.slideUrl && <a href={module.slideUrl} target="_blank" rel="noreferrer" className="btn-soft rounded-full px-4 py-2 text-[13px] flex items-center gap-1.5" style={{ fontWeight: 700 }}><FileText size={14} /> View slides</a>}
-            {module.slideFile && <a href={module.slideFile.dataUrl} download={module.slideFile.name} className="btn-soft rounded-full px-4 py-2 text-[13px] flex items-center gap-1.5" style={{ fontWeight: 700 }}><Download size={14} /> {module.slideFile.name}</a>}
-          </div>
-          <div className="flex items-center justify-between mt-6">
-            {module.brief ? <button onClick={() => setLectureStep("brief")} className="text-[13px]" style={{ color: "#A79B84" }}>Back</button> : <span />}
-            <button onClick={() => setLectureStep("summary")} className="btn-primary rounded-lg px-6 py-3 text-[14px] flex items-center gap-2">Next: Summary <ArrowRight size={15} /></button>
+        <div className="card rounded-2xl overflow-hidden">
+          {module.videoUrl && (
+            <div className="px-8 pt-6"><a href={module.videoUrl} target="_blank" rel="noreferrer" className="btn-soft rounded-full px-4 py-2 text-[13px] inline-flex items-center gap-1.5" style={{ fontWeight: 700 }}><PlayCircle size={14} /> Watch lecture</a></div>
+          )}
+          <div className={showSectionNav ? "md:flex" : ""}>
+            {showSectionNav && (
+              <div className="md:w-[220px] shrink-0 md:border-r" style={{ borderColor: "#E7DEC9" }}>
+                <button onClick={() => setDrawerOpen((s) => !s)} className="md:hidden w-full flex items-center justify-between px-5 py-3.5 text-[13px]" style={{ background: "#F0E7D6", color: "var(--accent)", fontWeight: 700 }}>
+                  <span>Sections — {atDeck ? "slide deck" : `${sectionIdx + 1} of ${sections.length}`}</span>
+                  <ChevronDown size={14} style={{ transform: drawerOpen ? "rotate(180deg)" : "none", transition: "transform .15s ease" }} />
+                </button>
+                <div className={`${drawerOpen ? "flex" : "hidden"} md:flex flex-col gap-0.5 p-3.5`}>
+                  {sections.map((s, i) => (
+                    <button key={i} onClick={() => goToSection(i)} className="text-left text-[13.5px] px-3 py-2 rounded-lg flex items-center gap-2" style={{ background: !atDeck && i === sectionIdx ? "#F0E7D6" : "transparent", color: !atDeck && i === sectionIdx ? "var(--accent)" : "#71675A", fontWeight: !atDeck && i === sectionIdx ? 700 : 400 }}>
+                      <span style={{ width: 6, height: 6, borderRadius: 99, background: !atDeck && i <= sectionIdx ? "var(--accent)" : "#E7DEC9", flexShrink: 0 }} />
+                      {s.heading || `Part ${i + 1}`}
+                    </button>
+                  ))}
+                  {hasDeck && (
+                    <button onClick={() => goToSection(sections.length)} className="text-left text-[13.5px] px-3 py-2 rounded-lg mt-1.5 pt-2.5 flex items-center gap-2" style={{ borderTop: "1px dashed #E7DEC9", background: atDeck ? "#F0E7D6" : "transparent", color: atDeck ? "var(--accent)" : "#71675A", fontWeight: atDeck ? 700 : 400 }}>
+                      <span style={{ width: 6, height: 6, borderRadius: 99, background: atDeck ? "var(--accent)" : "#E7DEC9", flexShrink: 0 }} /> Slide deck
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+            <div className="flex-1 p-8">
+              {!atDeck ? (
+                <>
+                  <div className="f-label text-[11px] mb-3" style={{ color: "#A79B84" }}>{module.testType === "milestone" ? "PROJECT OVERVIEW" : "LECTURE NOTES"}</div>
+                  {sections[sectionIdx]?.heading && <div className="f-display text-[20px] mb-3" style={{ fontWeight: 800 }}>{sections[sectionIdx].heading}</div>}
+                  <RichText html={sections[sectionIdx]?.html || "Lecture content coming soon."} className="rich-content text-[15px] leading-relaxed mb-5" style={{ color: "#4A4237" }} />
+                </>
+              ) : (
+                <>
+                  <div className="f-label text-[11px] mb-3" style={{ color: "#A79B84" }}>SLIDE DECK</div>
+                  {module.slideDescription && <p className="text-[15px] leading-relaxed mb-5" style={{ color: "#4A4237", whiteSpace: "pre-wrap" }}>{module.slideDescription}</p>}
+                  <div className="flex items-center gap-3 flex-wrap">
+                    {module.slideUrl && <a href={module.slideUrl} target="_blank" rel="noreferrer" className="btn-primary rounded-lg px-5 py-2.5 text-[14px] flex items-center gap-1.5" style={{ fontWeight: 700 }}><FileText size={14} /> View slides</a>}
+                    {module.slideFile && <a href={module.slideFile.dataUrl} download={module.slideFile.name} className="btn-primary rounded-lg px-5 py-2.5 text-[14px] flex items-center gap-1.5" style={{ fontWeight: 700 }}><Download size={14} /> Download {module.slideFile.name}</a>}
+                  </div>
+                </>
+              )}
+              <div className="flex items-center justify-between mt-6">
+                {(sectionIdx > 0 || module.brief) ? <button onClick={backSection} className="text-[13px]" style={{ color: "#A79B84" }}>Back</button> : <span />}
+                <button onClick={nextSection} className="btn-primary rounded-lg px-6 py-3 text-[14px] flex items-center gap-2">{sectionIdx === totalSteps - 1 ? "Next: Summary" : "Next"} <ArrowRight size={15} /></button>
+              </div>
+            </div>
           </div>
         </div>
       )}

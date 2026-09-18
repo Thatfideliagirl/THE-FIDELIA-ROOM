@@ -168,6 +168,7 @@ export function ModuleEditor({ course, module, setCourses, onBack }) {
   const [title, setTitle] = useState(module.title); const [brief, setBrief] = useState(module.brief || "");
   const [notes, setNotes] = useState(module.notes || ""); const [videoUrl, setVideoUrl] = useState(module.videoUrl || ""); const [slideUrl, setSlideUrl] = useState(module.slideUrl || "");
   const [slideFile, setSlideFile] = useState(module.slideFile || null);
+  const [slideDescription, setSlideDescription] = useState(module.slideDescription || "");
   const [summary, setSummary] = useState(module.summary || "");
   const [testType, setTestType] = useState(module.testType); const [passPct, setPassPct] = useState(module.passPct || 70);
   const [proofType, setProofType] = useState(module.proofType || "text"); const [markingGuide, setMarkingGuide] = useState(module.markingGuide || "");
@@ -178,7 +179,7 @@ export function ModuleEditor({ course, module, setCourses, onBack }) {
   function updateQ(i, field, value) { setQuiz((q) => q.map((item, idx) => idx !== i ? item : { ...item, [field]: value })); }
   function updateOpt(qi, oi, value) { setQuiz((q) => q.map((item, idx) => idx !== qi ? item : { ...item, options: item.options.map((o, oidx) => oidx === oi ? value : o) })); }
   function removeQ(i) { setQuiz((q) => q.filter((_, idx) => idx !== i)); }
-  function save() { setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, modules: c.modules.map((m) => m.id !== module.id ? m : { ...m, title, brief, notes, summary, videoUrl, slideUrl, slideFile, testType, passPct: Number(passPct), proofType, markingGuide, questionPrompt, quiz, meetings }) })); onBack(); }
+  function save() { setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, modules: c.modules.map((m) => m.id !== module.id ? m : { ...m, title, brief, notes, summary, videoUrl, slideUrl, slideFile, slideDescription, testType, passPct: Number(passPct), proofType, markingGuide, questionPrompt, quiz, meetings }) })); onBack(); }
   return (
     <div>
       <button onClick={onBack} className="flex items-center gap-1.5 text-[13px] mb-6" style={{ color: "#71675A" }}><ArrowLeft size={14} /> Back to {course.title}</button>
@@ -189,6 +190,7 @@ export function ModuleEditor({ course, module, setCourses, onBack }) {
         <div><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Lecture notes</div><RichTextEditor value={notes} onChange={setNotes} minRows={12} /></div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Field label="Video link (max ~50MB if uploading elsewhere)" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://…" /><Field label="Slide deck link (optional if uploading a file below)" value={slideUrl} onChange={(e) => setSlideUrl(e.target.value)} placeholder="https://…" /></div>
         <FileField label="Or upload a slide deck file (PDF, PPT, etc.)" value={slideFile} onChange={setSlideFile} accept=".pdf,.ppt,.pptx,.key" />
+        {(slideUrl || slideFile) && <TextArea label="Description shown to students on the slide-deck step (optional)" value={slideDescription} onChange={(e) => setSlideDescription(e.target.value)} rows={2} placeholder="e.g. Slides from this week's session — the checklist and examples we reviewed together." />}
       </div>
 
       <div className="card rounded-2xl p-7 flex flex-col gap-4 mb-6">
