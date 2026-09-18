@@ -273,7 +273,14 @@ export default function App() {
       // and immediately get replaced. While handling a recovery link, every
       // auth event is ignored here; only the explicit "Continue" button
       // after a successful save is allowed to route them onward.
-      if (isRecoveryLink) return;
+      // "INITIAL_SESSION" fires immediately on subscribing, carrying the
+      // exact same session the explicit getSession() call above already
+      // handles -- reacting to it too ran the whole loadForSession flow
+      // (two fetches, one navigation decision) twice on every page load,
+      // and could momentarily land a freshly-signed-up applicant on
+      // "account not found" before their own submit flow's insert had a
+      // chance to land.
+      if (isRecoveryLink || event === "INITIAL_SESSION") return;
       loadForSession(session);
     }) || { data: null };
     return () => listener?.subscription.unsubscribe();
@@ -365,6 +372,12 @@ export default function App() {
       sendWelcomeEmail({ email: rest.email, name: rest.name, courseName: courses.find((c) => c.id === rest.courseId)?.title || "your course" });
       return null;
     } catch (e) {
+      // A unique-violation here (code 23505) means a matching pending
+      // application already exists -- most likely a double-click on
+      // Submit racing itself. That application already went through
+      // correctly, so this isn't a real failure worth showing an error
+      // for; it just quietly stops here instead of leaving a second copy.
+      if (e?.code === "23505") return null;
       console.error("submitApplication failed", e);
       return "Couldn't reach the server — check your connection and try again.";
     }
