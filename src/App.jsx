@@ -238,7 +238,7 @@ export default function App() {
     try { await deleteResource(id); } catch (e) { console.error("deleteResource failed", e); }
   }
 
-  async function loadForSession(session) {
+  async function loadForSession(session, isFreshSignIn = false) {
     if (!session) { setStudents([]); setApplicants([]); setCurrentAuthUserId(null); return; }
     setCurrentAuthUserId(session.user.id);
     const [studs, apps] = await Promise.all([fetchStudents(), fetchApplicants()]);
@@ -256,7 +256,13 @@ export default function App() {
         setTeamAccess(access); setTeamViewMode("admin");
         if (myStudent) setActiveStudent(myStudent);
         setPage("adminDash");
-        logActivity("Signed in");
+        // loadForSession runs on plenty of things that aren't a real sign-in
+        // (restoring the session on a page reload, a background token
+        // refresh every ~50 minutes while the tab stays open) -- logging on
+        // every call turned one real sign-in into three or four entries.
+        // Only a genuine SIGNED_IN event (or a fresh team sign-up, which
+        // calls this with isFreshSignIn itself) counts as one.
+        if (isFreshSignIn) logActivity("Signed in");
         return;
       }
     } catch (e) { console.error("getMyTeamAccess failed", e); }
@@ -297,7 +303,7 @@ export default function App() {
       // "account not found" before their own submit flow's insert had a
       // chance to land.
       if (isRecoveryLink || event === "INITIAL_SESSION") return;
-      loadForSession(session);
+      loadForSession(session, event === "SIGNED_IN");
     }) || { data: null };
     return () => listener?.subscription.unsubscribe();
   }, []);
@@ -342,7 +348,7 @@ export default function App() {
     const { error, hasSession } = await signUpTeamMember({ name: teamName, email: teamEmail.trim(), password: teamPassword });
     setTeamSubmitting(false);
     if (error) { setTeamError(error.toLowerCase().includes("already registered") ? "That email already has an account — try signing in instead." : error); return; }
-    if (hasSession) { supabase.auth.getSession().then(({ data }) => loadForSession(data.session)); }
+    if (hasSession) { supabase.auth.getSession().then(({ data }) => loadForSession(data.session, true)); }
     else { setTeamAwaitingConfirm(true); }
   }
   async function handleForgotPassword(email) { const { error } = await sendPasswordReset(email); return error; }
@@ -510,7 +516,16 @@ export default function App() {
                 <>
                   <p className="text-[13px]" style={{ color: "#71675A" }}>Enter the email address you were invited with.</p>
                   <Field label="Email" value={teamEmail} onChange={(e) => setTeamEmail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submitTeamEmail()} />
-                  {teamError && <div className="text-[13px]" style={{ color: "#B04A3A" }}>{teamError}</div>}
+                  {teamError && (
+                    <div className="text-[13px]" style={{ color: "#B04A3A" }}>
+                      {teamError}
+                      {teamError.includes("hasn't been invited") && (
+                        <div className="mt-2">
+                          <button onClick={() => setPage("landing")} className="text-[13px]" style={{ color: "var(--accent)", fontWeight: 700, textDecoration: "underline" }}>Not meant to be here? Go to the sign-up page instead →</button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <button disabled={teamChecking} onClick={submitTeamEmail} className="btn-primary rounded-lg py-3 text-[15px]">{teamChecking ? "Checking…" : "Continue"}</button>
                 </>
               ) : (
