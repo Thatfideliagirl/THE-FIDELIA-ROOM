@@ -422,7 +422,13 @@ export default function App() {
       return null;
     } catch (e) {
       console.error("acceptApplicant failed", e);
-      return "Couldn't accept this applicant — check your connection and try again.";
+      // PGRST116 = .single() matched zero (or more than one) row -- the
+      // browser's own copy of this applicant is stale (e.g. it was already
+      // accepted, or removed by the duplicate-cleanup) and a plain refetch
+      // fixes it, which is a different, better message than "check your
+      // connection" for something that was never a network problem.
+      if (e?.code === "PGRST116") return "This application has changed since you loaded the page — refresh and try again.";
+      return e?.message ? `Couldn't accept this applicant: ${e.message}` : "Couldn't accept this applicant — check your connection and try again.";
     }
   }
   function redeemCode(enrollmentId) { syncStudents((prev) => prev.map((s) => s.id !== activeStudent.id ? s : { ...s, enrollments: s.enrollments.map((e) => e.id === enrollmentId ? { ...e, status: "active" } : e) })); }
