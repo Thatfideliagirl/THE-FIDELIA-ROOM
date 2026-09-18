@@ -156,7 +156,18 @@ export function scoreSubmission(text, markingGuide) {
   return { pct: Math.round((matched.length / guideWords.length) * 100), matched, missed, total: guideWords.length };
 }
 export function genCode() { const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; let out = "FJ-"; for (let i = 0; i < 5; i++) out += chars[Math.floor(Math.random() * chars.length)]; return out; }
-export function nextStudentId(students) { return `FJ/2026/${String(students.length + 1).padStart(3, "0")}`; }
+// Based on the highest student code actually in use, not students.length --
+// counting rows breaks the instant anyone's ever been deleted (a gap in the
+// list means the "next" count collides with a code that's still taken),
+// which is exactly what caused "duplicate key value violates unique
+// constraint students_student_code_key" on Accept.
+export function nextStudentId(students) {
+  const maxNum = students.reduce((max, s) => {
+    const m = /^FJ\/2026\/(\d+)$/.exec(s.studentId || "");
+    return m ? Math.max(max, Number(m[1])) : max;
+  }, 0);
+  return `FJ/2026/${String(maxNum + 1).padStart(3, "0")}`;
+}
 export function moduleStatus(course, enrollment, moduleId) {
   const ids = course.modules.map((m) => m.id);
   const idx = ids.indexOf(moduleId);
