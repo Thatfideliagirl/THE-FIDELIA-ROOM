@@ -111,7 +111,14 @@ export async function deleteStudent(id) {
 // (nested modules, quizzes, meetings) already lives in this exact form
 // throughout the app, so this is just giving that same object a place to
 // persist instead of reinventing it as columns.
-const courseOut = (row) => ({ id: row.id, ...row.data });
+// modules/applicationQuestions default to [] before the real data spreads
+// over them -- dozens of places across the app read course.modules.* or
+// course.applicationQuestions.* directly with no fallback of their own
+// (matching how a real course, created through the app, always has both).
+// A course missing either one -- from before this default existed, or
+// touched some other way -- would otherwise crash whatever screen reads
+// it, exactly like the applicationQuestions gap that broke Accept.
+const courseOut = (row) => ({ id: row.id, modules: [], applicationQuestions: [], ...row.data });
 export async function fetchCourses() {
   const { data, error } = await supabase.from("courses").select("*").order("created_at", { ascending: true });
   if (error) throw error;
@@ -125,7 +132,11 @@ export async function upsertCourse(course) {
 }
 
 // Cohorts follow the same opaque-jsonb-blob pattern as courses.
-const cohortOut = (row) => ({ id: row.id, ...row.data });
+// Same reasoning as courseOut above -- courseIds/unlockedCourseIds get read
+// with .map/.includes directly (no per-call-site fallback) in several
+// places, so a cohort missing either would crash rather than just show
+// nothing.
+const cohortOut = (row) => ({ id: row.id, courseIds: [], unlockedCourseIds: [], ...row.data });
 export async function fetchCohorts() {
   const { data, error } = await supabase.from("cohorts").select("*").order("created_at", { ascending: true });
   if (error) throw error;
