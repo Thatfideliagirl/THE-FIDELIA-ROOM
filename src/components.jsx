@@ -13,10 +13,11 @@ import { moduleStatus } from "./lib/data.js";
 import { changePassword } from "./lib/auth.js";
 import { uploadFile } from "./lib/storage.js";
 import { useEditor, EditorContent, NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
-import { Node as TiptapNode } from "@tiptap/core";
+import { Node as TiptapNode, Extension as TiptapExtension } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import TextStyle from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
+import Link from "@tiptap/extension-link";
 
 // lucide-react dropped trademarked brand marks — small inline stand-ins so the footer keeps working.
 export function Instagram({ size = 16, color = "currentColor" }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="1" fill={color} stroke="none" /></svg>; }
@@ -76,15 +77,24 @@ export function Field({ label, ...props }) { return <label className="block">{la
 // only see rendered later. Stores real HTML. Old plain-text notes still
 // display fine, since plain text with no tags in it renders identically as
 // "HTML" with none of the elements a browser would treat as markup.
-const ALLOWED_TAGS = new Set(["B", "STRONG", "I", "EM", "U", "H1", "H2", "H3", "UL", "OL", "LI", "P", "DIV", "BR", "BLOCKQUOTE", "SPAN", "IMG", "FIGURE", "FIGCAPTION"]);
-// The color picker's only output is a single "color: <value>" declaration
-// on a <span> -- anything else in a style attribute (including a second
-// declaration smuggled in after a semicolon) is rejected outright rather
-// than trimmed, so there's no partial-sanitization gap to exploit. Both
-// forms are allowed because the browser itself rewrites a hex value like
-// "#cc3355" to "rgb(204, 51, 85)" when the attribute is read back, so a
-// hex-only pattern silently stripped every real color a user picked.
-const SAFE_COLOR_STYLE = /^color:\s*(#[0-9a-fA-F]{3,8}|rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\))$/;
+const ALLOWED_TAGS = new Set(["B", "STRONG", "I", "EM", "U", "H1", "H2", "H3", "UL", "OL", "LI", "P", "DIV", "BR", "BLOCKQUOTE", "SPAN", "IMG", "FIGURE", "FIGCAPTION", "A"]);
+// Each style attribute (on a text span or an image figure) is split into
+// individual declarations and rebuilt from only these patterns -- so two
+// safe declarations together (a font size AND a color on the same run of
+// text, which now happens routinely) survive, while anything not on this
+// list -- including a third, unrecognized declaration smuggled in next to
+// a real one -- is dropped rather than letting one bad entry void the
+// whole attribute or, worse, let something unsafe through with it. Color
+// allows both hex and rgb() because the browser itself rewrites a picked
+// hex value to rgb() when the attribute is read back.
+const SAFE_STYLE_PATTERNS = [
+  /^color:\s*(#[0-9a-fA-F]{3,8}|rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\))$/,
+  /^font-size:\s*\d{1,3}px$/,
+  /^width:\s*(100|[1-9]?[0-9])%$/,
+];
+function sanitizeStyle(style) {
+  return (style || "").split(";").map((d) => d.trim()).filter((d) => d && SAFE_STYLE_PATTERNS.some((p) => p.test(d))).join("; ");
+}
 function sanitizeHtml(html) {
   const doc = new DOMParser().parseFromString(html || "", "text/html");
   (function clean(node) {
@@ -101,12 +111,29 @@ function sanitizeHtml(html) {
         if (/^(data:image\/|https?:\/\/)/i.test(src)) { child.setAttribute("src", src); if (alt) child.setAttribute("alt", alt); }
         else { child.remove(); return; }
       } else if (child.tagName === "FIGURE") {
+        const safeStyle = sanitizeStyle(child.getAttribute("style"));
         [...child.attributes].forEach((a) => child.removeAttribute(a.name));
         child.setAttribute("class", "rt-figure");
+        if (safeStyle) child.setAttribute("style", safeStyle);
       } else if (child.tagName === "SPAN") {
-        const style = (child.getAttribute("style") || "").trim().replace(/;$/, "");
+        const safeStyle = sanitizeStyle(child.getAttribute("style"));
         [...child.attributes].forEach((a) => child.removeAttribute(a.name));
-        if (SAFE_COLOR_STYLE.test(style)) child.setAttribute("style", style);
+        if (safeStyle) child.setAttribute("style", safeStyle);
+      } else if (child.tagName === "A") {
+        // Only a real http(s)/mailto link survives -- anything else
+        // (javascript:, data:, etc.) is a real XSS vector on a clickable
+        // element, so the link wrapper is dropped and just the text stays.
+        const href = child.getAttribute("href") || "";
+        [...child.attributes].forEach((a) => child.removeAttribute(a.name));
+        if (/^(https?:\/\/|mailto:)/i.test(href)) {
+          child.setAttribute("href", href);
+          child.setAttribute("target", "_blank");
+          child.setAttribute("rel", "noopener noreferrer");
+        } else {
+          const text = document.createTextNode(child.textContent);
+          node.replaceChild(text, child);
+          return;
+        }
       } else {
         [...child.attributes].forEach((a) => child.removeAttribute(a.name));
       }
@@ -115,6 +142,34 @@ function sanitizeHtml(html) {
   })(doc.body);
   return doc.body.innerHTML;
 }
+// Tiptap has no official font-size extension -- this follows the same
+// shape @tiptap/extension-color uses (a global attribute riding on the
+// existing textStyle mark), so both a color and a size can live on the
+// same span instead of needing two separate marks.
+const FontSize = TiptapExtension.create({
+  name: "fontSize",
+  addOptions() { return { types: ["textStyle"] }; },
+  addGlobalAttributes() {
+    return [{
+      types: this.options.types,
+      attributes: {
+        fontSize: {
+          default: null,
+          parseHTML: (el) => el.style.fontSize || null,
+          renderHTML: (attrs) => attrs.fontSize ? { style: `font-size: ${attrs.fontSize}` } : {},
+        },
+      },
+    }];
+  },
+  addCommands() {
+    return {
+      setFontSize: (size) => ({ chain }) => chain().setMark("textStyle", { fontSize: size }).run(),
+      unsetFontSize: () => ({ chain }) => chain().setMark("textStyle", { fontSize: null }).run(),
+    };
+  },
+});
+const FONT_SIZES = [12, 14, 16, 18, 20, 24, 28, 32, 36, 40, 48];
+const IMAGE_WIDTHS = ["30%", "50%", "70%", "100%"];
 // A custom atom node (image + optional caption) instead of the plain Tiptap
 // Image extension -- the caption needs its own editable field attached to
 // the image, which a plain <img> attribute can't provide.
@@ -136,6 +191,7 @@ const ImageFigure = TiptapNode.create({
       src: { default: null, renderHTML: () => ({}) },
       alt: { default: "", renderHTML: () => ({}) },
       caption: { default: "", renderHTML: () => ({}) },
+      width: { default: null, renderHTML: () => ({}) },
     };
   },
   parseHTML() {
@@ -145,21 +201,56 @@ const ImageFigure = TiptapNode.create({
         src: el.querySelector("img")?.getAttribute("src") || null,
         alt: el.querySelector("img")?.getAttribute("alt") || "",
         caption: el.querySelector("figcaption")?.textContent || "",
+        width: el.style.width || null,
       }),
     }];
   },
   renderHTML({ node }) {
-    const { src, alt, caption } = node.attrs;
-    return ["figure", { class: "rt-figure" }, ["img", { src, alt: alt || "" }], ...(caption ? [["figcaption", {}, caption]] : [])];
+    const { src, alt, caption, width } = node.attrs;
+    return ["figure", { class: "rt-figure", ...(width ? { style: `width: ${width}` } : {}) }, ["img", { src, alt: alt || "" }], ...(caption ? [["figcaption", {}, caption]] : [])];
   },
   addNodeView() {
     return ReactNodeViewRenderer(ImageFigureView);
   },
 });
-function ImageFigureView({ node, updateAttributes, selected }) {
+// Tapping the image itself toggles a small overlay (delete + resize) via
+// plain local state, not ProseMirror's own node selection -- selectable is
+// still false above, for the same reason it always was (see the comment
+// there), so this can't reintroduce the click-then-type bug that made
+// images selectable in the first place.
+function ImageFigureView({ node, updateAttributes, deleteNode }) {
+  const [active, setActive] = useState(false);
+  const wrapRef = useRef(null);
+  useEffect(() => {
+    if (!active) return;
+    function onDocClick(e) { if (wrapRef.current && !wrapRef.current.contains(e.target)) setActive(false); }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [active]);
+  function resize(dir) {
+    const current = IMAGE_WIDTHS.includes(node.attrs.width) ? IMAGE_WIDTHS.indexOf(node.attrs.width) : IMAGE_WIDTHS.length - 1;
+    const next = Math.max(0, Math.min(IMAGE_WIDTHS.length - 1, current + dir));
+    updateAttributes({ width: IMAGE_WIDTHS[next] });
+  }
+  const iconBtn = { width: 26, height: 26, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(38,32,25,.75)", color: "#fff", border: "none", cursor: "pointer" };
   return (
-    <NodeViewWrapper className="rt-figure" style={{ margin: "16px 0", outline: selected ? "2px solid var(--accent)" : "none", borderRadius: 10 }}>
-      <img src={node.attrs.src} alt={node.attrs.alt || ""} style={{ maxWidth: "100%", maxHeight: 420, borderRadius: 10, display: "block" }} />
+    <NodeViewWrapper ref={wrapRef} className="rt-figure" contentEditable={false} style={{ margin: "16px 0", width: node.attrs.width || "100%" }}>
+      <div style={{ position: "relative" }}>
+        <img
+          src={node.attrs.src} alt={node.attrs.alt || ""}
+          onClick={() => setActive((a) => !a)}
+          style={{ width: "100%", maxHeight: 420, objectFit: "contain", borderRadius: 10, display: "block", outline: active ? "2px solid var(--accent)" : "none", cursor: "pointer" }}
+        />
+        {active && (
+          <>
+            <button type="button" onClick={() => deleteNode()} title="Remove image" style={{ ...iconBtn, position: "absolute", top: 8, right: 8 }}>×</button>
+            <div style={{ position: "absolute", bottom: 8, left: 8, display: "flex", gap: 4 }}>
+              <button type="button" onClick={() => resize(-1)} title="Smaller" disabled={node.attrs.width === IMAGE_WIDTHS[0]} style={{ ...iconBtn, opacity: node.attrs.width === IMAGE_WIDTHS[0] ? 0.4 : 1 }}>−</button>
+              <button type="button" onClick={() => resize(1)} title="Bigger" disabled={!node.attrs.width || node.attrs.width === IMAGE_WIDTHS[IMAGE_WIDTHS.length - 1]} style={{ ...iconBtn, opacity: (!node.attrs.width || node.attrs.width === IMAGE_WIDTHS[IMAGE_WIDTHS.length - 1]) ? 0.4 : 1 }}>+</button>
+            </div>
+          </>
+        )}
+      </div>
       <input
         value={node.attrs.caption || ""}
         onChange={(e) => updateAttributes({ caption: e.target.value })}
@@ -181,8 +272,13 @@ export function RichTextEditor({ value, onChange, minRows = 8 }) {
   const wrapRef = useRef(null);
   const imageInputRef = useRef(null);
   const [slashMenu, setSlashMenu] = useState(null);
+  const [linkMenu, setLinkMenu] = useState(null);
+  const [linkUrl, setLinkUrl] = useState("");
   const editor = useEditor({
-    extensions: [StarterKit.configure({ heading: { levels: [1, 2, 3] } }), TextStyle, Color, ImageFigure],
+    extensions: [
+      StarterKit.configure({ heading: { levels: [1, 2, 3] } }), TextStyle, Color, FontSize, ImageFigure,
+      Link.configure({ openOnClick: false, autolink: false, HTMLAttributes: { target: "_blank", rel: "noopener noreferrer" } }),
+    ],
     content: value || "",
     onUpdate: ({ editor }) => { onChange(sanitizeHtml(editor.getHTML())); checkSlash(editor); },
     onSelectionUpdate: ({ editor }) => checkSlash(editor),
@@ -227,6 +323,29 @@ export function RichTextEditor({ value, onChange, minRows = 8 }) {
     setSlashMenu(null);
     imageInputRef.current?.click();
   }
+  // Highlight text, click Link, paste a URL -- exactly the Google Docs
+  // flow. Needs a real selection to attach the link mark to; opening it
+  // with the cursor collapsed (nothing highlighted) would silently do
+  // nothing on Apply, so that case gets a short message instead of the
+  // URL field.
+  function openLinkMenu() {
+    setLinkUrl(editor.getAttributes("link").href || "");
+    setLinkMenu((open) => !open);
+  }
+  function applyLink() {
+    const url = linkUrl.trim();
+    if (!url) { editor.chain().focus().extendMarkRange("link").unsetLink().run(); setLinkMenu(false); return; }
+    const href = /^(https?:\/\/|mailto:)/i.test(url) ? url : `https://${url}`;
+    editor.chain().focus().extendMarkRange("link").setLink({ href }).run();
+    setLinkMenu(false);
+  }
+  function removeLink() { editor.chain().focus().extendMarkRange("link").unsetLink().run(); setLinkMenu(false); }
+  function stepFontSize(dir) {
+    const current = parseInt(editor.getAttributes("textStyle").fontSize, 10) || 16;
+    const idx = FONT_SIZES.reduce((closest, s, i) => Math.abs(s - current) < Math.abs(FONT_SIZES[closest] - current) ? i : closest, 0);
+    const next = FONT_SIZES[Math.max(0, Math.min(FONT_SIZES.length - 1, idx + dir))];
+    editor.chain().focus().setFontSize(`${next}px`).run();
+  }
   const slashOptions = [
     { label: "Heading 1", chain: (c) => c.toggleHeading({ level: 1 }) },
     { label: "Heading 2", chain: (c) => c.toggleHeading({ level: 2 }) },
@@ -258,9 +377,38 @@ export function RichTextEditor({ value, onChange, minRows = 8 }) {
           <input type="color" value={editor.getAttributes("textStyle").color || "#262019"} onChange={(e) => editor.chain().focus().setColor(e.target.value).run()} style={{ width: 16, height: 16, padding: 0, border: "none", background: "none", cursor: "pointer" }} />
         </label>
         {editor.getAttributes("textStyle").color && <button type="button" onClick={() => editor.chain().focus().unsetColor().run()} className={btn} style={btnStyle(false)}>Clear color</button>}
+        <div className="flex items-center gap-0.5">
+          <button type="button" onClick={() => stepFontSize(-1)} className={btn} style={btnStyle(false)} title="Smaller text">A−</button>
+          <select
+            value={parseInt(editor.getAttributes("textStyle").fontSize, 10) || 16}
+            onChange={(e) => editor.chain().focus().setFontSize(`${e.target.value}px`).run()}
+            className={btn} style={{ ...btnStyle(false), padding: "5px 2px" }}
+          >
+            {FONT_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <button type="button" onClick={() => stepFontSize(1)} className={btn} style={btnStyle(false)} title="Bigger text">A+</button>
+        </div>
+        <button type="button" onClick={openLinkMenu} className={btn} style={btnStyle(editor.isActive("link") || linkMenu)}>Link</button>
         <button type="button" onClick={() => imageInputRef.current?.click()} className={btn} style={btnStyle(false)}>+ Image</button>
         <input ref={imageInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => { insertImage(e.target.files?.[0]); e.target.value = ""; }} />
       </div>
+      {linkMenu && (
+        <div className="flex items-center gap-2 mb-2 p-2 rounded-lg" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
+          {editor.state.selection.empty && !editor.isActive("link") ? (
+            <span className="text-[12px]" style={{ color: "#A79B84" }}>Highlight some text first, then add a link.</span>
+          ) : (
+            <>
+              <input
+                autoFocus value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} placeholder="https://…"
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); applyLink(); } if (e.key === "Escape") setLinkMenu(false); }}
+                className="input-field rounded px-2.5 py-1.5 text-[13px]" style={{ flex: 1 }}
+              />
+              <button type="button" onClick={applyLink} className={btn} style={btnStyle(true)}>Apply</button>
+              {editor.isActive("link") && <button type="button" onClick={removeLink} className={btn} style={btnStyle(false)}>Remove</button>}
+            </>
+          )}
+        </div>
+      )}
       <EditorContent editor={editor} className="input-field rich-content rounded-lg px-3.5 py-2.5" style={{ minHeight: minRows * 22 }} onKeyDown={(e) => { if (e.key === "Escape") setSlashMenu(null); }} />
       {slashMenu && (
         <div style={{ position: "absolute", top: slashMenu.top, left: slashMenu.left, zIndex: 50, background: "#fff", border: "1px solid #E7DEC9", borderRadius: 10, boxShadow: "0 14px 30px -10px rgba(0,0,0,.25)", minWidth: 160, overflow: "hidden" }}>
