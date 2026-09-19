@@ -622,7 +622,13 @@ export function TasksTab({ tasks, setTasks, students, courses }) {
 }
 
 export function ResourceForm({ courses, initial, onSave, onClose }) {
-  const [category, setCategory] = useState(initial?.category || "module"); const [folder, setFolder] = useState(initial?.folder || ""); const [title, setTitle] = useState(initial?.title || ""); const [description, setDescription] = useState(initial?.description || ""); const [type, setType] = useState(initial?.type || "Doc"); const [url, setUrl] = useState(initial?.url || ""); const [file, setFile] = useState(initial?.file || null); const [kind, setKind] = useState(initial?.kind || "link"); const [visibility, setVisibility] = useState(initial?.visibility || "course"); const [courseId, setCourseId] = useState(initial?.courseId || courses[0]?.id);
+  // "category" only ever existed as this form's own way of asking "should
+  // this be public" -- it was never actually saved (only isPublic was), so
+  // reopening an existing resource to edit anything else about it always
+  // reset this dropdown to "Module resource" regardless of its real status,
+  // and saving from there would silently un-publish a resource that was
+  // meant to stay public.
+  const [category, setCategory] = useState(initial ? (initial.isPublic ? "free" : "module") : "module"); const [folder, setFolder] = useState(initial?.folder || ""); const [title, setTitle] = useState(initial?.title || ""); const [description, setDescription] = useState(initial?.description || ""); const [type, setType] = useState(initial?.type || "Doc"); const [url, setUrl] = useState(initial?.url || ""); const [file, setFile] = useState(initial?.file || null); const [kind, setKind] = useState(initial?.kind || "link"); const [visibility, setVisibility] = useState(initial?.visibility || "course"); const [courseId, setCourseId] = useState(initial?.courseId || courses[0]?.id);
   const [saving, setSaving] = useState(false); const [error, setError] = useState("");
   const isPublic = category === "free";
   const canSave = folder && title && (kind === "file" ? file : url);
