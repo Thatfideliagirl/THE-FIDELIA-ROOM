@@ -272,7 +272,20 @@ export default function App() {
         if (isFreshSignIn) logActivity("Signed in");
         return;
       }
-    } catch (e) { console.error("getMyTeamAccess failed", e); }
+    } catch (e) {
+      console.error("getMyTeamAccess failed", e);
+      // loadForSession re-runs on a background token refresh (~every 50 min
+      // while the tab stays open) as well as a real sign-in -- if this one
+      // call fails transiently (a network blip, not an actual access
+      // change), falling through to the student/applicant checks below
+      // would misclassify an already-signed-in team member as having no
+      // account at all and land them on "Account Not Found" mid-session,
+      // wiping out whatever they were doing. A genuine sign-in still falls
+      // through to work out where they land; a background refresh just
+      // leaves them exactly where they already are and tries again next
+      // time one fires, instead of forcing them off the page they're on.
+      if (!isFreshSignIn) return;
+    }
     if (myStudent) { setActiveStudent(myStudent); setPage("studentDash"); return; }
     const myApplicant = [...apps].reverse().find((a) => a.email.toLowerCase() === email.toLowerCase());
     if (myApplicant) { setActiveApplicant(myApplicant); setPage(myApplicant.status === "pending" ? "inReview" : "landing"); return; }
