@@ -47,7 +47,7 @@ function splitLectureSections(html) {
   return sections;
 }
 
-export function LessonView({ course, enrollment, updateEnrollment, onBack, onNext, moduleId }) {
+export function LessonView({ course, enrollment, updateEnrollment, onBack, onNext, moduleId, justApproved, onAcknowledgeApproval }) {
   const [view, setView] = useState("lecture"); // "lecture" | "check" | "meetings"
   const [lectureStep, setLectureStep] = useState("brief"); // "brief" | "content" | "summary"
   const [sectionIdx, setSectionIdx] = useState(0);
@@ -63,7 +63,7 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
   const hasNext = enrollment.completedModuleIds.length < course.modules.length;
   const pendingHere = enrollment.pendingReview?.moduleId === module.id;
 
-  useEffect(() => { setView("lecture"); setLectureStep(module.brief ? "brief" : "content"); setSectionIdx(0); setDrawerOpen(false); setAnswers({}); setResult(null); setProof(""); setJustPassed(false); }, [module.id]);
+  useEffect(() => { setView("lecture"); setLectureStep(module.brief ? "brief" : "content"); setSectionIdx(0); setDrawerOpen(false); setAnswers({}); setResult(null); setProof(""); setJustPassed(!!justApproved); }, [module.id]);
   const sections = useMemo(() => {
     const s = splitLectureSections(module.notes);
     return s.length > 0 ? s : [{ heading: null, html: "" }];
@@ -89,7 +89,7 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
       <CheckCircle2 size={48} color="var(--accent)" className="mb-5" />
       <div className="f-display text-[28px] mb-3" style={{ fontWeight: 800 }}>Well done — you passed!</div>
       <div className="text-[15px] mb-8" style={{ color: "#71675A" }}>{hasNext ? "The next module is unlocked." : "That was the last module — nicely done."}</div>
-      <div className="flex gap-3">{hasNext && <button onClick={() => onNext ? onNext() : setJustPassed(false)} className="btn-primary rounded-full px-7 py-3.5 text-[15px]" style={{ fontWeight: 700 }}>Continue to next module</button>}<button onClick={onBack} className="btn-ghost rounded-full px-7 py-3.5 text-[15px]">Back to your path</button></div>
+      <div className="flex gap-3">{hasNext && <button onClick={() => { if (justApproved) onAcknowledgeApproval?.(); onNext ? onNext() : setJustPassed(false); }} className="btn-primary rounded-full px-7 py-3.5 text-[15px]" style={{ fontWeight: 700 }}>Continue to next module</button>}<button onClick={() => { if (justApproved) onAcknowledgeApproval?.(); onBack(); }} className="btn-ghost rounded-full px-7 py-3.5 text-[15px]">Back to your path</button></div>
     </div>
   );
   const tabs = [
@@ -280,7 +280,28 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
             <div className="card rounded-2xl p-8"><div className="f-label text-[12px] mb-6" style={{ color: "#71675A" }}>YOUR PATH</div><Spine course={course} enrollment={enrollment} onOpen={(id) => setOpenModuleId(id)} /></div>
           </>
         )}
-        {tab === "path" && openModuleId !== null && <LessonView course={course} enrollment={enrollment} updateEnrollment={updateEnrollment} onBack={() => setOpenModuleId(null)} onNext={() => setOpenModuleId(course.modules[enrollment.completedModuleIds.length]?.id ?? null)} moduleId={openModuleId} />}
+        {tab === "path" && openModuleId !== null && (() => {
+          // A module reviewed and approved by an admin in a separate session
+          // never triggers the in-session "well done" screen below (that only
+          // fires for a submission judged the instant it's made) -- the
+          // student would otherwise have to notice on their own that a
+          // module quietly unlocked. Reusing the same notifSeen id as the
+          // bell notification means this shows exactly once, right when they
+          // open that module, and never again once acknowledged.
+          const openMod = course.modules.find((m) => m.id === openModuleId);
+          const approvalNotifId = `modapproved-${enrollment.id}-${openModuleId}`;
+          const justApproved = !!openMod && enrollment.completedModuleIds.includes(openModuleId) && ["written", "file-upload", "milestone"].includes(openMod.testType) && !notifSeen.includes(approvalNotifId);
+          return (
+            <LessonView
+              course={course} enrollment={enrollment} updateEnrollment={updateEnrollment}
+              onBack={() => setOpenModuleId(null)}
+              onNext={() => setOpenModuleId(course.modules[enrollment.completedModuleIds.length]?.id ?? null)}
+              moduleId={openModuleId}
+              justApproved={justApproved}
+              onAcknowledgeApproval={() => onMarkSeen([approvalNotifId])}
+            />
+          );
+        })()}
 
         {tab === "meetings" && (() => {
           const now = Date.now();

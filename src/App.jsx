@@ -458,6 +458,21 @@ export default function App() {
   const studentNotifItems = liveStudent ? [
     ...tasks.filter((t) => t.assigned.includes(liveStudent.id) && !t.submissions[liveStudent.id]).map((t) => ({ id: `assigned-${t.id}`, t: `You've been assigned a new task: "${t.title}"` })),
     ...tasks.filter((t) => t.assigned.includes(liveStudent.id)).flatMap((t) => { const sub = t.submissions[liveStudent.id]; return sub && sub.status === "approved" ? [{ id: `grade-${t.id}`, t: `Your task "${t.title}" was reviewed — ${sub.score}%` }] : []; }),
+    // A written/file-upload/milestone submission reviewed by an admin never
+    // gave the student any feedback at all -- unlike an auto-graded quick
+    // check, which shows "well done" the instant it passes, this happened in
+    // a separate admin session with nobody there to see it. modapproved- is
+    // also what LessonView checks (same notifSeen id) to show that same
+    // "well done, continue" screen the first time they open the module.
+    ...liveStudent.enrollments.flatMap((e) => {
+      const course = courses.find((c) => c.id === e.courseId);
+      if (!course) return [];
+      return e.completedModuleIds.flatMap((mid) => {
+        const mod = course.modules.find((m) => m.id === mid);
+        if (!mod || !["written", "file-upload", "milestone"].includes(mod.testType)) return [];
+        return [{ id: `modapproved-${e.id}-${mid}`, t: `Your submission for "${mod.title}" was approved — the next module is unlocked` }];
+      });
+    }),
     ...liveStudent.enrollments.filter((e) => e.certificateReady).map((e) => ({ id: `cert-${e.id}`, t: "Your certificate is ready to download" })),
   ] : [];
 
