@@ -627,7 +627,13 @@ export function ResourceForm({ courses, initial, onSave, onClose }) {
   const isPublic = category === "free";
   const canSave = folder && title && (kind === "file" ? file : url);
   async function submit() {
-    if (!canSave) return;
+    // Silently doing nothing when a required field was empty (no error, no
+    // "saving" state) looked exactly like a successful save that just
+    // didn't stick -- there was nothing here to tell you otherwise.
+    if (!canSave) {
+      setError(!folder ? "Folder name is required." : !title ? "Resource title is required." : kind === "file" ? "Please upload a file." : "Please add a link.");
+      return;
+    }
     setSaving(true); setError("");
     const err = await onSave({ courseId, folder, title, description, type, url, file, kind, visibility: category === "free" ? "all" : visibility, isPublic });
     setSaving(false);
