@@ -22,14 +22,28 @@ function splitLectureSections(html) {
   let current = null;
   doc.body.childNodes.forEach((node) => {
     const isHeading = node.nodeType === 1 && /^H[1-3]$/.test(node.tagName);
-    if (isHeading) {
-      current = { heading: node.textContent.trim(), html: "" };
+    const headingText = isHeading ? node.textContent.trim() : "";
+    // A heading-styled line with no actual text isn't a real section break --
+    // just a blank line the editor happens to have left in "Heading" format
+    // (easy to leave behind, invisible to the eye) -- so it's folded into
+    // whatever section it landed in instead of starting a new, empty one.
+    if (isHeading && headingText) {
+      current = { heading: headingText, html: "" };
       sections.push(current);
     } else {
       if (!current) { current = { heading: null, html: "" }; sections.push(current); }
-      current.html += node.nodeType === 1 ? node.outerHTML : (node.textContent || "");
+      if (!(isHeading && !headingText)) current.html += node.nodeType === 1 ? node.outerHTML : (node.textContent || "");
     }
   });
+  // Drop trailing sections that end up with nothing real in them -- e.g.
+  // stray empty paragraphs left after the last real heading.
+  while (sections.length > 1) {
+    const last = sections[sections.length - 1];
+    const hasMedia = /<img|<iframe|<video/.test(last.html);
+    const hasText = last.html.replace(/<[^>]*>/g, "").trim().length > 0;
+    if (last.heading || hasMedia || hasText) break;
+    sections.pop();
+  }
   return sections;
 }
 
