@@ -260,16 +260,20 @@ export default function App() {
     try {
       const access = await getMyTeamAccess();
       if (access) {
-        setTeamAccess(access); setTeamViewMode("admin");
+        setTeamAccess(access);
         if (myStudent) setActiveStudent(myStudent);
         setPage("adminDash");
         // loadForSession runs on plenty of things that aren't a real sign-in
         // (restoring the session on a page reload, a background token
-        // refresh every ~50 minutes while the tab stays open) -- logging on
-        // every call turned one real sign-in into three or four entries.
-        // Only a genuine SIGNED_IN event (or a fresh team sign-up, which
-        // calls this with isFreshSignIn itself) counts as one.
-        if (isFreshSignIn) logActivity("Signed in");
+        // refresh every ~50 minutes while the tab stays open). Only a
+        // genuine SIGNED_IN event (or a fresh team sign-up, which calls this
+        // with isFreshSignIn itself) counts as a real sign-in: logging on
+        // every call turned one real sign-in into three or four entries, and
+        // forcing teamViewMode back to "admin" on every call meant a team
+        // member who deliberately switched to student view got silently
+        // switched back the next time a background refresh fired, whether
+        // they wanted that or not.
+        if (isFreshSignIn) { setTeamViewMode("admin"); logActivity("Signed in"); }
         return;
       }
     } catch (e) {
