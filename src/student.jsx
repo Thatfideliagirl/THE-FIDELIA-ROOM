@@ -10,24 +10,38 @@ import {
 import { pairKey, moduleStatus, scoreSubmission, AUTO_APPROVE_THRESHOLD } from "./lib/data.js";
 import { SectionHeader, NotifBell, WelcomeTour, SidebarLink, LogoMark, Spine, TextArea, ProgressBar, ResourceDetail, Field, ChangePasswordCard, RichText, RichTextEditor, DashboardShell } from "./components.jsx";
 
-// Splits lecture notes into one section per top-level heading (H1/H2/H3) --
-// the same Heading button already in the notes editor, nothing new to mark.
-// Content before the first heading (or a module with no headings at all,
-// e.g. everything written before this existed) still comes through as a
-// single unlabeled section, so nothing that already worked stops working.
+// Splits lecture notes into one section per heading -- but only at whichever
+// heading level (H1 biggest, H3 smallest) is actually the main structure of
+// THIS lecture, not every level at once. Notes aren't always numbered
+// consistently -- "1.1, 1.2" in one module, "Section 1" in another, H1 in
+// one place and H3 in the next -- so rather than guessing at a numbering
+// pattern, the biggest heading level actually present is treated as "start
+// a new section"; anything smaller is a sub-heading inside that section,
+// not a break of its own. A module using only one level (most of them, so
+// far) behaves exactly as before. Content before the first heading (or a
+// module with no headings at all, e.g. everything written before this
+// existed) still comes through as a single unlabeled section.
 function splitLectureSections(html) {
   if (!html) return [];
   const doc = new DOMParser().parseFromString(html, "text/html");
+  const nodes = Array.from(doc.body.childNodes);
+  let primaryLevel = null;
+  nodes.forEach((node) => {
+    if (node.nodeType !== 1 || !/^H[1-3]$/.test(node.tagName) || !node.textContent.trim()) return;
+    const level = Number(node.tagName[1]);
+    if (primaryLevel === null || level < primaryLevel) primaryLevel = level;
+  });
   const sections = [];
   let current = null;
-  doc.body.childNodes.forEach((node) => {
+  nodes.forEach((node) => {
     const isHeading = node.nodeType === 1 && /^H[1-3]$/.test(node.tagName);
     const headingText = isHeading ? node.textContent.trim() : "";
     // A heading-styled line with no actual text isn't a real section break --
     // just a blank line the editor happens to have left in "Heading" format
     // (easy to leave behind, invisible to the eye) -- so it's folded into
     // whatever section it landed in instead of starting a new, empty one.
-    if (isHeading && headingText) {
+    const isSectionBreak = isHeading && headingText && Number(node.tagName[1]) === primaryLevel;
+    if (isSectionBreak) {
       current = { heading: headingText, html: "" };
       sections.push(current);
     } else {
