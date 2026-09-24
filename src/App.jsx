@@ -32,9 +32,14 @@ const isExpiredAuthLink = typeof window !== "undefined" && (window.location.hash
 // admin's Team tab), separate from the normal student sign-up flow, which
 // asks course-application questions that don't apply to a teammate.
 const isTeamSignupLink = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("team") === "1";
+// A single shareable link straight to the public Resource Library, so it
+// can be posted anywhere without pointing at any one person's own copied
+// link for a single resource (that's what ?r=<id> is for -- this is the
+// whole library page instead).
+const isLibraryLink = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("library") === "1";
 
 export default function App() {
-  const [page, setPage] = useState(() => (isRecoveryLink ? "resetPassword" : isExpiredAuthLink ? "linkExpired" : isTeamSignupLink ? "teamSignup" : "landing"));
+  const [page, setPage] = useState(() => (isRecoveryLink ? "resetPassword" : isExpiredAuthLink ? "linkExpired" : isTeamSignupLink ? "teamSignup" : isLibraryLink ? "resources" : "landing"));
   const [presetCourseId, setPresetCourseId] = useState(null);
   const [viewCourseId, setViewCourseId] = useState(null);
   const [applyingAsExisting, setApplyingAsExisting] = useState(null);
