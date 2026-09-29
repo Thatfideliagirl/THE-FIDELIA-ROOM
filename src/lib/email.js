@@ -17,6 +17,17 @@ async function send(templateId, params) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ service_id: SERVICE_ID, template_id: templateId, user_id: PUBLIC_KEY, template_params: params }),
+      // Every caller fires this right after already switching the screen
+      // (to "check your email" or "in review") -- a completely normal
+      // moment for someone to immediately close the tab or switch apps,
+      // especially on mobile. Without keepalive, the browser is free to
+      // cancel this in-flight request the instant the page unloads, before
+      // it ever reaches EmailJS -- which looks exactly like "nothing was
+      // ever sent" (confirmed against EmailJS's own history: zero record
+      // of the attempt, not even a failed one). keepalive lets the request
+      // finish in the background even if the page is gone, same as
+      // navigator.sendBeacon is built for.
+      keepalive: true,
     });
     if (!res.ok) console.error("EmailJS send failed", res.status, await res.text());
   } catch (e) {
