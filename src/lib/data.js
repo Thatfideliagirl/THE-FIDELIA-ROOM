@@ -128,6 +128,26 @@ export const seedResources = [
   { id: "r3", courseId: "va", folder: "Free downloads", title: "Weekly Planning Template", description: "Plan your working week in one page, built for VA workloads.", type: "Doc", url: "https://docs.google.com", file: null, kind: "link", visibility: "all", isPublic: true },
 ];
 
+// Shared between the admin task builder and the student submission screen --
+// each required link a task can ask for, with a pattern that only checks the
+// URL's shape (is this actually a Trello/Notion/Canva/Google Doc address),
+// never whether the page itself loads. A real "is this page still live"
+// check would need a server, not the browser, and even then a private or
+// deleted board on these platforms typically still returns a normal-looking
+// login page rather than a clear error -- so the honest, reliable version
+// of "verify it" is confirming the link's shape plus a one-click preview,
+// not a false promise that the system checked the page really exists.
+export const LINK_TYPES = [
+  { key: "gdoc", label: "Google Doc", placeholder: "https://docs.google.com/document/…", test: (u) => /docs\.google\.com/.test(u) },
+  { key: "gsheet", label: "Google Sheet", placeholder: "https://docs.google.com/spreadsheets/…", test: (u) => /docs\.google\.com\/spreadsheets/.test(u) },
+  { key: "gslides", label: "Google Slides", placeholder: "https://docs.google.com/presentation/…", test: (u) => /docs\.google\.com\/presentation/.test(u) },
+  { key: "canva", label: "Canva", placeholder: "https://www.canva.com/design/…", test: (u) => /canva\.com/.test(u) },
+  { key: "notion", label: "Notion", placeholder: "https://www.notion.so/…", test: (u) => /notion\.(so|site)/.test(u) },
+  { key: "trello", label: "Trello", placeholder: "https://trello.com/b/…", test: (u) => /trello\.com/.test(u) },
+  { key: "figma", label: "Figma", placeholder: "https://www.figma.com/file/…", test: (u) => /figma\.com/.test(u) },
+  { key: "other", label: "Other link", placeholder: "https://…", test: (u) => /^https?:\/\/.+/.test(u) },
+];
+
 export const seedTasks = [
   { id: "t1", courseId: "va", title: "Reach out to 3 potential clients", description: "Send a short, genuine intro message to 3 people in your network.", tools: "LinkedIn or WhatsApp, your intro template from Module 6", proofType: "link", dueInDays: 7, assigned: [], submissions: {} },
   { id: "t2", courseId: "va", title: "Set up your calendar tool", description: "Have a working Calendly (or similar) link ready.", tools: "Calendly, Google Calendar", proofType: "link", dueInDays: 3, assigned: [], submissions: {} },

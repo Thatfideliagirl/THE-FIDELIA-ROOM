@@ -7,7 +7,7 @@ import {
   UserCircle, FolderPlus, Folder, UploadCloud, ClipboardCheck, HelpCircle as HelpIcon,
   Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Compass, Home, Repeat
 } from "lucide-react";
-import { pairKey, moduleStatus, scoreSubmission, AUTO_APPROVE_THRESHOLD } from "./lib/data.js";
+import { pairKey, moduleStatus, scoreSubmission, AUTO_APPROVE_THRESHOLD, LINK_TYPES } from "./lib/data.js";
 import { SectionHeader, NotifBell, WelcomeTour, SidebarLink, LogoMark, Spine, TextArea, ProgressBar, ResourceDetail, Field, ChangePasswordCard, RichText, RichTextEditor, DashboardShell } from "./components.jsx";
 
 // Splits lecture notes into one section per heading -- but only at whichever
@@ -367,7 +367,7 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
           {viewingResourceId && <ResourceDetail resource={resources.find((r) => r.id === viewingResourceId)} onClose={() => setViewingResourceId(null)} />}
         </>}
 
-        {tab === "tasks" && (openTask ? <TaskDetailStudent task={openTask} student={student} allStudents={allStudents} setTasks={setTasks} onBack={() => setOpenTaskId(null)} /> : <><SectionHeader eyebrow="ASSIGNED TO YOU" title="Tasks" />{myTasks.length === 0 && <div className="text-[15px]" style={{ color: "#A79B84" }}>No tasks assigned yet.</div>}<div className="flex flex-col gap-3">{myTasks.map((t) => { const sub = t.submissions[student.id]; return <button key={t.id} onClick={() => setOpenTaskId(t.id)} className="card card-pop rounded-xl p-5 text-left"><div className="flex items-center justify-between mb-1.5"><div className="text-[16px]" style={{ fontWeight: 700 }}>{t.title}</div>{sub ? <span className="f-code text-[10px] px-2.5 py-1 rounded-full tint-badge">{sub.status.toUpperCase()}</span> : <span className="f-code text-[10px] flex items-center gap-1" style={{ color: "#A79B84" }}><Clock size={11} /> {t.dueInDays}D LEFT</span>}</div><div className="text-[14px]" style={{ color: "#71675A" }}>{t.description}</div></button>; })}</div></>)}
+        {tab === "tasks" && (openTask ? <TaskDetailStudent task={openTask} student={student} allStudents={allStudents} setTasks={setTasks} onBack={() => setOpenTaskId(null)} /> : <><SectionHeader eyebrow="ASSIGNED TO YOU" title="Tasks" />{myTasks.length === 0 && <div className="text-[15px]" style={{ color: "#A79B84" }}>No tasks assigned yet.</div>}<div className="flex flex-col gap-3">{myTasks.map((t) => { const sub = t.submissions[student.id]; return <button key={t.id} onClick={() => setOpenTaskId(t.id)} className="card card-pop rounded-xl p-5 text-left"><div className="flex items-center justify-between mb-1.5"><div className="text-[16px]" style={{ fontWeight: 700 }}>{t.title}</div>{sub ? <span className="f-code text-[10px] px-2.5 py-1 rounded-full tint-badge">{sub.status.toUpperCase()}</span> : t.deadlineAt && Date.now() > new Date(t.deadlineAt).getTime() ? <span className="f-code text-[10px] flex items-center gap-1" style={{ color: "#B04A3A" }}><Clock size={11} /> CLOSED</span> : <span className="f-code text-[10px] flex items-center gap-1" style={{ color: "#A79B84" }}><Clock size={11} /> {t.deadlineAt ? new Date(t.deadlineAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : `${t.dueInDays}D LEFT`}</span>}</div><div className="text-[14px]" style={{ color: "#71675A" }}>{t.description}</div></button>; })}</div></>)}
 
         {tab === "certificate" && <><SectionHeader eyebrow="YOUR ACHIEVEMENT" title="Certificate" />{enrollment.certificateReady && enrollment.certificateFile ? <div className="card rounded-2xl p-10 text-center" style={{ background: "linear-gradient(155deg, color-mix(in srgb, var(--accent) 16%, white), #F0E7D6)" }}><Award size={40} color="var(--accent)" className="mx-auto mb-4" /><div className="f-display text-[22px] mb-2" style={{ fontWeight: 800 }}>Certificate of Completion</div><div className="text-[14px] mb-6" style={{ color: "#4A4237" }}>{course.title} — issued to {student.name}</div><a href={enrollment.certificateFile} download className="btn-primary rounded-full px-6 py-3 text-[14px] inline-block">Download certificate</a></div> : <div className="card rounded-2xl p-10 text-center"><Award size={32} color="#C9BFAE" className="mx-auto mb-3" /><div className="text-[15px]" style={{ color: "#A79B84" }}>Not yet available — finish all modules and it will be issued here.</div></div>}</>}
 
@@ -393,7 +393,27 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
 }
 export function TaskDetailStudent({ task, student, allStudents, setTasks, onBack }) {
   const [note, setNote] = useState(""); const sub = task.submissions[student.id];
-  function submit() { if (!note.trim()) return; setTasks((prev) => prev.map((t) => t.id !== task.id ? t : { ...t, submissions: { ...t.submissions, [student.id]: { status: "in review", note, score: null } } })); }
+  const hasLinks = task.requiredLinks?.length > 0;
+  // One entry per required link, keyed by its position in task.requiredLinks
+  // (stable for a saved task -- rows aren't reordered after students start
+  // seeing them). Each gets checked against that link type's own pattern as
+  // the student types, same rule the admin side previews when building it.
+  const [links, setLinks] = useState(() => (task.requiredLinks || []).map(() => ""));
+  const isPastDeadline = task.deadlineAt ? Date.now() > new Date(task.deadlineAt).getTime() : false;
+  function submit() {
+    if (isPastDeadline) return;
+    if (hasLinks) {
+      const linksObj = {}; links.forEach((v, i) => { linksObj[i] = v; });
+      setTasks((prev) => prev.map((t) => t.id !== task.id ? t : { ...t, submissions: { ...t.submissions, [student.id]: { status: "in review", links: linksObj, note: "", score: null } } }));
+    } else {
+      if (!note.trim()) return;
+      setTasks((prev) => prev.map((t) => t.id !== task.id ? t : { ...t, submissions: { ...t.submissions, [student.id]: { status: "in review", note, score: null } } }));
+    }
+  }
+  const allLinksValid = hasLinks && task.requiredLinks.every((r, i) => {
+    const type = LINK_TYPES.find((t) => t.key === r.type);
+    return type && type.test(links[i] || "");
+  });
   const others = task.assigned.filter((id) => id !== student.id).map((id) => allStudents.find((s) => s.id === id)?.name).filter(Boolean);
   const proofLabel = { link: "a link", image: "an image link", document: "a document link", text: "a written answer" }[task.proofType] || "your proof";
   return (
@@ -403,10 +423,48 @@ export function TaskDetailStudent({ task, student, allStudents, setTasks, onBack
         <div className="f-display text-[23px] mb-2" style={{ fontWeight: 800 }}>{task.title}</div>
         <div className="text-[15px] mb-4" style={{ color: "#4A4237" }}>{task.description}</div>
         {task.tools && <div className="text-[14px] mb-2" style={{ color: "#71675A" }}><strong>Tools:</strong> {task.tools}</div>}
-        <div className="text-[14px] mb-2" style={{ color: "#71675A" }}><strong>Submit:</strong> {proofLabel}</div>
-        <div className="f-code text-[11px] mb-1 flex items-center gap-1.5" style={{ color: "#A79B84" }}><Clock size={11} /> DUE IN {task.dueInDays} DAYS</div>
+        {!hasLinks && <div className="text-[14px] mb-2" style={{ color: "#71675A" }}><strong>Submit:</strong> {proofLabel}</div>}
+        {task.deadlineAt ? (
+          <div className="f-code text-[11px] mb-1 flex items-center gap-1.5" style={{ color: isPastDeadline ? "#B04A3A" : "#A79B84" }}><Clock size={11} /> {isPastDeadline ? "CLOSED" : "CLOSES"} {new Date(task.deadlineAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</div>
+        ) : (
+          <div className="f-code text-[11px] mb-1 flex items-center gap-1.5" style={{ color: "#A79B84" }}><Clock size={11} /> DUE IN {task.dueInDays} DAYS</div>
+        )}
         {others.length > 0 && <div className="text-[13px] mb-6" style={{ color: "#A79B84" }}>Also assigned to: {others.join(", ")}</div>}
-        {sub ? <div className="rounded-xl p-4 mt-2" style={{ background: "#FAF6EC" }}><span className="f-code text-[10px] tint-badge px-2.5 py-1 rounded-full">{sub.status.toUpperCase()}{sub.score != null ? ` · ${sub.score}%` : ""}</span><div className="text-[14px] mt-3" style={{ color: "#4A4237" }}>{sub.note}</div></div> : <div className="mt-4"><TextArea label={`Provide ${proofLabel}`} value={note} onChange={(e) => setNote(e.target.value)} /><button onClick={submit} className="btn-primary rounded-lg px-5 py-2.5 text-[14px] mt-3 flex items-center gap-1.5"><UploadCloud size={14} /> Submit</button></div>}
+        {sub ? (
+          <div className="rounded-xl p-4 mt-2" style={{ background: "#FAF6EC" }}>
+            <span className="f-code text-[10px] tint-badge px-2.5 py-1 rounded-full">{sub.status.toUpperCase()}{sub.score != null ? ` · ${sub.score}%` : ""}</span>
+            {sub.links ? (
+              <div className="flex flex-col gap-1.5 mt-3">{task.requiredLinks.map((r, i) => sub.links[i] && <a key={i} href={sub.links[i]} target="_blank" rel="noreferrer" className="text-[13.5px] accent-text flex items-center gap-1.5" style={{ fontWeight: 700 }}>{r.label || r.type} ↗</a>)}</div>
+            ) : <div className="text-[14px] mt-3" style={{ color: "#4A4237" }}>{sub.note}</div>}
+          </div>
+        ) : isPastDeadline ? (
+          <div className="rounded-xl p-4 mt-2 flex items-start gap-2.5" style={{ background: "#FBEAE7", color: "#B04A3A" }}>
+            <Clock size={15} style={{ marginTop: 1, flexShrink: 0 }} />
+            <span className="text-[13.5px]">This task closed on {new Date(task.deadlineAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}. Submission is no longer possible.</span>
+          </div>
+        ) : hasLinks ? (
+          <div className="mt-4 flex flex-col gap-3">
+            {task.requiredLinks.map((r, i) => {
+              const type = LINK_TYPES.find((t) => t.key === r.type);
+              const value = links[i] || "";
+              const filled = value.trim().length > 0;
+              const valid = filled && type?.test(value);
+              return (
+                <div key={i}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="f-label text-[11px]" style={{ color: "#71675A" }}>{(r.label || type?.label || "Link").toUpperCase()}</span>
+                    <span className="f-code text-[10px] px-2 py-0.5 rounded-full" style={{ background: !filled ? "#F0E7D6" : valid ? "#E4F3E9" : "#FBEAE7", color: !filled ? "#A79B84" : valid ? "#2F7D4F" : "#B04A3A" }}>{!filled ? "NOT FILLED" : valid ? "✓ LOOKS RIGHT" : `NOT A ${type?.label?.toUpperCase()} LINK`}</span>
+                  </div>
+                  <input className="input-field rounded-lg px-3.5 py-2.5 text-[14px] w-full" placeholder={type?.placeholder} value={value} onChange={(e) => setLinks((prev) => prev.map((v, idx) => idx === i ? e.target.value : v))} />
+                  {valid && <a href={value} target="_blank" rel="noreferrer" className="text-[12px] accent-text mt-1 inline-flex items-center gap-1" style={{ fontWeight: 700 }}>Preview ↗</a>}
+                </div>
+              );
+            })}
+            <button disabled={!allLinksValid} onClick={submit} className="btn-primary rounded-lg px-5 py-2.5 text-[14px] mt-1 flex items-center gap-1.5 self-start"><UploadCloud size={14} /> Submit</button>
+          </div>
+        ) : (
+          <div className="mt-4"><TextArea label={`Provide ${proofLabel}`} value={note} onChange={(e) => setNote(e.target.value)} /><button onClick={submit} className="btn-primary rounded-lg px-5 py-2.5 text-[14px] mt-3 flex items-center gap-1.5"><UploadCloud size={14} /> Submit</button></div>
+        )}
       </div>
     </div>
   );

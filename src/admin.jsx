@@ -8,7 +8,7 @@ import {
   Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Home, UserCog, Repeat
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from "recharts";
-import { genCode, pairKey, ADMIN_EMAIL, TEAM_PERMISSION_TABS } from "./lib/data.js";
+import { genCode, pairKey, ADMIN_EMAIL, TEAM_PERMISSION_TABS, LINK_TYPES } from "./lib/data.js";
 import { Field, SectionHeader, NotifBell, SidebarLink, LogoMark, TextArea, SelectF, ImgField, FileField, ChangePasswordCard, RichTextEditor, RichText, DashboardShell, WelcomeTour, TEAM_TOUR_STEPS } from "./components.jsx";
 import { CommunityPanel } from "./student.jsx";
 import { fetchTeamMembers, addTeamMember, updateTeamMember, removeTeamMember, fetchTeamActivity, updateMyTeamProfile, markTourSeen } from "./lib/team.js";
@@ -564,50 +564,118 @@ export function StudentsTab({ students, setStudents, onRemove, applicants, cours
   );
 }
 
-export function TaskForm({ students, courses, initial, onSave, onClose }) {
+export function TaskForm({ students, courses, cohorts, initial, onSave, onClose }) {
   const [title, setTitle] = useState(initial?.title || ""); const [description, setDescription] = useState(initial?.description || ""); const [tools, setTools] = useState(initial?.tools || ""); const [dueInDays, setDueInDays] = useState(initial?.dueInDays || 7); const [proofType, setProofType] = useState(initial?.proofType || "link");
   const [courseId, setCourseId] = useState(initial?.courseId || courses[0]?.id); const [assigned, setAssigned] = useState(initial?.assigned || []);
+  // cohortId "all" keeps the original behavior exactly -- pick people by
+  // hand for this course. Any real cohort switches to auto-assign: every
+  // enrolled student in that course+cohort, no picking names one by one.
+  const [cohortId, setCohortId] = useState(initial?.cohortId || "all");
+  const [deadlineAt, setDeadlineAt] = useState(initial?.deadlineAt || "");
+  // Empty means "old style" -- one proof field (proofType below), same as
+  // every task before this. Adding a row switches to requiring each of
+  // these specific links instead.
+  const [requiredLinks, setRequiredLinks] = useState(initial?.requiredLinks || []);
   function toggle(id) { setAssigned((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]); }
   const eligible = students.filter((s) => s.enrollments.some((e) => e.courseId === courseId));
+  const cohortEligible = cohortId === "all" ? eligible : eligible.filter((s) => s.cohortId === cohortId);
+  const effectiveAssigned = cohortId === "all" ? assigned : cohortEligible.map((s) => s.id);
+  function addLinkRow() {
+    const used = new Set(requiredLinks.map((r) => r.type));
+    const next = LINK_TYPES.find((t) => !used.has(t.key)) || LINK_TYPES[0];
+    setRequiredLinks((prev) => [...prev, { type: next.key, label: next.label }]);
+  }
+  function updateLinkRow(i, patch) { setRequiredLinks((prev) => prev.map((r, idx) => idx === i ? { ...r, ...patch } : r)); }
+  function removeLinkRow(i) { setRequiredLinks((prev) => prev.filter((_, idx) => idx !== i)); }
   return (
     <div className="card rounded-xl p-6 mb-6 flex flex-col gap-3">
       <Field label="Task title" value={title} onChange={(e) => setTitle(e.target.value)} />
-      <TextArea label="Full description" value={description} onChange={(e) => setDescription(e.target.value)} />
+      <TextArea label="Full description / instructions" value={description} onChange={(e) => setDescription(e.target.value)} />
       <Field label="Tools needed (optional)" value={tools} onChange={(e) => setTools(e.target.value)} placeholder="e.g. Calendly, a laptop" />
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><SelectF label="Course" value={courseId} onChange={(e) => setCourseId(e.target.value)} options={courses.map((c) => ({ value: c.id, label: c.title }))} /><Field label="Due in (days)" type="number" value={dueInDays} onChange={(e) => setDueInDays(e.target.value)} /></div>
-      <SelectF label="Required proof type" value={proofType} onChange={(e) => setProofType(e.target.value)} options={[{ value: "link", label: "Link" }, { value: "image", label: "Image / screenshot" }, { value: "document", label: "Document" }, { value: "text", label: "Written text" }]} />
-      <div><div className="f-label text-[11px] mb-2" style={{ color: "#71675A" }}>ASSIGN TO</div><div className="flex flex-wrap gap-2">{eligible.map((s) => <button key={s.id} onClick={() => toggle(s.id)} className="f-label text-[11px] px-3 py-1.5 rounded-full" style={{ background: assigned.includes(s.id) ? "var(--accent)" : "#F0E7D6", color: assigned.includes(s.id) ? "#FAF6EC" : "#71675A" }}>{s.name}</button>)}</div></div>
-      <div className="flex gap-3 mt-1"><button onClick={() => { if (title) onSave({ title, description, tools, courseId, dueInDays: Number(dueInDays), proofType, assigned }); }} className="btn-primary rounded-lg px-5 py-2.5 text-[14px]">Save task</button><button onClick={onClose} className="text-[14px]" style={{ color: "#A79B84" }}>Cancel</button></div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <SelectF label="Course" value={courseId} onChange={(e) => setCourseId(e.target.value)} options={courses.map((c) => ({ value: c.id, label: c.title }))} />
+        <SelectF label="Cohort" value={cohortId} onChange={(e) => setCohortId(e.target.value)} options={[{ value: "all", label: "Pick students myself" }, ...cohorts.map((c) => ({ value: c.id, label: c.name }))]} />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Field label="Due in (days) — shown until a real deadline is set below" type="number" value={dueInDays} onChange={(e) => setDueInDays(e.target.value)} />
+        <Field label="Hard deadline (optional — locks submission after this moment)" type="datetime-local" value={deadlineAt} onChange={(e) => setDeadlineAt(e.target.value)} />
+      </div>
+
+      {cohortId === "all" ? (
+        <div><div className="f-label text-[11px] mb-2" style={{ color: "#71675A" }}>ASSIGN TO</div><div className="flex flex-wrap gap-2">{eligible.map((s) => <button key={s.id} onClick={() => toggle(s.id)} className="f-label text-[11px] px-3 py-1.5 rounded-full" style={{ background: assigned.includes(s.id) ? "var(--accent)" : "#F0E7D6", color: assigned.includes(s.id) ? "#FAF6EC" : "#71675A" }}>{s.name}</button>)}</div></div>
+      ) : (
+        <div className="rounded-xl p-4" style={{ background: "#F0E7D6" }}>
+          <div className="text-[13.5px] mb-2" style={{ color: "var(--accent)", fontWeight: 700 }}>This assigns to all {cohortEligible.length} student{cohortEligible.length === 1 ? "" : "s"} in {cohorts.find((c) => c.id === cohortId)?.name} taking {courses.find((c) => c.id === courseId)?.title}.</div>
+          <div className="flex flex-wrap gap-1.5">{cohortEligible.map((s) => <span key={s.id} className="f-code text-[11px] px-2.5 py-1 rounded-full" style={{ background: "#FAF6EC", color: "#71675A" }}>{s.name}</span>)}</div>
+        </div>
+      )}
+
+      <div>
+        <div className="f-label text-[11px] mb-2" style={{ color: "#71675A" }}>WHAT THEY NEED TO SUBMIT</div>
+        {requiredLinks.length === 0 ? (
+          <SelectF label="Required proof type" value={proofType} onChange={(e) => setProofType(e.target.value)} options={[{ value: "link", label: "Link" }, { value: "image", label: "Image / screenshot" }, { value: "document", label: "Document" }, { value: "text", label: "Written text" }]} />
+        ) : (
+          <div className="flex flex-col gap-2 mb-2">
+            {requiredLinks.map((r, i) => (
+              <div key={i} className="flex items-center gap-2 rounded-lg p-2.5" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
+                <select className="input-field rounded-lg px-2.5 py-2 text-[13px]" style={{ maxWidth: 150 }} value={r.type} onChange={(e) => { const t = LINK_TYPES.find((x) => x.key === e.target.value); updateLinkRow(i, { type: e.target.value, label: t.label }); }}>
+                  {LINK_TYPES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+                </select>
+                <input className="input-field rounded-lg px-3 py-2 text-[13px] flex-1" placeholder="Label shown to student (optional)" value={r.label} onChange={(e) => updateLinkRow(i, { label: e.target.value })} />
+                <button onClick={() => removeLinkRow(i)}><X size={15} color="#A79B84" /></button>
+              </div>
+            ))}
+          </div>
+        )}
+        <button onClick={addLinkRow} className="text-[13px] accent-text flex items-center gap-1.5" style={{ fontWeight: 700 }}><Plus size={14} /> Require a specific link (Google Doc, Canva, Trello…)</button>
+        {requiredLinks.length > 0 && <div className="text-[12px] mt-1.5" style={{ color: "#A79B84" }}>Each link is checked as the student types it — it has to actually look like the right kind of link before they can submit.</div>}
+      </div>
+
+      <div className="flex gap-3 mt-1"><button onClick={() => { if (title) onSave({ title, description, tools, courseId, cohortId, dueInDays: Number(dueInDays), deadlineAt: deadlineAt || null, proofType, requiredLinks, assigned: effectiveAssigned }); }} className="btn-primary rounded-lg px-5 py-2.5 text-[14px]">Save task</button><button onClick={onClose} className="text-[14px]" style={{ color: "#A79B84" }}>Cancel</button></div>
     </div>
   );
 }
-export function SubmissionDetail({ sid, student, sub, onGrade, onClose }) {
+export function SubmissionDetail({ sid, student, sub, task, onGrade, onClose }) {
   const [score, setScore] = useState(sub?.score || 100);
-  return <div className="card modal-in rounded-2xl p-6 mb-4"><div className="flex items-center justify-between mb-3"><div className="text-[15px]" style={{ fontWeight: 700 }}>{student?.name}'s submission</div><button onClick={onClose}><X size={16} color="#A79B84" /></button></div><div className="text-[14px] mb-4" style={{ color: "#4A4237" }}>{sub.note}</div><div className="flex items-center gap-3"><Field label="Score (%)" type="number" value={score} onChange={(e) => setScore(e.target.value)} /><button onClick={() => onGrade(sid, "approved", Number(score))} className="btn-primary rounded-lg px-5 py-2.5 text-[13px] shrink-0 mt-6">Mark reviewed</button></div></div>;
+  const links = sub?.links || {};
+  return <div className="card modal-in rounded-2xl p-6 mb-4">
+    <div className="flex items-center justify-between mb-3"><div className="text-[15px]" style={{ fontWeight: 700 }}>{student?.name}'s submission</div><button onClick={onClose}><X size={16} color="#A79B84" /></button></div>
+    {task?.requiredLinks?.length > 0 ? (
+      <div className="flex flex-col gap-2 mb-4">
+        {task.requiredLinks.map((r, i) => links[i] ? (
+          <a key={i} href={links[i]} target="_blank" rel="noreferrer" className="rounded-lg px-3.5 py-2.5 text-[13.5px] flex items-center justify-between" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9", color: "var(--accent)", fontWeight: 700 }}>{r.label || r.type} <span style={{ color: "#71675A", fontWeight: 400 }}>{links[i]} ↗</span></a>
+        ) : (
+          <div key={i} className="rounded-lg px-3.5 py-2.5 text-[13.5px]" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9", color: "#A79B84" }}>{r.label || r.type} — not submitted</div>
+        ))}
+      </div>
+    ) : <div className="text-[14px] mb-4" style={{ color: "#4A4237" }}>{sub.note}</div>}
+    <div className="flex items-center gap-3"><Field label="Score (%)" type="number" value={score} onChange={(e) => setScore(e.target.value)} /><button onClick={() => onGrade(sid, "approved", Number(score))} className="btn-primary rounded-lg px-5 py-2.5 text-[13px] shrink-0 mt-6">Mark reviewed</button></div>
+  </div>;
 }
-export function TaskDetail({ task, setTasks, students, onClose, onDelete }) {
+export function TaskDetail({ task, setTasks, students, courses, cohorts, onClose, onDelete }) {
   const [editing, setEditing] = useState(false); const [viewingSub, setViewingSub] = useState(null);
   function grade(sid, status, score) { setTasks((prev) => prev.map((t) => t.id !== task.id ? t : { ...t, submissions: { ...t.submissions, [sid]: { ...t.submissions[sid], status, score } } })); setViewingSub(null); }
   function save(data) { setTasks((prev) => prev.map((t) => t.id !== task.id ? t : { ...t, ...data })); setEditing(false); }
-  if (editing) return <TaskForm students={students} courses={[{ id: task.courseId, title: task.courseId }]} initial={task} onSave={save} onClose={() => setEditing(false)} />;
+  if (editing) return <TaskForm students={students} courses={courses} cohorts={cohorts} initial={task} onSave={save} onClose={() => setEditing(false)} />;
   return (
     <div className="card rounded-2xl p-7 mb-6">
       <div className="flex items-center justify-between mb-2"><button onClick={onClose} className="flex items-center gap-1.5 text-[13px]" style={{ color: "#71675A" }}><ArrowLeft size={14} /> Back to tasks</button><div className="flex gap-3"><button onClick={() => setEditing(true)} className="flex items-center gap-1.5 text-[13px] accent-text" style={{ fontWeight: 700 }}><Pencil size={13} /> Edit</button><button onClick={() => onDelete(task.id)} className="flex items-center gap-1.5 text-[13px]" style={{ color: "#B04A3A" }}><Trash2 size={13} /> Delete</button></div></div>
       <div className="f-display text-[22px] mt-3 mb-1" style={{ fontWeight: 800 }}>{task.title}</div>
       <div className="text-[15px] mb-2" style={{ color: "#4A4237" }}>{task.description}</div>
       {task.tools && <div className="text-[14px] mb-2" style={{ color: "#71675A" }}><strong>Tools:</strong> {task.tools}</div>}
-      <div className="text-[14px] mb-6" style={{ color: "#71675A" }}><strong>Required proof:</strong> {task.proofType}</div>
+      <div className="text-[14px] mb-1" style={{ color: "#71675A" }}><strong>Required proof:</strong> {task.requiredLinks?.length > 0 ? task.requiredLinks.map((r) => r.label || r.type).join(", ") : task.proofType}</div>
+      {task.deadlineAt && <div className="text-[14px] mb-6" style={{ color: "#71675A" }}><strong>Closes:</strong> {new Date(task.deadlineAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</div>}
       <div className="f-label text-[12px] mb-3" style={{ color: "#71675A" }}>SUBMISSIONS</div>
       <div className="flex flex-col gap-3">{task.assigned.map((sid) => { const s = students.find((x) => x.id === sid); const sub = task.submissions[sid]; return (
         <div key={sid}>
           <div className="rounded-xl p-4 flex items-center justify-between" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}><div><span className="text-[14px]" style={{ fontWeight: 700 }}>{s?.name}</span>{sub && <span className="f-code text-[10px] tint-badge px-2 py-1 rounded-full ml-2">{sub.status.toUpperCase()}{sub.score != null ? ` · ${sub.score}%` : ""}</span>}</div>{sub ? <button onClick={() => setViewingSub(viewingSub === sid ? null : sid)} className="f-label text-[11px] accent-text flex items-center gap-1"><Eye size={12} /> View</button> : <span className="f-code text-[10px]" style={{ color: "#C9BFAE" }}>NOT SUBMITTED</span>}</div>
-          {viewingSub === sid && <SubmissionDetail sid={sid} student={s} sub={sub} onGrade={grade} onClose={() => setViewingSub(null)} />}
+          {viewingSub === sid && <SubmissionDetail sid={sid} student={s} sub={sub} task={task} onGrade={grade} onClose={() => setViewingSub(null)} />}
         </div>
       ); })}</div>
     </div>
   );
 }
-export function TasksTab({ tasks, setTasks, students, courses }) {
+export function TasksTab({ tasks, setTasks, students, courses, cohorts }) {
   const [showAdd, setShowAdd] = useState(false); const [selected, setSelected] = useState(null);
   function addTask(data) { setTasks((prev) => [...prev, { id: "t" + Date.now(), submissions: {}, ...data }]); setShowAdd(false); }
   function deleteTask(id) { setTasks((prev) => prev.filter((t) => t.id !== id)); setSelected(null); }
@@ -615,8 +683,8 @@ export function TasksTab({ tasks, setTasks, students, courses }) {
   return (
     <>
       <SectionHeader eyebrow="ASSIGN & REVIEW" title="Tasks" action={<button onClick={() => setShowAdd((s) => !s)} className="btn-primary rounded-full px-5 py-2.5 text-[14px] flex items-center gap-1.5"><Plus size={16} /> New task</button>} />
-      {showAdd && <TaskForm students={students} courses={courses} onSave={addTask} onClose={() => setShowAdd(false)} />}
-      {selectedTask ? <TaskDetail task={selectedTask} setTasks={setTasks} students={students} onClose={() => setSelected(null)} onDelete={deleteTask} /> : <div className="flex flex-col gap-4">{tasks.map((t) => <button key={t.id} onClick={() => setSelected(t.id)} className="card card-pop rounded-xl p-5 text-left"><div className="flex items-center justify-between mb-1.5"><div className="text-[16px]" style={{ fontWeight: 700 }}>{t.title}</div><span className="f-code text-[10px]" style={{ color: "#A79B84" }}>{t.assigned.length} assigned</span></div><div className="text-[14px]" style={{ color: "#71675A" }}>{t.description}</div></button>)}</div>}
+      {showAdd && <TaskForm students={students} courses={courses} cohorts={cohorts} onSave={addTask} onClose={() => setShowAdd(false)} />}
+      {selectedTask ? <TaskDetail task={selectedTask} setTasks={setTasks} students={students} courses={courses} cohorts={cohorts} onClose={() => setSelected(null)} onDelete={deleteTask} /> : <div className="flex flex-col gap-4">{tasks.map((t) => <button key={t.id} onClick={() => setSelected(t.id)} className="card card-pop rounded-xl p-5 text-left"><div className="flex items-center justify-between mb-1.5"><div className="text-[16px]" style={{ fontWeight: 700 }}>{t.title}</div><span className="f-code text-[10px]" style={{ color: "#A79B84" }}>{t.assigned.length} assigned</span></div><div className="text-[14px]" style={{ color: "#71675A" }}>{t.description}</div></button>)}</div>}
     </>
   );
 }
@@ -1106,7 +1174,7 @@ export function AdminDashboard({ courses, setCourses, students, setStudents, onR
         {tab === "meetings" && <AdminMeetingsTab courses={courses} setCourses={setCourses} cohorts={cohorts} />}
         {tab === "students" && <StudentsTab students={students} setStudents={setStudents} onRemove={onRemoveStudent} applicants={applicants} courses={courses} cohorts={cohorts} />}
         {tab === "gradebook" && <GradebookTab students={students} courses={courses} cohorts={cohorts} />}
-        {tab === "tasks" && <TasksTab tasks={tasks} setTasks={setTasks} students={students} courses={courses} />}
+        {tab === "tasks" && <TasksTab tasks={tasks} setTasks={setTasks} students={students} courses={courses} cohorts={cohorts} />}
         {tab === "library" && <LibraryTab resources={resources} onAdd={onAddResource} onEdit={onEditResource} onRemove={onRemoveResource} courses={courses} />}
         {tab === "certificates" && <CertificatesTab students={students} setStudents={setStudents} courses={courses} />}
         {tab === "testimonials" && <TestimonialsTab testimonials={testimonials} setTestimonials={setTestimonials} />}
