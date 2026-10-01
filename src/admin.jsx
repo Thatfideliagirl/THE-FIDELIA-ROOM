@@ -172,14 +172,24 @@ export function ModuleEditor({ course, module, setCourses, onBack }) {
   const [summary, setSummary] = useState(module.summary || "");
   const [testType, setTestType] = useState(module.testType); const [passPct, setPassPct] = useState(module.passPct || 70);
   const [proofType, setProofType] = useState(module.proofType || "text"); const [markingGuide, setMarkingGuide] = useState(module.markingGuide || "");
+  const [linkType, setLinkType] = useState(module.linkType || "other");
   const [questionPrompt, setQuestionPrompt] = useState(module.questionPrompt || "");
   const [quiz, setQuiz] = useState(module.quiz || []);
   const [meetings, setMeetings] = useState(module.meetings || []);
+  // A separate step from the lecture notes and from the Resources/Library
+  // tab on purpose -- Fidelia doesn't want videos mixed into the library,
+  // and wants every module able to carry its own required watch-list,
+  // shown between Summary and Quick Check.
+  const [videoIntro, setVideoIntro] = useState(module.videoIntro || "");
+  const [videos, setVideos] = useState(module.videos || []);
   function addQuestion() { setQuiz((q) => [...q, { q: "", options: ["", "", ""], correct: 0 }]); }
   function updateQ(i, field, value) { setQuiz((q) => q.map((item, idx) => idx !== i ? item : { ...item, [field]: value })); }
   function updateOpt(qi, oi, value) { setQuiz((q) => q.map((item, idx) => idx !== qi ? item : { ...item, options: item.options.map((o, oidx) => oidx === oi ? value : o) })); }
   function removeQ(i) { setQuiz((q) => q.filter((_, idx) => idx !== i)); }
-  function save() { setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, modules: c.modules.map((m) => m.id !== module.id ? m : { ...m, title, brief, notes, summary, videoUrl, slideUrl, slideFile, slideDescription, testType, passPct: Number(passPct), proofType, markingGuide, questionPrompt, quiz, meetings }) })); onBack(); }
+  function addVideo() { setVideos((v) => [...v, { id: "v" + Date.now(), label: "", url: "", file: null }]); }
+  function updateVideo(i, patch) { setVideos((v) => v.map((item, idx) => idx === i ? { ...item, ...patch } : item)); }
+  function removeVideo(i) { setVideos((v) => v.filter((_, idx) => idx !== i)); }
+  function save() { setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, modules: c.modules.map((m) => m.id !== module.id ? m : { ...m, title, brief, notes, summary, videoUrl, slideUrl, slideFile, slideDescription, testType, passPct: Number(passPct), proofType, linkType, markingGuide, questionPrompt, quiz, meetings, videoIntro, videos }) })); onBack(); }
   return (
     <div>
       <button onClick={onBack} className="flex items-center gap-1.5 text-[13px] mb-6" style={{ color: "#71675A" }}><ArrowLeft size={14} /> Back to {course.title}</button>
@@ -200,6 +210,23 @@ export function ModuleEditor({ course, module, setCourses, onBack }) {
       </div>
 
       <div className="card rounded-2xl p-7 flex flex-col gap-4 mb-6">
+        <div className="f-label text-[11px]" style={{ color: "#71675A" }}>VIDEO RESOURCE</div>
+        <div className="text-[13px]" style={{ color: "#71675A" }}>Shown after the summary, before the quick check. Separate from your Resource Library — just for this module. Leave empty to skip this step entirely.</div>
+        <div><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Instructions</div><RichTextEditor value={videoIntro} onChange={setVideoIntro} minRows={4} /></div>
+        <div className="flex flex-col gap-3">
+          {videos.map((v, i) => (
+            <div key={v.id} className="rounded-xl p-4 flex flex-col gap-2.5" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
+              <div className="flex items-center justify-between"><div className="f-label text-[11px]" style={{ color: "#71675A" }}>VIDEO {i + 1}</div><button onClick={() => removeVideo(i)}><Trash2 size={14} color="#B04A3A" /></button></div>
+              <Field label="Label (optional)" value={v.label} onChange={(e) => updateVideo(i, { label: e.target.value })} placeholder="e.g. How to set up your calendar" />
+              <Field label="Video link (YouTube, Loom, etc. — optional if uploading a file below)" value={v.url} onChange={(e) => updateVideo(i, { url: e.target.value })} placeholder="https://…" />
+              <FileField label="Or upload a video file" value={v.file} onChange={(file) => updateVideo(i, { file })} accept="video/*" />
+            </div>
+          ))}
+          <button onClick={addVideo} className="text-[13px] accent-text flex items-center gap-1.5 self-start" style={{ fontWeight: 700 }}><Plus size={14} /> Add a video</button>
+        </div>
+      </div>
+
+      <div className="card rounded-2xl p-7 flex flex-col gap-4 mb-6">
         <div className="f-label text-[11px]" style={{ color: "#71675A" }}>QUICK CHECK</div>
         <SelectF label="Check type" value={testType} onChange={(e) => setTestType(e.target.value)} options={[{ value: "multiple-choice", label: "Multiple choice (auto-graded)" }, { value: "written", label: "Short written answer (you review)" }, { value: "file-upload", label: "File / assignment upload (you review)" }, { value: "checklist", label: "Self-check (no review needed)" }, { value: "milestone", label: "Milestone project (bigger checkpoint, you review)" }]} />
         {testType === "multiple-choice" && (
@@ -211,8 +238,10 @@ export function ModuleEditor({ course, module, setCourses, onBack }) {
         {(testType === "written" || testType === "file-upload" || testType === "milestone") && (
           <>
             {(testType === "file-upload" || testType === "milestone") && <SelectF label="Required proof type" value={proofType} onChange={(e) => setProofType(e.target.value)} options={[{ value: "document", label: "Document upload" }, { value: "link", label: "Link" }, { value: "image", label: "Image / screenshot link" }]} />}
+            {(testType === "file-upload" || testType === "milestone") && proofType === "link" && <SelectF label="What kind of link is this?" value={linkType} onChange={(e) => setLinkType(e.target.value)} options={LINK_TYPES.map((t) => ({ value: t.key, label: t.label }))} />}
             <div><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>{testType === "written" ? "The question students will answer" : testType === "milestone" ? "Milestone project brief (what they need to build and submit)" : "What students need to submit"}</div><RichTextEditor value={questionPrompt} onChange={setQuestionPrompt} minRows={5} /></div>
-            <TextArea label="Marking guide — list the key points a good submission should cover, one per idea (used both for your review and for auto-checking matches)" value={markingGuide} onChange={(e) => setMarkingGuide(e.target.value)} rows={6} />
+            {proofType !== "link" && <TextArea label="Marking guide — list the key points a good submission should cover, one per idea (used both for your review and for auto-checking matches)" value={markingGuide} onChange={(e) => setMarkingGuide(e.target.value)} rows={6} />}
+            {proofType === "link" && (testType === "file-upload" || testType === "milestone") && <div className="text-[13px] rounded-lg px-4 py-3" style={{ background: "#FAF6EC", color: "#71675A" }}>No marking guide for a link — the system already checks it's the right kind of link ({LINK_TYPES.find((t) => t.key === linkType)?.label}). Every submission goes to you for review.</div>}
           </>
         )}
       </div>
@@ -576,6 +605,7 @@ export function TaskForm({ students, courses, cohorts, initial, onSave, onClose 
   // every task before this. Adding a row switches to requiring each of
   // these specific links instead.
   const [requiredLinks, setRequiredLinks] = useState(initial?.requiredLinks || []);
+  const [isCapstone, setIsCapstone] = useState(initial?.isCapstone || false);
   function toggle(id) { setAssigned((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]); }
   const eligible = students.filter((s) => s.enrollments.some((e) => e.courseId === courseId));
   const cohortEligible = cohortId === "all" ? eligible : eligible.filter((s) => s.cohortId === cohortId);
@@ -631,7 +661,12 @@ export function TaskForm({ students, courses, cohorts, initial, onSave, onClose 
         {requiredLinks.length > 0 && <div className="text-[12px] mt-1.5" style={{ color: "#A79B84" }}>Each link is checked as the student types it — it has to actually look like the right kind of link before they can submit.</div>}
       </div>
 
-      <div className="flex gap-3 mt-1"><button onClick={() => { if (title) onSave({ title, description, tools, courseId, cohortId, dueInDays: Number(dueInDays), deadlineAt: deadlineAt || null, proofType, requiredLinks, assigned: effectiveAssigned }); }} className="btn-primary rounded-lg px-5 py-2.5 text-[14px]">Save task</button><button onClick={onClose} className="text-[14px]" style={{ color: "#A79B84" }}>Cancel</button></div>
+      <label className="flex items-center gap-2.5 text-[13.5px] rounded-lg p-3" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9", cursor: "pointer" }}>
+        <input type="checkbox" checked={isCapstone} onChange={(e) => setIsCapstone(e.target.checked)} />
+        <span>This is the <strong>capstone</strong> for {courses.find((c) => c.id === courseId)?.title || "this course"} — counts toward certificate eligibility in the Gradebook. Only one task per course can be the capstone.</span>
+      </label>
+
+      <div className="flex gap-3 mt-1"><button onClick={() => { if (title) onSave({ title, description, tools, courseId, cohortId, dueInDays: Number(dueInDays), deadlineAt: deadlineAt || null, proofType, requiredLinks, isCapstone, assigned: effectiveAssigned }); }} className="btn-primary rounded-lg px-5 py-2.5 text-[14px]">Save task</button><button onClick={onClose} className="text-[14px]" style={{ color: "#A79B84" }}>Cancel</button></div>
     </div>
   );
 }
@@ -652,10 +687,18 @@ export function SubmissionDetail({ sid, student, sub, task, onGrade, onClose }) 
     <div className="flex items-center gap-3"><Field label="Score (%)" type="number" value={score} onChange={(e) => setScore(e.target.value)} /><button onClick={() => onGrade(sid, "approved", Number(score))} className="btn-primary rounded-lg px-5 py-2.5 text-[13px] shrink-0 mt-6">Mark reviewed</button></div>
   </div>;
 }
+// Only one task per course can be the capstone -- picking a new one for a
+// course un-ticks whichever task held that spot before, same way a radio
+// button works, instead of letting eligibility silently depend on whichever
+// capstone task happens to come first in the list.
+function applyCapstoneExclusivity(prev, taskId, courseId, isCapstone) {
+  if (!isCapstone) return prev;
+  return prev.map((t) => (t.id !== taskId && t.courseId === courseId && t.isCapstone) ? { ...t, isCapstone: false } : t);
+}
 export function TaskDetail({ task, setTasks, students, courses, cohorts, onClose, onDelete }) {
   const [editing, setEditing] = useState(false); const [viewingSub, setViewingSub] = useState(null);
   function grade(sid, status, score) { setTasks((prev) => prev.map((t) => t.id !== task.id ? t : { ...t, submissions: { ...t.submissions, [sid]: { ...t.submissions[sid], status, score } } })); setViewingSub(null); }
-  function save(data) { setTasks((prev) => prev.map((t) => t.id !== task.id ? t : { ...t, ...data })); setEditing(false); }
+  function save(data) { setTasks((prev) => applyCapstoneExclusivity(prev, task.id, data.courseId, data.isCapstone).map((t) => t.id !== task.id ? t : { ...t, ...data })); setEditing(false); }
   if (editing) return <TaskForm students={students} courses={courses} cohorts={cohorts} initial={task} onSave={save} onClose={() => setEditing(false)} />;
   return (
     <div className="card rounded-2xl p-7 mb-6">
@@ -664,6 +707,7 @@ export function TaskDetail({ task, setTasks, students, courses, cohorts, onClose
       <div className="text-[15px] mb-2" style={{ color: "#4A4237" }}>{task.description}</div>
       {task.tools && <div className="text-[14px] mb-2" style={{ color: "#71675A" }}><strong>Tools:</strong> {task.tools}</div>}
       <div className="text-[14px] mb-1" style={{ color: "#71675A" }}><strong>Required proof:</strong> {task.requiredLinks?.length > 0 ? task.requiredLinks.map((r) => r.label || r.type).join(", ") : task.proofType}</div>
+      {task.isCapstone && <div className="text-[12px] mb-1"><span className="f-code px-2 py-0.5 rounded-full tint-badge">CAPSTONE</span></div>}
       {task.deadlineAt && <div className="text-[14px] mb-6" style={{ color: "#71675A" }}><strong>Closes:</strong> {new Date(task.deadlineAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</div>}
       <div className="f-label text-[12px] mb-3" style={{ color: "#71675A" }}>SUBMISSIONS</div>
       <div className="flex flex-col gap-3">{task.assigned.map((sid) => { const s = students.find((x) => x.id === sid); const sub = task.submissions[sid]; return (
@@ -677,14 +721,14 @@ export function TaskDetail({ task, setTasks, students, courses, cohorts, onClose
 }
 export function TasksTab({ tasks, setTasks, students, courses, cohorts }) {
   const [showAdd, setShowAdd] = useState(false); const [selected, setSelected] = useState(null);
-  function addTask(data) { setTasks((prev) => [...prev, { id: "t" + Date.now(), submissions: {}, ...data }]); setShowAdd(false); }
+  function addTask(data) { const id = "t" + Date.now(); setTasks((prev) => [...applyCapstoneExclusivity(prev, id, data.courseId, data.isCapstone), { id, submissions: {}, ...data }]); setShowAdd(false); }
   function deleteTask(id) { setTasks((prev) => prev.filter((t) => t.id !== id)); setSelected(null); }
   const selectedTask = tasks.find((t) => t.id === selected);
   return (
     <>
       <SectionHeader eyebrow="ASSIGN & REVIEW" title="Tasks" action={<button onClick={() => setShowAdd((s) => !s)} className="btn-primary rounded-full px-5 py-2.5 text-[14px] flex items-center gap-1.5"><Plus size={16} /> New task</button>} />
       {showAdd && <TaskForm students={students} courses={courses} cohorts={cohorts} onSave={addTask} onClose={() => setShowAdd(false)} />}
-      {selectedTask ? <TaskDetail task={selectedTask} setTasks={setTasks} students={students} courses={courses} cohorts={cohorts} onClose={() => setSelected(null)} onDelete={deleteTask} /> : <div className="flex flex-col gap-4">{tasks.map((t) => <button key={t.id} onClick={() => setSelected(t.id)} className="card card-pop rounded-xl p-5 text-left"><div className="flex items-center justify-between mb-1.5"><div className="text-[16px]" style={{ fontWeight: 700 }}>{t.title}</div><span className="f-code text-[10px]" style={{ color: "#A79B84" }}>{t.assigned.length} assigned</span></div><div className="text-[14px]" style={{ color: "#71675A" }}>{t.description}</div></button>)}</div>}
+      {selectedTask ? <TaskDetail task={selectedTask} setTasks={setTasks} students={students} courses={courses} cohorts={cohorts} onClose={() => setSelected(null)} onDelete={deleteTask} /> : <div className="flex flex-col gap-4">{tasks.map((t) => <button key={t.id} onClick={() => setSelected(t.id)} className="card card-pop rounded-xl p-5 text-left"><div className="flex items-center justify-between mb-1.5"><div className="text-[16px] flex items-center gap-2" style={{ fontWeight: 700 }}>{t.title}{t.isCapstone && <span className="f-code text-[10px] px-2 py-0.5 rounded-full tint-badge">CAPSTONE</span>}</div><span className="f-code text-[10px]" style={{ color: "#A79B84" }}>{t.assigned.length} assigned</span></div><div className="text-[14px]" style={{ color: "#71675A" }}>{t.description}</div></button>)}</div>}
     </>
   );
 }
@@ -896,10 +940,26 @@ export function AdminProfileTab({ adminProfile, setAdminProfile }) {
     </>
   );
 }
-export function GradebookTab({ students, courses, cohorts }) {
+// A course with no capstone task set has nothing to grade, so it doesn't
+// hold eligibility back -- capstone counts as "done" by default and only
+// starts actually gating once an admin marks one task as the capstone.
+function capstoneStatus(tasks, courseId, studentId) {
+  const capstone = tasks.find((t) => t.courseId === courseId && t.isCapstone);
+  if (!capstone) return { pct: 100, label: "—", hasCapstone: false };
+  const sub = capstone.submissions[studentId];
+  if (!sub) return { pct: 0, label: "Not started", hasCapstone: true };
+  if (sub.status === "approved") return { pct: 100, label: "100%", hasCapstone: true };
+  return { pct: 50, label: "In review", hasCapstone: true };
+}
+export function GradebookTab({ students, courses, cohorts, tasks }) {
   const [cohortFilter, setCohortFilter] = useState("all");
   const scopedStudents = cohortFilter === "all" ? students : students.filter((s) => s.cohortId === cohortFilter);
-  const rows = scopedStudents.flatMap((s) => s.enrollments.map((e) => { const c = courses.find((x) => x.id === e.courseId); const pct = c ? Math.round((e.completedModuleIds.length / c.modules.length) * 100) : 0; return { student: s.name, course: c?.title, pct, eligible: pct >= 90 }; }));
+  const rows = scopedStudents.flatMap((s) => s.enrollments.map((e) => {
+    const c = courses.find((x) => x.id === e.courseId);
+    const coursePct = c ? Math.round((e.completedModuleIds.length / c.modules.length) * 100) : 0;
+    const capstone = capstoneStatus(tasks, e.courseId, s.id);
+    return { student: s.name, course: c?.title, coursePct, capstone, eligible: coursePct >= 100 && capstone.pct >= 100 };
+  }));
   return (
     <>
       <SectionHeader eyebrow="ACCUMULATED SCORES" title="Gradebook" />
@@ -909,9 +969,9 @@ export function GradebookTab({ students, courses, cohorts }) {
       </div>
       <div className="card rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
-          <div className="min-w-[640px]">
-            <div className="grid grid-cols-4 px-6 py-3 f-label text-[11px]" style={{ background: "#F0E7D6", color: "#71675A" }}><div>STUDENT</div><div>COURSE</div><div>PROGRESS</div><div>CERTIFICATE ELIGIBLE (90%+)</div></div>
-            {rows.map((r, i) => <div key={i} className="grid grid-cols-4 px-6 py-4 items-center text-[14px]" style={{ borderTop: "1px solid #F0E7D6" }}><div style={{ fontWeight: 700 }}>{r.student}</div><div>{r.course}</div><div>{r.pct}%</div><div>{r.eligible ? <span className="f-code text-[10px] tint-badge px-2 py-1 rounded-full">YES</span> : <span className="f-code text-[10px]" style={{ color: "#A79B84" }}>NOT YET</span>}</div></div>)}
+          <div className="min-w-[760px]">
+            <div className="grid grid-cols-5 px-6 py-3 f-label text-[11px]" style={{ background: "#F0E7D6", color: "#71675A" }}><div>STUDENT</div><div>COURSE</div><div>COURSE PROGRESS</div><div>CAPSTONE</div><div>ELIGIBILITY</div></div>
+            {rows.map((r, i) => <div key={i} className="grid grid-cols-5 px-6 py-4 items-center text-[14px]" style={{ borderTop: "1px solid #F0E7D6" }}><div style={{ fontWeight: 700 }}>{r.student}</div><div>{r.course}</div><div>{r.coursePct}%</div><div>{r.capstone.label}</div><div>{r.eligible ? <span className="f-code text-[10px] tint-badge px-2 py-1 rounded-full">ELIGIBLE</span> : <span className="f-code text-[10px]" style={{ color: "#A79B84" }}>INELIGIBLE</span>}</div></div>)}
           </div>
         </div>
         {rows.length === 0 && <div className="px-6 py-8 text-[13px]" style={{ color: "#A79B84" }}>No enrollments in this cohort yet.</div>}
@@ -1173,7 +1233,7 @@ export function AdminDashboard({ courses, setCourses, students, setStudents, onR
         {tab === "courses" && <CoursesTab courses={courses} setCourses={setCourses} testimonials={testimonials} />}
         {tab === "meetings" && <AdminMeetingsTab courses={courses} setCourses={setCourses} cohorts={cohorts} />}
         {tab === "students" && <StudentsTab students={students} setStudents={setStudents} onRemove={onRemoveStudent} applicants={applicants} courses={courses} cohorts={cohorts} />}
-        {tab === "gradebook" && <GradebookTab students={students} courses={courses} cohorts={cohorts} />}
+        {tab === "gradebook" && <GradebookTab students={students} courses={courses} cohorts={cohorts} tasks={tasks} />}
         {tab === "tasks" && <TasksTab tasks={tasks} setTasks={setTasks} students={students} courses={courses} cohorts={cohorts} />}
         {tab === "library" && <LibraryTab resources={resources} onAdd={onAddResource} onEdit={onEditResource} onRemove={onRemoveResource} courses={courses} />}
         {tab === "certificates" && <CertificatesTab students={students} setStudents={setStudents} courses={courses} />}

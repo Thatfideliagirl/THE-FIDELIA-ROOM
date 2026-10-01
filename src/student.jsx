@@ -82,6 +82,7 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
     const s = splitLectureSections(module.notes);
     return s.length > 0 ? s : [{ heading: null, html: "" }];
   }, [module.notes]);
+  const hasVideoResource = !!(module.videoIntro?.trim() || module.videos?.length > 0);
   const hasDeck = !!(module.slideUrl || module.slideFile);
   const totalSteps = sections.length + (hasDeck ? 1 : 0);
   const atDeck = hasDeck && sectionIdx === sections.length;
@@ -92,8 +93,16 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
 
   function completeModule() { updateEnrollment({ completedModuleIds: [...new Set([...enrollment.completedModuleIds, module.id])] }); setJustPassed(true); }
   function submitQuiz() { let correct = 0; module.quiz.forEach((q, i) => { if (answers[i] === q.correct) correct++; }); const pct = Math.round((correct / module.quiz.length) * 100); setResult(pct); if (pct >= (module.passPct || 70)) completeModule(); }
+  const isLinkProof = (module.testType === "file-upload" || module.testType === "milestone") && module.proofType === "link";
+  const linkType = isLinkProof ? (LINK_TYPES.find((t) => t.key === module.linkType) || LINK_TYPES.find((t) => t.key === "other")) : null;
+  const linkValid = isLinkProof && linkType?.test(proof.trim());
   function submitForReview() {
     if (!proof.trim()) return;
+    // A link already gets checked for shape as it's typed (see linkValid) --
+    // there's nothing left to keyword-match against the marking guide, so
+    // every link submission just goes straight to review instead of risking
+    // an auto-approve on an unrelated keyword overlap with the URL itself.
+    if (isLinkProof) { updateEnrollment({ pendingReview: { moduleId: module.id, proof, submittedAt: Date.now() } }); return; }
     const { pct } = scoreSubmission(proof, module.markingGuide);
     if (pct >= AUTO_APPROVE_THRESHOLD) completeModule();
     else updateEnrollment({ pendingReview: { moduleId: module.id, proof, submittedAt: Date.now(), autoScore: pct } });
@@ -185,7 +194,32 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
           <RichText html={module.summary || "No summary yet for this module."} className="rich-content text-[17px] leading-relaxed mb-6" style={{ color: "#4A4237" }} />
           <div className="flex items-center justify-between mt-6">
             <button onClick={() => setLectureStep("content")} className="text-[13px]" style={{ color: "#A79B84" }}>Back</button>
-            <button onClick={() => setView("check")} className="btn-primary rounded-lg px-6 py-3 text-[14px] flex items-center gap-2">Next: {module.testType === "milestone" ? "Milestone Project" : "Quick Check"} <ArrowRight size={15} /></button>
+            {hasVideoResource ? (
+              <button onClick={() => setLectureStep("videos")} className="btn-primary rounded-lg px-6 py-3 text-[14px] flex items-center gap-2">Next: Video Resource <ArrowRight size={15} /></button>
+            ) : (
+              <button onClick={() => setView("check")} className="btn-primary rounded-lg px-6 py-3 text-[14px] flex items-center gap-2">Next: {module.testType === "milestone" ? "Milestone Project" : "Quick Check"} <ArrowRight size={15} /></button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {view === "lecture" && lectureStep === "videos" && (
+        <div className="card rounded-2xl p-8">
+          <div className="f-label text-[11px] mb-3" style={{ color: "#A79B84" }}>VIDEO RESOURCE</div>
+          {module.videoIntro && <RichText html={module.videoIntro} className="rich-content text-[15px] leading-relaxed mb-6" style={{ color: "#4A4237" }} />}
+          <div className="flex flex-col gap-4 mb-2">{(module.videos || []).map((v, i) => (
+            <div key={v.id || i} className="rounded-xl p-4" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
+              {v.label && <div className="text-[14px] mb-2.5" style={{ fontWeight: 700 }}>{v.label}</div>}
+              {v.file ? (
+                <video controls src={v.file.dataUrl} className="w-full rounded-lg" style={{ maxHeight: 360 }} />
+              ) : v.url ? (
+                <a href={v.url} target="_blank" rel="noreferrer" className="btn-soft rounded-full px-4 py-2 text-[13px] inline-flex items-center gap-1.5" style={{ fontWeight: 700 }}><PlayCircle size={14} /> Watch video ↗</a>
+              ) : null}
+            </div>
+          ))}</div>
+          <div className="flex items-center justify-between mt-6">
+            <button onClick={() => setLectureStep("summary")} className="text-[13px]" style={{ color: "#A79B84" }}>Back</button>
+            <button onClick={() => setView("check")} className="btn-primary rounded-lg px-6 py-3 text-[14px] flex items-center gap-2">I've watched this — Next: {module.testType === "milestone" ? "Milestone Project" : "Quick Check"} <ArrowRight size={15} /></button>
           </div>
         </div>
       )}
@@ -231,10 +265,19 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
               {module.questionPrompt && <RichText html={module.questionPrompt} className="rich-content text-[14px] mb-4" style={{ color: "#4A4237" }} />}
               {module.testType === "written" ? (
                 <div><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Your answer</div><RichTextEditor value={proof} onChange={setProof} minRows={6} /></div>
+              ) : isLinkProof ? (
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="f-label text-[11px]" style={{ color: "#71675A" }}>{linkType?.label?.toUpperCase()} LINK</span>
+                    <span className="f-code text-[10px] px-2 py-0.5 rounded-full" style={{ background: !proof.trim() ? "#F0E7D6" : linkValid ? "#E4F3E9" : "#FBEAE7", color: !proof.trim() ? "#A79B84" : linkValid ? "#2F7D4F" : "#B04A3A" }}>{!proof.trim() ? "NOT FILLED" : linkValid ? "✓ LOOKS RIGHT" : `NOT A ${linkType?.label?.toUpperCase()} LINK`}</span>
+                  </div>
+                  <input className="input-field rounded-lg px-3.5 py-2.5 text-[14px] w-full" placeholder={linkType?.placeholder} value={proof} onChange={(e) => setProof(e.target.value)} />
+                  {linkValid && <a href={proof.trim()} target="_blank" rel="noreferrer" className="text-[12px] accent-text mt-1 inline-flex items-center gap-1" style={{ fontWeight: 700 }}>Preview ↗</a>}
+                </div>
               ) : (
                 <TextArea label="Link to your file" value={proof} onChange={(e) => setProof(e.target.value)} />
               )}
-              <button onClick={submitForReview} className="btn-primary rounded-lg px-6 py-3 text-[14px] mt-4">Submit for review</button>
+              <button onClick={submitForReview} disabled={isLinkProof && !linkValid} className="btn-primary rounded-lg px-6 py-3 text-[14px] mt-4">Submit for review</button>
             </>
           )}
         </div>
