@@ -190,9 +190,18 @@ export function ModuleEditor({ course, module, setCourses, onBack }) {
   function updateVideo(i, patch) { setVideos((v) => v.map((item, idx) => idx === i ? { ...item, ...patch } : item)); }
   function removeVideo(i) { setVideos((v) => v.filter((_, idx) => idx !== i)); }
   function save() { setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, modules: c.modules.map((m) => m.id !== module.id ? m : { ...m, title, brief, notes, summary, videoUrl, slideUrl, slideFile, slideDescription, testType, passPct: Number(passPct), proofType, linkType, markingGuide, questionPrompt, quiz, meetings, videoIntro, videos }) })); onBack(); }
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  function deleteModuleNow() { setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, modules: c.modules.filter((m) => m.id !== module.id) })); onBack(); }
   return (
     <div>
-      <button onClick={onBack} className="flex items-center gap-1.5 text-[13px] mb-6" style={{ color: "#71675A" }}><ArrowLeft size={14} /> Back to {course.title}</button>
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+        <button onClick={onBack} className="flex items-center gap-1.5 text-[13px]" style={{ color: "#71675A" }}><ArrowLeft size={14} /> Back to {course.title}</button>
+        {confirmDelete ? (
+          <div className="flex items-center gap-2 text-[12px]"><span style={{ color: "#B04A3A" }}>Delete this module? Student progress on it is lost.</span><button onClick={deleteModuleNow} className="f-label" style={{ color: "#B04A3A", fontWeight: 700 }}>YES, DELETE</button><button onClick={() => setConfirmDelete(false)} style={{ color: "#A79B84" }}>Cancel</button></div>
+        ) : (
+          <button onClick={() => setConfirmDelete(true)} className="btn-soft rounded-full px-4 py-2 text-[13px] flex items-center gap-1.5" style={{ fontWeight: 700, color: "#B04A3A" }}><Trash2 size={13} /> Delete module</button>
+        )}
+      </div>
       <div className="card rounded-2xl p-7 flex flex-col gap-4 mb-6">
         <div className="f-label text-[11px]" style={{ color: "#71675A" }}>LECTURE CONTENT</div>
         <Field label="Module title" value={title} onChange={(e) => setTitle(e.target.value)} />
