@@ -12,7 +12,7 @@ import { AdminDashboard } from "./admin.jsx";
 import { supabase } from "./lib/supabaseClient.js";
 import { signIn, signOut, signUpApplicant, sendPasswordReset, isAdminEmail } from "./lib/auth.js";
 import { fetchApplicants, insertApplicant, updateApplicant, deleteApplicant, fetchStudents, insertStudent, updateStudent, deleteStudent, fetchResources, insertResource, updateResource, deleteResource, fetchCourses, upsertCourse, deleteCourse, fetchCohorts, upsertCohort, deleteCohort, fetchSettings, updateSettings, fetchTestimonials, upsertTestimonial, deleteTestimonial, fetchFaqs, upsertFaq, deleteFaq, fetchNotices, upsertNotice, fetchTasks, upsertTask, deleteTask, fetchCommunityPosts, upsertCommunityPost, fetchDirectMessages, insertDirectMessage, fetchNotifSeen, saveNotifSeen } from "./lib/db.js";
-import { sendWelcomeEmail, sendAcceptanceEmail } from "./lib/email.js";
+import { sendWelcomeEmail, sendAcceptanceEmail, logSignupBranch } from "./lib/email.js";
 import { checkTeamInvite, signUpTeamMember, getMyTeamAccess, logActivity } from "./lib/team.js";
 
 // Captured the instant this module evaluates -- before Supabase's own client
@@ -390,6 +390,7 @@ export default function App() {
   async function submitApplication(data) {
     try {
       const { password, ...rest } = data;
+      logSignupBranch(applyingAsExisting?.isTeamMember ? "teammember" : applyingAsExisting ? "existing-student" : "new-applicant", rest.email);
       if (applyingAsExisting?.isTeamMember) {
         // A team member applying for their first course -- they already
         // have a login (their team account), so this links straight to
@@ -407,6 +408,7 @@ export default function App() {
         return null;
       }
       const { error, authUserId, needsConfirmation } = await signUpApplicant({ name: rest.name, email: rest.email, password, courseId: rest.courseId, answers: rest.answers });
+      logSignupBranch(error ? "signup-error:" + error.slice(0, 60) : needsConfirmation ? "needs-confirmation" : "immediate", rest.email);
       if (error) return error.toLowerCase().includes("already registered") ? "That email already has an account — try signing in instead." : error;
       if (needsConfirmation) {
         // No session yet, so nothing can be saved until they confirm --

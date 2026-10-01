@@ -66,6 +66,16 @@ async function send(templateId, params, kind) {
   }
 }
 
+// The welcome-email investigation so far has ruled out the request dying
+// mid-flight (an "attempting" row with no "sent"/"failed" row) -- real
+// tests show no "welcome" row at all, meaning sendWelcomeEmail itself
+// isn't being reached. This logs which branch of the signup code actually
+// ran, so the next real test shows exactly where it diverges instead of
+// guessing further. Remove alongside the rest of this diagnostic trail.
+export function logSignupBranch(branch, email) {
+  logEmailAttempt("signup-branch:" + branch, email, "n/a");
+}
+
 export function sendWelcomeEmail({ email, name, courseName }) {
   return send(TEMPLATE_WELCOME, { email, to_name: name, course_name: courseName }, "welcome");
 }
