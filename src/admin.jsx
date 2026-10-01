@@ -260,6 +260,7 @@ export function CourseManager({ course, testimonials, setCourses, onBack }) {
   const [editingQuestions, setEditingQuestions] = useState(false);
   const [openModuleId, setOpenModuleId] = useState(null);
   const [addingModule, setAddingModule] = useState(false); const [newModTitle, setNewModTitle] = useState("");
+  const [confirmDeleteModId, setConfirmDeleteModId] = useState(null);
   const [title, setTitle] = useState(course.title); const [tagline, setTagline] = useState(course.tagline || ""); const [audience, setAudience] = useState(course.audience); const [description, setDescription] = useState(course.description); const [durationWeeks, setDurationWeeks] = useState(course.durationWeeks); const [level, setLevel] = useState(course.level); const [image, setImage] = useState(course.image);
   const [questions, setQuestions] = useState(course.applicationQuestions || []); const [newQ, setNewQ] = useState("");
   const [outcomes, setOutcomes] = useState(course.outcomes || []); const [newOutcome, setNewOutcome] = useState("");
@@ -278,6 +279,7 @@ export function CourseManager({ course, testimonials, setCourses, onBack }) {
     }));
   }
   function togglePublish() { setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, status: c.status === "live" ? "draft" : "live" })); }
+  function deleteModule(id) { setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, modules: c.modules.filter((m) => m.id !== id) })); setConfirmDeleteModId(null); }
   function deleteCourseNow() { setCourses((prev) => prev.filter((c) => c.id !== course.id)); onBack(); }
   function toggleTestimonial(id) { setTestimonialIds((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]); }
   const openModule = openModuleId ? course.modules.find((m) => m.id === openModuleId) : null;
@@ -328,13 +330,23 @@ export function CourseManager({ course, testimonials, setCourses, onBack }) {
           <div className="flex items-center gap-1 absolute top-3 right-3">
             <button onClick={(e) => { e.stopPropagation(); moveModule(i, -1); }} disabled={i === 0} className="rounded-full flex items-center justify-center" style={{ width: 24, height: 24, background: "#F0E7D6", opacity: i === 0 ? 0.4 : 1 }}><ChevronRight size={12} color="#71675A" style={{ transform: "rotate(-90deg)" }} /></button>
             <button onClick={(e) => { e.stopPropagation(); moveModule(i, 1); }} disabled={i === course.modules.length - 1} className="rounded-full flex items-center justify-center" style={{ width: 24, height: 24, background: "#F0E7D6", opacity: i === course.modules.length - 1 ? 0.4 : 1 }}><ChevronRight size={12} color="#71675A" style={{ transform: "rotate(90deg)" }} /></button>
+            <button onClick={(e) => { e.stopPropagation(); setConfirmDeleteModId(m.id); }} title="Delete this module" className="rounded-full flex items-center justify-center" style={{ width: 24, height: 24, background: "#F0E7D6" }}><Trash2 size={12} color="#B04A3A" /></button>
           </div>
-          <button onClick={() => setOpenModuleId(m.id)} className="text-left w-full">
-            <div className="f-code text-[11px] mb-1 accent-text">{m.testType === "milestone" ? "MILESTONE" : "MODULE"} {String(i + 1).padStart(2, "0")}</div>
-            <div className="text-[16px] mb-1 pr-14" style={{ fontWeight: 700 }}>{m.title}</div>
-            {m.brief ? <RichText html={m.brief} className="rich-content text-[13px] mb-3 line-clamp-3" style={{ color: "#71675A" }} /> : <div className="text-[13px] mb-3" style={{ color: "#71675A" }}>No brief yet.</div>}
-            <div className="flex items-center gap-1.5 text-[12px] accent-text" style={{ fontWeight: 700 }}><Pencil size={12} /> Edit module</div>
-          </button>
+          {confirmDeleteModId === m.id ? (
+            <div className="pr-14">
+              <div className="f-code text-[11px] mb-1 accent-text">{m.testType === "milestone" ? "MILESTONE" : "MODULE"} {String(i + 1).padStart(2, "0")}</div>
+              <div className="text-[16px] mb-3" style={{ fontWeight: 700 }}>{m.title}</div>
+              <div className="text-[13px] mb-3" style={{ color: "#B04A3A" }}>Delete this module? Students' progress on it and any submissions will be lost.</div>
+              <div className="flex items-center gap-3 text-[13px]"><button onClick={(e) => { e.stopPropagation(); deleteModule(m.id); }} style={{ color: "#B04A3A", fontWeight: 700 }}>YES, DELETE</button><button onClick={(e) => { e.stopPropagation(); setConfirmDeleteModId(null); }} style={{ color: "#A79B84" }}>Cancel</button></div>
+            </div>
+          ) : (
+            <button onClick={() => setOpenModuleId(m.id)} className="text-left w-full">
+              <div className="f-code text-[11px] mb-1 accent-text">{m.testType === "milestone" ? "MILESTONE" : "MODULE"} {String(i + 1).padStart(2, "0")}</div>
+              <div className="text-[16px] mb-1 pr-16" style={{ fontWeight: 700 }}>{m.title}</div>
+              {m.brief ? <RichText html={m.brief} className="rich-content text-[13px] mb-3 line-clamp-3" style={{ color: "#71675A" }} /> : <div className="text-[13px] mb-3" style={{ color: "#71675A" }}>No brief yet.</div>}
+              <div className="flex items-center gap-1.5 text-[12px] accent-text" style={{ fontWeight: 700 }}><Pencil size={12} /> Edit module</div>
+            </button>
+          )}
         </div>
       ))}</div>
       {addingModule ? <div className="flex items-center gap-3"><input className="input-field rounded-lg px-3.5 py-2" placeholder="New module title" value={newModTitle} onChange={(e) => setNewModTitle(e.target.value)} /><button onClick={addModule} className="btn-primary rounded-lg px-4 py-2 text-[13px] shrink-0">Add</button><button onClick={() => setAddingModule(false)}><X size={16} color="#A79B84" /></button></div> : <button onClick={() => setAddingModule(true)} className="btn-soft rounded-full px-5 py-2.5 text-[13px] flex items-center gap-1.5" style={{ fontWeight: 700 }}><Plus size={15} /> Add module</button>}
