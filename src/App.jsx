@@ -479,10 +479,30 @@ export default function App() {
     ...tasks.flatMap((t) => Object.entries(t.submissions).filter(([, v]) => v.status === "in review").map(([sid]) => ({ id: `sub-${t.id}-${sid}`, t: `New submission for "${t.title}"` }))),
     ...students.flatMap((s) => s.enrollments.filter((e) => e.pendingReview).map((e) => ({ id: `mod-${e.id}`, t: `${s.name} submitted a module quick check for review` }))),
     ...community.filter((p) => p.mentionedIds?.includes("admin")).map((p) => ({ id: `mention-${p.id}`, t: `${p.author} tagged you in the community` })),
+    // Messages have no id or seen-flag of their own -- the key + its index
+    // in that thread is stable and unique, so it doubles as the notif id
+    // (same trick as everything else here, which is all keyed off some
+    // existing id rather than a separate notification record).
+    ...Object.entries(directThreads).flatMap(([key, msgs]) => {
+      const [a, b] = key.split("__");
+      if (a !== "admin" && b !== "admin") return [];
+      const otherId = a === "admin" ? b : a;
+      const student = students.find((s) => s.id === otherId);
+      if (!student) return [];
+      return msgs.flatMap((m, i) => m.from !== "admin" ? [{ id: `chat-${key}-${i}`, t: `New message from ${student.name}` }] : []);
+    }),
   ];
   const studentNotifItems = liveStudent ? [
     ...tasks.filter((t) => t.assigned.includes(liveStudent.id) && !t.submissions[liveStudent.id]).map((t) => ({ id: `assigned-${t.id}`, t: `You've been assigned a new task: "${t.title}"` })),
     ...community.filter((p) => p.mentionedIds?.includes(liveStudent.id)).map((p) => ({ id: `mention-${p.id}`, t: `${p.author} tagged you in the community` })),
+    ...Object.entries(directThreads).flatMap(([key, msgs]) => {
+      const [a, b] = key.split("__");
+      if (a !== liveStudent.id && b !== liveStudent.id) return [];
+      const otherId = a === liveStudent.id ? b : a;
+      const otherName = otherId === "admin" ? "Fidelia" : students.find((s) => s.id === otherId)?.name;
+      if (!otherName) return [];
+      return msgs.flatMap((m, i) => m.from !== liveStudent.id ? [{ id: `chat-${key}-${i}`, t: `New message from ${otherName}` }] : []);
+    }),
     ...tasks.filter((t) => t.assigned.includes(liveStudent.id)).flatMap((t) => { const sub = t.submissions[liveStudent.id]; return sub && sub.status === "approved" ? [{ id: `grade-${t.id}`, t: `Your task "${t.title}" was reviewed — ${sub.score}%` }] : []; }),
     // A written/file-upload/milestone submission reviewed by an admin never
     // gave the student any feedback at all -- unlike an auto-graded quick
