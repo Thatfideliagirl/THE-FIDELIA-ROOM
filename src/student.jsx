@@ -121,14 +121,14 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
     { id: "meetings", label: `Virtual Meetings${module.meetings?.length ? ` (${module.meetings.length})` : ""}` },
   ];
   return (
-    <div className="min-h-screen px-10 md:px-16 py-12 max-w-[760px] mx-auto">
-      <button onClick={onBack} className="flex items-center gap-1.5 text-[13px] mb-8" style={{ color: "#71675A" }}><ArrowLeft size={14} /> Back to your path</button>
+    <div className="min-h-screen px-5 md:px-16 py-8 md:py-12 max-w-[760px] mx-auto">
+      <button onClick={onBack} className="flex items-center gap-1.5 text-[13px] mb-6 md:mb-8" style={{ color: "#71675A" }}><ArrowLeft size={14} /> Back to your path</button>
       <div className="f-code text-[12px] mb-2 accent-text">{module.testType === "milestone" ? "MILESTONE" : "MODULE"} {String(moduleIndex + 1).padStart(2, "0")}</div>
-      <h1 className="f-display text-[30px] mb-6" style={{ fontWeight: 800 }}>{module.title}</h1>
+      <h1 className="f-display text-[22px] md:text-[30px] mb-4 md:mb-6" style={{ fontWeight: 800 }}>{module.title}</h1>
       <div className="flex items-center gap-2 mb-6 flex-wrap">{tabs.map((t) => <button key={t.id} onClick={() => setView(t.id)} className="f-label text-[12px] px-4 py-2 rounded-full" style={{ background: view === t.id ? "var(--accent)" : "#F0E7D6", color: view === t.id ? "#FAF6EC" : "#71675A" }}>{t.label}</button>)}</div>
 
       {view === "lecture" && lectureStep === "brief" && (
-        <div className="card rounded-2xl p-8">
+        <div className="card rounded-2xl p-5 md:p-8">
           <div className="f-label text-[11px] mb-3" style={{ color: "#A79B84" }}>BEFORE YOU START</div>
           <RichText html={module.brief} className="rich-content text-[17px] leading-relaxed mb-6" style={{ color: "#4A4237" }} />
           <div className="flex justify-end"><button onClick={() => setLectureStep("content")} className="btn-primary rounded-lg px-6 py-3 text-[14px] flex items-center gap-2">Next <ArrowRight size={15} /></button></div>
@@ -138,7 +138,7 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
       {view === "lecture" && lectureStep === "content" && (
         <div className="card rounded-2xl overflow-hidden">
           {module.videoUrl && (
-            <div className="px-8 pt-6"><a href={module.videoUrl} target="_blank" rel="noreferrer" className="btn-soft rounded-full px-4 py-2 text-[13px] inline-flex items-center gap-1.5" style={{ fontWeight: 700 }}><PlayCircle size={14} /> Watch lecture</a></div>
+            <div className="px-5 md:px-8 pt-6"><a href={module.videoUrl} target="_blank" rel="noreferrer" className="btn-soft rounded-full px-4 py-2 text-[13px] inline-flex items-center gap-1.5" style={{ fontWeight: 700 }}><PlayCircle size={14} /> Watch lecture</a></div>
           )}
           <div className={showSectionNav ? "md:flex" : ""}>
             {showSectionNav && (
@@ -162,7 +162,7 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
                 </div>
               </div>
             )}
-            <div className="flex-1 p-8">
+            <div className="flex-1 p-5 md:p-8">
               {!atDeck ? (
                 <>
                   <div className="f-label text-[11px] mb-3" style={{ color: "#A79B84" }}>{module.testType === "milestone" ? "PROJECT OVERVIEW" : "LECTURE NOTES"}</div>
@@ -189,7 +189,7 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
       )}
 
       {view === "lecture" && lectureStep === "summary" && (
-        <div className="card rounded-2xl p-8">
+        <div className="card rounded-2xl p-5 md:p-8">
           <div className="f-label text-[11px] mb-3" style={{ color: "#A79B84" }}>SUMMARY</div>
           <RichText html={module.summary || "No summary yet for this module."} className="rich-content text-[17px] leading-relaxed mb-6" style={{ color: "#4A4237" }} />
           <div className="flex items-center justify-between mt-6">
@@ -204,7 +204,7 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
       )}
 
       {view === "lecture" && lectureStep === "videos" && (
-        <div className="card rounded-2xl p-8">
+        <div className="card rounded-2xl p-5 md:p-8">
           <div className="f-label text-[11px] mb-3" style={{ color: "#A79B84" }}>VIDEO RESOURCE</div>
           {module.videoIntro && <RichText html={module.videoIntro} className="rich-content text-[15px] leading-relaxed mb-6" style={{ color: "#4A4237" }} />}
           <div className="flex flex-col gap-4 mb-2">{(module.videos || []).map((v, i) => (
@@ -225,7 +225,7 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
       )}
 
       {view === "meetings" && (
-        <div className="card rounded-2xl p-8">
+        <div className="card rounded-2xl p-5 md:p-8">
           <div className="f-display text-[19px] mb-5" style={{ fontWeight: 700 }}>Virtual meetings for this module</div>
           {(!module.meetings || module.meetings.length === 0) && <div className="text-[14px]" style={{ color: "#A79B84" }}>No classes scheduled yet — check back soon.</div>}
           <div className="flex flex-col gap-2">{(module.meetings || []).map((mt) => (
@@ -247,7 +247,7 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
       )}
 
       {view === "check" && (
-        <div className="card rounded-2xl p-8">
+        <div className="card rounded-2xl p-5 md:p-8">
           {status === "complete" && <div className="flex items-center gap-3" style={{ color: "var(--accent)" }}><CheckCircle2 size={20} /><span className="text-[14px]" style={{ fontWeight: 700 }}>You've completed this module's quick check.</span></div>}
           {status !== "complete" && pendingHere && <div className="flex items-center gap-3" style={{ color: "#71675A" }}><Clock size={20} /><span className="text-[14px]" style={{ fontWeight: 700 }}>Submitted — awaiting review. You'll be notified once it's graded.</span></div>}
           {status === "current" && !pendingHere && module.testType === "multiple-choice" && (
