@@ -423,7 +423,7 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
             </div>
           </>
         )}
-        {tab === "community" && <CommunityPanel community={community} setCommunity={setCommunity} authorName={student.name} allStudents={peers} cohortId={student.cohortId} />}
+        {tab === "community" && <CommunityPanel community={community} setCommunity={setCommunity} authorName={student.name} authorId={student.id} allStudents={peers} cohortId={student.cohortId} />}
         {tab === "notice" && <><SectionHeader eyebrow="FROM THE CREATOR" title="Notice Board" /><div className="flex flex-col gap-3">{[...notices].reverse().map((a) => { const seen = (a.seenBy || []).includes(student.id); return (
           <div key={a.id} className="card rounded-xl p-5">
             <div className="f-label text-[11px] mb-2 accent-text">THE CREATOR</div>
@@ -512,12 +512,18 @@ export function TaskDetailStudent({ task, student, allStudents, setTasks, onBack
     </div>
   );
 }
-export function CommunityPanel({ community, setCommunity, authorName, allStudents, cohortId = "all" }) {
+export function CommunityPanel({ community, setCommunity, authorName, authorId = "admin", allStudents, cohortId = "all" }) {
   const [text, setText] = useState(""); const [showMentions, setShowMentions] = useState(false);
-  function post() { if (!text.trim()) return; setCommunity((p) => [...p, { id: Date.now(), author: authorName, text, image: null, likes: 0, liked: false, comments: [], cohortId }]); setText(""); }
+  // Tracked by id as each name is picked (not re-parsed from the text
+  // afterward) -- two people can share a first name, and re-scanning
+  // "@Daniel" text could match the wrong "Daniel" or miss one typed by
+  // hand without using the picker. Only picks made through this menu
+  // ever notify anyone.
+  const [mentionedIds, setMentionedIds] = useState([]);
+  function post() { if (!text.trim()) return; setCommunity((p) => [...p, { id: Date.now(), author: authorName, authorId, text, image: null, likes: 0, liked: false, comments: [], cohortId, mentionedIds }]); setText(""); setMentionedIds([]); }
   function toggleLike(id) { setCommunity((p) => p.map((post) => post.id === id ? { ...post, liked: !post.liked, likes: post.likes + (post.liked ? -1 : 1) } : post)); }
   function addComment(id, ctext) { if (!ctext.trim()) return; setCommunity((p) => p.map((post) => post.id === id ? { ...post, comments: [...post.comments, { author: authorName, text: ctext }] } : post)); }
-  const names = [{ name: "Fidelia" }, ...allStudents.map((s) => ({ name: s.name }))];
+  const names = [{ id: "admin", name: "Fidelia" }, ...allStudents.map((s) => ({ id: s.id, name: s.name }))];
   const visible = community.filter((p) => cohortId === "all" || (p.cohortId || "all") === "all" || p.cohortId === cohortId);
   return (
     <>
@@ -529,7 +535,7 @@ export function CommunityPanel({ community, setCommunity, authorName, allStudent
           <input className="input-field rounded-lg px-4 py-2.5" placeholder="Share something with the cohort…" value={text} onChange={(e) => setText(e.target.value)} />
           <button onClick={() => setShowMentions((s) => !s)} className="btn-soft rounded-lg p-2.5 shrink-0"><AtSign size={16} /></button>
         </div>
-        {showMentions && <div className="card rounded-lg p-2 mt-2 absolute z-10" style={{ width: 200 }}>{names.map((n, i) => <button key={i} onClick={() => { setText((t) => t + `@${n.name} `); setShowMentions(false); }} className="block w-full text-left px-3 py-1.5 text-[13px] rounded">{n.name}</button>)}</div>}
+        {showMentions && <div className="card rounded-lg p-2 mt-2 absolute z-10" style={{ width: 200 }}>{names.map((n, i) => <button key={i} onClick={() => { setText((t) => t + `@${n.name} `); setMentionedIds((m) => [...new Set([...m, n.id])]); setShowMentions(false); }} className="block w-full text-left px-3 py-1.5 text-[13px] rounded">{n.name}</button>)}</div>}
         <button onClick={post} className="btn-primary rounded-lg px-5 py-2 text-[14px] mt-3">Post</button>
       </div>
       <div className="flex flex-col gap-4">{[...visible].reverse().map((p) => <CommunityPost key={p.id} post={p} onLike={() => toggleLike(p.id)} onComment={(t) => addComment(p.id, t)} />)}</div>

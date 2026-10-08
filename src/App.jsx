@@ -478,9 +478,11 @@ export default function App() {
     ...applicants.filter((a) => a.status === "pending").map((a) => ({ id: `ap-${a.id}`, t: `${a.name} applied for a course` })),
     ...tasks.flatMap((t) => Object.entries(t.submissions).filter(([, v]) => v.status === "in review").map(([sid]) => ({ id: `sub-${t.id}-${sid}`, t: `New submission for "${t.title}"` }))),
     ...students.flatMap((s) => s.enrollments.filter((e) => e.pendingReview).map((e) => ({ id: `mod-${e.id}`, t: `${s.name} submitted a module quick check for review` }))),
+    ...community.filter((p) => p.mentionedIds?.includes("admin")).map((p) => ({ id: `mention-${p.id}`, t: `${p.author} tagged you in the community` })),
   ];
   const studentNotifItems = liveStudent ? [
     ...tasks.filter((t) => t.assigned.includes(liveStudent.id) && !t.submissions[liveStudent.id]).map((t) => ({ id: `assigned-${t.id}`, t: `You've been assigned a new task: "${t.title}"` })),
+    ...community.filter((p) => p.mentionedIds?.includes(liveStudent.id)).map((p) => ({ id: `mention-${p.id}`, t: `${p.author} tagged you in the community` })),
     ...tasks.filter((t) => t.assigned.includes(liveStudent.id)).flatMap((t) => { const sub = t.submissions[liveStudent.id]; return sub && sub.status === "approved" ? [{ id: `grade-${t.id}`, t: `Your task "${t.title}" was reviewed — ${sub.score}%` }] : []; }),
     // A written/file-upload/milestone submission reviewed by an admin never
     // gave the student any feedback at all -- unlike an auto-graded quick
