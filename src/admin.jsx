@@ -641,7 +641,7 @@ export function TaskForm({ students, courses, cohorts, initial, onSave, onClose 
   return (
     <div className="card rounded-xl p-6 mb-6 flex flex-col gap-3">
       <Field label="Task title" value={title} onChange={(e) => setTitle(e.target.value)} />
-      <TextArea label="Full description / instructions" value={description} onChange={(e) => setDescription(e.target.value)} />
+      <div><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Full description / instructions</div><RichTextEditor value={description} onChange={setDescription} minRows={4} /></div>
       <Field label="Tools needed (optional)" value={tools} onChange={(e) => setTools(e.target.value)} placeholder="e.g. Calendly, a laptop" />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <SelectF label="Course" value={courseId} onChange={(e) => setCourseId(e.target.value)} options={courses.map((c) => ({ value: c.id, label: c.title }))} />
@@ -725,7 +725,7 @@ export function TaskDetail({ task, setTasks, students, courses, cohorts, onClose
     <div className="card rounded-2xl p-7 mb-6">
       <div className="flex items-center justify-between mb-2"><button onClick={onClose} className="flex items-center gap-1.5 text-[13px]" style={{ color: "#71675A" }}><ArrowLeft size={14} /> Back to tasks</button><div className="flex gap-3"><button onClick={() => setEditing(true)} className="flex items-center gap-1.5 text-[13px] accent-text" style={{ fontWeight: 700 }}><Pencil size={13} /> Edit</button><button onClick={() => onDelete(task.id)} className="flex items-center gap-1.5 text-[13px]" style={{ color: "#B04A3A" }}><Trash2 size={13} /> Delete</button></div></div>
       <div className="f-display text-[22px] mt-3 mb-1" style={{ fontWeight: 800 }}>{task.title}</div>
-      <div className="text-[15px] mb-2" style={{ color: "#4A4237" }}>{task.description}</div>
+      <RichText html={task.description} className="rich-content text-[15px] mb-2" style={{ color: "#4A4237" }} />
       {task.tools && <div className="text-[14px] mb-2" style={{ color: "#71675A" }}><strong>Tools:</strong> {task.tools}</div>}
       <div className="text-[14px] mb-1" style={{ color: "#71675A" }}><strong>Required proof:</strong> {task.requiredLinks?.length > 0 ? task.requiredLinks.map((r) => r.label || r.type).join(", ") : task.proofType}</div>
       {task.isCapstone && <div className="text-[12px] mb-1"><span className="f-code px-2 py-0.5 rounded-full tint-badge">CAPSTONE</span></div>}
@@ -749,7 +749,7 @@ export function TasksTab({ tasks, setTasks, students, courses, cohorts }) {
     <>
       <SectionHeader eyebrow="ASSIGN & REVIEW" title="Tasks" action={<button onClick={() => setShowAdd((s) => !s)} className="btn-primary rounded-full px-5 py-2.5 text-[14px] flex items-center gap-1.5"><Plus size={16} /> New task</button>} />
       {showAdd && <TaskForm students={students} courses={courses} cohorts={cohorts} onSave={addTask} onClose={() => setShowAdd(false)} />}
-      {selectedTask ? <TaskDetail task={selectedTask} setTasks={setTasks} students={students} courses={courses} cohorts={cohorts} onClose={() => setSelected(null)} onDelete={deleteTask} /> : <div className="flex flex-col gap-4">{tasks.map((t) => <button key={t.id} onClick={() => setSelected(t.id)} className="card card-pop rounded-xl p-5 text-left"><div className="flex items-center justify-between mb-1.5"><div className="text-[16px] flex items-center gap-2" style={{ fontWeight: 700 }}>{t.title}{t.isCapstone && <span className="f-code text-[10px] px-2 py-0.5 rounded-full tint-badge">CAPSTONE</span>}</div><span className="f-code text-[10px]" style={{ color: "#A79B84" }}>{t.assigned.length} assigned</span></div><div className="text-[14px]" style={{ color: "#71675A" }}>{t.description}</div></button>)}</div>}
+      {selectedTask ? <TaskDetail task={selectedTask} setTasks={setTasks} students={students} courses={courses} cohorts={cohorts} onClose={() => setSelected(null)} onDelete={deleteTask} /> : <div className="flex flex-col gap-4">{tasks.map((t) => <button key={t.id} onClick={() => setSelected(t.id)} className="card card-pop rounded-xl p-5 text-left"><div className="flex items-center justify-between mb-1.5"><div className="text-[16px] flex items-center gap-2" style={{ fontWeight: 700 }}>{t.title}{t.isCapstone && <span className="f-code text-[10px] px-2 py-0.5 rounded-full tint-badge">CAPSTONE</span>}</div><span className="f-code text-[10px]" style={{ color: "#A79B84" }}>{t.assigned.length} assigned</span></div><RichText html={t.description} className="rich-content text-[14px] line-clamp-2" style={{ color: "#71675A" }} /></button>)}</div>}
     </>
   );
 }

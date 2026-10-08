@@ -74,6 +74,7 @@ export const FONT_STYLE = `
   .modal-in { animation: modalIn .3s cubic-bezier(.22,1,.36,1) both; }
   .progress-track { background:#F0E7D6; border-radius:99px; overflow:hidden; }
   .progress-fill { background:var(--accent); height:100%; border-radius:99px; transition:width .5s ease; }
+  .rich-content { overflow-wrap:break-word; word-break:break-word; }
   .rich-content h1, .rich-content h2, .rich-content h3 { font-family:'Fraunces',serif; font-weight:800; margin:18px 0 10px; }
   .rich-content h1 { font-size:22px; } .rich-content h2 { font-size:20px; } .rich-content h3 { font-size:18px; }
   .rich-content p { margin:0 0 12px; } .rich-content p:empty { min-height:12px; }
