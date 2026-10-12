@@ -10,25 +10,43 @@ import {
 import { pairKey, moduleStatus, scoreSubmission, AUTO_APPROVE_THRESHOLD, LINK_TYPES } from "./lib/data.js";
 import { SectionHeader, NotifBell, WelcomeTour, SidebarLink, LogoMark, Spine, TextArea, ProgressBar, ResourceDetail, Field, ChangePasswordCard, RichText, RichTextEditor, DashboardShell } from "./components.jsx";
 
+// List markers (•, ‣, etc.) are sometimes present as literal characters
+// in the text itself, not just a CSS bullet -- left in, the speech engine
+// tries to pronounce the glyph and it comes out as a stray word.
+function cleanSpokenText(t) {
+  return (t || "").replace(/[•‣◦●▪·]/g, " ").replace(/\s+/g, " ").trim();
+}
+
 function stripHtml(html) {
   if (!html) return "";
-  // textContent on a parsed document runs every block together with no
-  // separator at all -- a heading butts straight into the next paragraph,
-  // list items run into each other ("Module 1!Learn XLearn Y") -- which is
-  // exactly what made this read like it was jumping between unrelated
-  // lines. Real lecture content also often has headings and bullet points
-  // with no punctuation at all, so a plain space alone still leaves the
-  // sentence-splitter below nothing to split on. Ending every block with
-  // its own period fixes both: a natural pause wherever the page itself
-  // shows a break, whether or not the original text had any punctuation.
-  const spaced = html
-    .replace(/<br\s*\/?>/gi, ". ")
-    .replace(/<\/(p|li|h[1-6]|div)>/gi, "$&. ");
-  const doc = new DOMParser().parseFromString(spaced, "text/html");
-  return (doc.body.textContent || "")
-    .replace(/([.!?])[.!?]+/g, "$1")
-    .replace(/\s+/g, " ")
-    .trim();
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const chunks = [];
+  // Walking the actual blocks (rather than one flat textContent call)
+  // fixes two things at once: a heading no longer butts straight into
+  // the next paragraph with zero separation, and a bullet list reads as
+  // one smoothly-paced line with a comma between items instead of each
+  // item getting the same long pause as a full topic change -- which is
+  // what made a short list of items feel slower than it needed to.
+  Array.from(doc.body.children).forEach((el) => {
+    if (/^(UL|OL)$/.test(el.tagName)) {
+      const items = Array.from(el.children)
+        .filter((li) => li.tagName === "LI")
+        .map((li) => cleanSpokenText(li.textContent))
+        .filter(Boolean);
+      if (items.length) chunks.push(items.join(", ") + ".");
+    } else {
+      const t = cleanSpokenText(el.textContent);
+      if (t) chunks.push(/[.!?]$/.test(t) ? t : t + ".");
+    }
+  });
+  // Content with no block-level wrapper at all (plain text straight in
+  // the body) never matches the walk above -- fall back to the whole
+  // thing as one chunk rather than reading nothing.
+  if (chunks.length === 0) {
+    const t = cleanSpokenText(doc.body.textContent);
+    if (t) chunks.push(t);
+  }
+  return chunks.join(" ").replace(/([.!?])[.!?]+/g, "$1").replace(/\s+/g, " ").trim();
 }
 
 // One long utterance reads flat and run-on, with no breath between ideas
