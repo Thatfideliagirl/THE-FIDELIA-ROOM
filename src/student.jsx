@@ -5,10 +5,50 @@ import {
   ChevronDown, Sparkles, Plus, Check, Send, X, Heart, MessageSquare,
   FileText, Download, GraduationCap, Mail, Phone, Award,
   UserCircle, FolderPlus, Folder, UploadCloud, ClipboardCheck, HelpCircle as HelpIcon,
-  Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Compass, Home, Repeat
+  Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Compass, Home, Repeat, Pause
 } from "lucide-react";
 import { pairKey, moduleStatus, scoreSubmission, AUTO_APPROVE_THRESHOLD, LINK_TYPES } from "./lib/data.js";
 import { SectionHeader, NotifBell, WelcomeTour, SidebarLink, LogoMark, Spine, TextArea, ProgressBar, ResourceDetail, Field, ChangePasswordCard, RichText, RichTextEditor, DashboardShell } from "./components.jsx";
+
+function stripHtml(html) {
+  if (!html) return "";
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  return doc.body.textContent || "";
+}
+
+// Uses the browser's own built-in voice (Web Speech API) -- free, no
+// account, no per-character cost, works for as long as the page is open.
+// Cancelled whenever the text it's reading changes (moving sections,
+// leaving the step) so it never keeps reading something no longer on
+// screen.
+function ListenButton({ text }) {
+  const [state, setState] = useState("idle"); // idle | playing | paused
+  const supported = typeof window !== "undefined" && "speechSynthesis" in window;
+  useEffect(() => {
+    return () => { if (supported) window.speechSynthesis.cancel(); };
+  }, [text]);
+  if (!supported || !text?.trim()) return null;
+  function toggle() {
+    if (state === "idle") {
+      const u = new SpeechSynthesisUtterance(text);
+      u.onend = () => setState("idle");
+      u.onerror = () => setState("idle");
+      window.speechSynthesis.speak(u);
+      setState("playing");
+    } else if (state === "playing") {
+      window.speechSynthesis.pause();
+      setState("paused");
+    } else {
+      window.speechSynthesis.resume();
+      setState("playing");
+    }
+  }
+  return (
+    <button onClick={toggle} className="btn-soft rounded-full px-3.5 py-1.5 text-[11.5px] flex items-center gap-1.5 shrink-0" style={{ fontWeight: 700 }}>
+      {state === "playing" ? <Pause size={12} /> : <PlayCircle size={12} />} {state === "playing" ? "Pause" : state === "paused" ? "Resume" : "Listen"}
+    </button>
+  );
+}
 
 // Splits lecture notes into one section per heading -- but only at whichever
 // heading level (H1 biggest, H3 smallest) is actually the main structure of
@@ -129,7 +169,7 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
 
       {view === "lecture" && lectureStep === "brief" && (
         <div className="card rounded-2xl p-5 md:p-8">
-          <div className="f-label text-[11px] mb-3" style={{ color: "#A79B84" }}>BEFORE YOU START</div>
+          <div className="flex items-center justify-between mb-3 gap-3"><div className="f-label text-[11px]" style={{ color: "#A79B84" }}>BEFORE YOU START</div><ListenButton text={stripHtml(module.brief)} /></div>
           <RichText html={module.brief} className="rich-content text-[17px] leading-relaxed mb-6" style={{ color: "#4A4237" }} />
           <div className="flex justify-end"><button onClick={() => setLectureStep("content")} className="btn-primary rounded-lg px-6 py-3 text-[14px] flex items-center gap-2">Next <ArrowRight size={15} /></button></div>
         </div>
@@ -165,7 +205,7 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
             <div className="flex-1 p-5 md:p-8">
               {!atDeck ? (
                 <>
-                  <div className="f-label text-[11px] mb-3" style={{ color: "#A79B84" }}>{module.testType === "milestone" ? "PROJECT OVERVIEW" : "LECTURE NOTES"}</div>
+                  <div className="flex items-center justify-between mb-3 gap-3"><div className="f-label text-[11px]" style={{ color: "#A79B84" }}>{module.testType === "milestone" ? "PROJECT OVERVIEW" : "LECTURE NOTES"}</div><ListenButton text={stripHtml(sections[sectionIdx]?.html)} /></div>
                   {sections[sectionIdx]?.heading && <div className="f-display text-[20px] mb-3" style={{ fontWeight: 800 }}>{sections[sectionIdx].heading}</div>}
                   <RichText html={sections[sectionIdx]?.html || "Lecture content coming soon."} className="rich-content text-[15px] leading-relaxed mb-5" style={{ color: "#4A4237" }} />
                 </>
@@ -190,7 +230,7 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
 
       {view === "lecture" && lectureStep === "summary" && (
         <div className="card rounded-2xl p-5 md:p-8">
-          <div className="f-label text-[11px] mb-3" style={{ color: "#A79B84" }}>SUMMARY</div>
+          <div className="flex items-center justify-between mb-3 gap-3"><div className="f-label text-[11px]" style={{ color: "#A79B84" }}>SUMMARY</div><ListenButton text={stripHtml(module.summary)} /></div>
           <RichText html={module.summary || "No summary yet for this module."} className="rich-content text-[17px] leading-relaxed mb-6" style={{ color: "#4A4237" }} />
           <div className="flex items-center justify-between mt-6">
             <button onClick={() => setLectureStep("content")} className="text-[13px]" style={{ color: "#A79B84" }}>Back</button>
