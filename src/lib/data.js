@@ -33,6 +33,27 @@ export const TEAM_PERMISSION_TABS = [
   ] },
 ];
 
+// Every tab on a student's enrollment dashboard, toggleable individually --
+// a cohort ending doesn't have to mean cutting someone off entirely, just
+// the learning side, while Library/Certificate/Chat/Community/Notice Board
+// can stay open. Scoped per enrollment (enrollment.restrictedTabs, absent
+// or empty = full access) rather than per student, since one student can
+// have more than one enrollment with different cohorts and end dates.
+export const STUDENT_ACCESS_TABS = [
+  { group: "Learning", items: [
+    { id: "path", label: "Your Path", sub: "Modules, lectures, quick checks" },
+    { id: "meetings", label: "Virtual Meetings" },
+    { id: "tasks", label: "Tasks", sub: "Assigned tasks & the capstone" },
+  ] },
+  { group: "Community & support", items: [
+    { id: "library", label: "Resource Library", sub: "Downloadable slide decks & files" },
+    { id: "certificate", label: "Certificate" },
+    { id: "chat", label: "Chat" },
+    { id: "community", label: "Community" },
+    { id: "notice", label: "Notice Board" },
+  ] },
+];
+
 
 export const FONT_STYLE = `
   @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;0,9..144,800;0,9..144,900;1,9..144,400;1,9..144,500&family=Work+Sans:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap');

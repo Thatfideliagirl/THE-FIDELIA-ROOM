@@ -8,7 +8,7 @@ import {
   Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Home, UserCog, Repeat
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from "recharts";
-import { genCode, pairKey, ADMIN_EMAIL, TEAM_PERMISSION_TABS, LINK_TYPES } from "./lib/data.js";
+import { genCode, pairKey, ADMIN_EMAIL, TEAM_PERMISSION_TABS, LINK_TYPES, STUDENT_ACCESS_TABS } from "./lib/data.js";
 import { Field, SectionHeader, NotifBell, SidebarLink, LogoMark, TextArea, SelectF, ImgField, FileField, ChangePasswordCard, RichTextEditor, RichText, DashboardShell, WelcomeTour, TEAM_TOUR_STEPS } from "./components.jsx";
 import { CommunityPanel } from "./student.jsx";
 import { fetchTeamMembers, addTeamMember, updateTeamMember, removeTeamMember, fetchTeamActivity, updateMyTeamProfile, markTourSeen } from "./lib/team.js";
@@ -534,9 +534,21 @@ export function CoursesTab({ courses, setCourses, testimonials }) {
 export function StudentDetail({ student, applicant, setStudents, courses, cohorts, onClose, onDelete }) {
   const [status, setStatus] = useState(student.accountStatus); const [cohortId, setCohortId] = useState(student.cohortId);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [manageAccessId, setManageAccessId] = useState(null);
   function saveStatus(v) { setStatus(v); setStudents((prev) => prev.map((s) => s.id === student.id ? { ...s, accountStatus: v } : s)); }
   function saveCohort(v) { setCohortId(v); setStudents((prev) => prev.map((s) => s.id === student.id ? { ...s, cohortId: v } : s)); }
   function reissue(enrollmentId) { const code = genCode(); setStudents((prev) => prev.map((s) => s.id !== student.id ? s : { ...s, enrollments: s.enrollments.map((e) => e.id === enrollmentId ? { ...e, code } : e) })); }
+  function toggleAccess(enrollmentId, tabId) {
+    setStudents((prev) => prev.map((s) => s.id !== student.id ? s : {
+      ...s,
+      enrollments: s.enrollments.map((e) => {
+        if (e.id !== enrollmentId) return e;
+        const current = e.restrictedTabs || [];
+        const next = current.includes(tabId) ? current.filter((t) => t !== tabId) : [...current, tabId];
+        return { ...e, restrictedTabs: next };
+      }),
+    }));
+  }
   function decideReview(enrollmentId, approve) {
     setStudents((prev) => prev.map((s) => s.id !== student.id ? s : {
       ...s,
@@ -588,25 +600,71 @@ export function StudentDetail({ student, applicant, setStudents, courses, cohort
         </div>
       )}
       <div className="f-label text-[11px] mb-3" style={{ color: "#71675A" }}>ENROLLMENTS</div>
-      <div className="flex flex-col gap-2 mb-5">{student.enrollments.map((e) => <div key={e.id} className="flex items-center justify-between px-4 py-3 rounded-lg" style={{ background: "#FAF6EC" }}><div><div className="text-[14px]" style={{ fontWeight: 700 }}>{courses.find((c) => c.id === e.courseId)?.title}</div><div className="f-code text-[10px]" style={{ color: "#71675A" }}>{e.status.toUpperCase()} · {e.completedModuleIds.length}/{courses.find((c) => c.id === e.courseId)?.modules.length || 8} modules</div></div><div className="flex items-center gap-2"><span className="f-code text-[13px]">{e.code}</span><button onClick={() => reissue(e.id)} className="f-label text-[10px] accent-text">REISSUE</button></div></div>)}</div>
+      <div className="flex flex-col gap-2 mb-5">{student.enrollments.map((e) => {
+        const studentCohort = cohorts.find((c) => c.id === student.cohortId);
+        const endedDaysAgo = studentCohort?.endDate ? Math.floor((Date.now() - new Date(studentCohort.endDate).getTime()) / 86400000) : null;
+        const restricted = new Set(e.restrictedTabs || []);
+        return (
+          <div key={e.id} className="rounded-lg px-4 py-3" style={{ background: "#FAF6EC" }}>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <div className="text-[14px]" style={{ fontWeight: 700 }}>{courses.find((c) => c.id === e.courseId)?.title}</div>
+                <div className="f-code text-[10px]" style={{ color: "#71675A" }}>{e.status.toUpperCase()} · {e.completedModuleIds.length}/{courses.find((c) => c.id === e.courseId)?.modules.length || 8} modules{restricted.size > 0 ? ` · ${restricted.size} area${restricted.size === 1 ? "" : "s"} restricted` : ""}</div>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="f-code text-[13px]">{e.code}</span>
+                <button onClick={() => reissue(e.id)} className="f-label text-[10px] accent-text">REISSUE</button>
+                <button onClick={() => setManageAccessId(manageAccessId === e.id ? null : e.id)} className="f-label text-[10px] accent-text">{manageAccessId === e.id ? "HIDE" : "MANAGE ACCESS"}</button>
+              </div>
+            </div>
+            {manageAccessId === e.id && (
+              <div className="mt-3 pt-3" style={{ borderTop: "1px solid #E7DEC9" }}>
+                {endedDaysAgo != null && endedDaysAgo > 0 && (
+                  <div className="text-[12px] rounded-lg px-3 py-2 mb-3" style={{ background: "#FBF0E2", color: "#8A5422" }}>{studentCohort.name} ended {endedDaysAgo === 1 ? "1 day" : `${endedDaysAgo} days`} ago.</div>
+                )}
+                {STUDENT_ACCESS_TABS.map((group) => (
+                  <div key={group.group}>
+                    <div className="f-label text-[10px] mt-2 mb-1" style={{ color: "#A79B84" }}>{group.group.toUpperCase()}</div>
+                    {group.items.map((item) => (
+                      <div key={item.id} className="flex items-center justify-between py-1.5" style={{ borderBottom: "1px solid #F0E7D6" }}>
+                        <div><div className="text-[13px]">{item.label}</div>{item.sub && <div className="text-[11px]" style={{ color: "#A79B84" }}>{item.sub}</div>}</div>
+                        <button onClick={() => toggleAccess(e.id, item.id)} className="rounded-full shrink-0" style={{ width: 36, height: 21, background: !restricted.has(item.id) ? "#4E7D5C" : "#E7DEC9", position: "relative", transition: "background .15s" }}>
+                          <span style={{ position: "absolute", top: 2, left: !restricted.has(item.id) ? 17 : 2, width: 17, height: 17, borderRadius: "50%", background: "#fff", transition: "left .15s" }} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}</div>
       {applicant && <div className="pt-5" style={{ borderTop: "1px solid #F0E7D6" }}><div className="f-label text-[11px] mb-3" style={{ color: "#71675A" }}>LATEST APPLICATION ANSWERS</div>{applicant.answers.map((ans, i) => <div key={i} className="mb-2 text-[13px]">{ans}</div>)}</div>}
     </div>
   );
 }
 export function StudentsTab({ students, setStudents, onRemove, applicants, courses, cohorts }) {
   const [selected, setSelected] = useState(null);
+  const [cohortFilter, setCohortFilter] = useState("all");
   function exportCsv() { const rows = [["Student ID", "Name", "Email", "Cohort", "Status", "Enrollments"], ...students.map((s) => [s.studentId, s.name, s.email, cohorts.find((c) => c.id === s.cohortId)?.name || "", s.accountStatus, s.enrollments.map((e) => courses.find((c) => c.id === e.courseId)?.title).join("; ")])]; const csv = rows.map((r) => r.join(",")).join("\n"); const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "fj-room-students.csv"; a.click(); URL.revokeObjectURL(url); }
+  const scopedStudents = cohortFilter === "all" ? students : students.filter((s) => s.cohortId === cohortFilter);
   const selectedStudent = students.find((s) => s.id === selected);
   const selectedApplicant = selectedStudent ? applicants.filter((a) => a.email === selectedStudent.email).slice(-1)[0] : null;
   return (
     <>
       <SectionHeader eyebrow="ROSTER" title="Students" action={<button onClick={exportCsv} className="btn-soft rounded-full px-5 py-2.5 text-[14px] flex items-center gap-1.5" style={{ fontWeight: 700 }}><Download size={14} /> Export CSV</button>} />
       {selectedStudent && <StudentDetail student={selectedStudent} applicant={selectedApplicant} setStudents={setStudents} courses={courses} cohorts={cohorts} onClose={() => setSelected(null)} onDelete={() => { onRemove(selectedStudent.id); setSelected(null); }} />}
+      <div className="flex items-center gap-2 mb-6 flex-wrap">
+        <button onClick={() => setCohortFilter("all")} className="f-label text-[11px] px-3.5 py-1.5 rounded-full" style={{ background: cohortFilter === "all" ? "var(--accent)" : "#F0E7D6", color: cohortFilter === "all" ? "#FAF6EC" : "#71675A" }}>All cohorts</button>
+        {cohorts.map((co) => <button key={co.id} onClick={() => setCohortFilter(co.id)} className="f-label text-[11px] px-3.5 py-1.5 rounded-full" style={{ background: cohortFilter === co.id ? "var(--accent)" : "#F0E7D6", color: cohortFilter === co.id ? "#FAF6EC" : "#71675A" }}>{co.name}</button>)}
+      </div>
       <div className="card rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
           <div className="min-w-[600px]">
             <div className="grid grid-cols-5 px-6 py-3 f-label text-[11px]" style={{ background: "#F0E7D6", color: "#71675A" }}><div>STUDENT ID</div><div>NAME</div><div>COHORT</div><div>STATUS</div><div>COURSES</div></div>
-            {students.map((s) => <button key={s.id} onClick={() => setSelected(s.id)} className="w-full grid grid-cols-5 px-6 py-4 items-center text-[14px] text-left" style={{ borderTop: "1px solid #F0E7D6" }}><div className="f-code text-[11px]" style={{ color: "#71675A" }}>{s.studentId}</div><div style={{ fontWeight: 700 }}>{s.name}</div><div style={{ color: "#4A4237" }}>{cohorts.find((c) => c.id === s.cohortId)?.name || "—"}</div><span className="f-code text-[10px] px-2.5 py-1 rounded-full self-start tint-badge">{s.accountStatus.toUpperCase()}</span><div style={{ color: "#4A4237" }}>{s.enrollments.length}</div></button>)}
+            {scopedStudents.map((s) => <button key={s.id} onClick={() => setSelected(s.id)} className="w-full grid grid-cols-5 px-6 py-4 items-center text-[14px] text-left" style={{ borderTop: "1px solid #F0E7D6" }}><div className="f-code text-[11px]" style={{ color: "#71675A" }}>{s.studentId}</div><div style={{ fontWeight: 700 }}>{s.name}</div><div style={{ color: "#4A4237" }}>{cohorts.find((c) => c.id === s.cohortId)?.name || "—"}</div><span className="f-code text-[10px] px-2.5 py-1 rounded-full self-start tint-badge">{s.accountStatus.toUpperCase()}</span><div style={{ color: "#4A4237" }}>{s.enrollments.length}</div></button>)}
+            {scopedStudents.length === 0 && <div className="px-6 py-8 text-[13px]" style={{ color: "#A79B84" }}>No students in this cohort yet.</div>}
           </div>
         </div>
       </div>

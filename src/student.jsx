@@ -289,8 +289,12 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
 // =========================================================
 // STUDENT: My Courses + per-enrollment dashboard
 // =========================================================
+const ENROLLMENT_TAB_ORDER = ["path", "meetings", "library", "tasks", "certificate", "chat", "community", "notice"];
 export function EnrollmentDashboard({ student, setStudents, course, enrollment, tasks, setTasks, resources, community, setCommunity, notices, setNotices, directThreads, setDirectThreads, allStudents, onBack, notifItems, notifSeen, onMarkSeen }) {
   const [tab, setTab] = useState("path");
+  const restrictedTabs = new Set(enrollment.restrictedTabs || []);
+  const allowedTabs = ENROLLMENT_TAB_ORDER.filter((id) => !restrictedTabs.has(id));
+  useEffect(() => { if (allowedTabs.length > 0 && restrictedTabs.has(tab)) setTab(allowedTabs[0]); }, [enrollment.restrictedTabs]);
   const [openModuleId, setOpenModuleId] = useState(null);
   const [openTaskId, setOpenTaskId] = useState(null);
   const [activePeer, setActivePeer] = useState("admin");
@@ -315,16 +319,21 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
       <button onClick={onBack} className="flex items-center gap-1.5 text-[13px] mb-6 px-2" style={{ color: "#71675A" }}><ArrowLeft size={14} /> My Courses</button>
       <div className="mb-6 px-2"><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>COURSE</div><div className="f-display text-[16px]" style={{ fontWeight: 700 }}>{course.title}</div></div>
       <div className="flex flex-col gap-1 flex-1">
-        <SidebarLink icon={BookOpen} label="Your path" active={tab === "path"} onClick={() => { setTab("path"); setOpenModuleId(null); }} />
-        <SidebarLink icon={PlayCircle} label="Virtual Meetings" active={tab === "meetings"} onClick={() => setTab("meetings")} />
-        <SidebarLink icon={Library} label="Resource library" active={tab === "library"} onClick={() => setTab("library")} />
-        <SidebarLink icon={ListChecks} label="Tasks" active={tab === "tasks"} onClick={() => { setTab("tasks"); setOpenTaskId(null); }} />
-        <SidebarLink icon={Award} label="Certificate" active={tab === "certificate"} onClick={() => setTab("certificate")} />
-        <SidebarLink icon={MessageCircle} label="Chat" active={tab === "chat"} onClick={() => setTab("chat")} />
-        <SidebarLink icon={Users} label="Community" active={tab === "community"} onClick={() => setTab("community")} />
-        <SidebarLink icon={Megaphone} label="Notice Board" active={tab === "notice"} onClick={() => setTab("notice")} />
+        {!restrictedTabs.has("path") && <SidebarLink icon={BookOpen} label="Your path" active={tab === "path"} onClick={() => { setTab("path"); setOpenModuleId(null); }} />}
+        {!restrictedTabs.has("meetings") && <SidebarLink icon={PlayCircle} label="Virtual Meetings" active={tab === "meetings"} onClick={() => setTab("meetings")} />}
+        {!restrictedTabs.has("library") && <SidebarLink icon={Library} label="Resource library" active={tab === "library"} onClick={() => setTab("library")} />}
+        {!restrictedTabs.has("tasks") && <SidebarLink icon={ListChecks} label="Tasks" active={tab === "tasks"} onClick={() => { setTab("tasks"); setOpenTaskId(null); }} />}
+        {!restrictedTabs.has("certificate") && <SidebarLink icon={Award} label="Certificate" active={tab === "certificate"} onClick={() => setTab("certificate")} />}
+        {!restrictedTabs.has("chat") && <SidebarLink icon={MessageCircle} label="Chat" active={tab === "chat"} onClick={() => setTab("chat")} />}
+        {!restrictedTabs.has("community") && <SidebarLink icon={Users} label="Community" active={tab === "community"} onClick={() => setTab("community")} />}
+        {!restrictedTabs.has("notice") && <SidebarLink icon={Megaphone} label="Notice Board" active={tab === "notice"} onClick={() => setTab("notice")} />}
       </div>
     </>
+  );
+  if (allowedTabs.length === 0) return (
+    <DashboardShell sidebar={sidebar} maxWidth={880}>
+      <div className="card rounded-2xl p-10 text-center"><div className="f-display text-[20px] mb-2" style={{ fontWeight: 800 }}>Access to this course has been paused.</div><div className="text-[14px]" style={{ color: "#71675A" }}>Reach out to the Room if you think this isn't right.</div></div>
+    </DashboardShell>
   );
   return (
     <DashboardShell sidebar={sidebar} maxWidth={880}>
