@@ -16,6 +16,28 @@ function stripHtml(html) {
   return doc.body.textContent || "";
 }
 
+// One long utterance reads flat and run-on, with no breath between ideas
+// -- queuing one utterance per sentence instead gives the engine a natural
+// gap at every full stop, closer to how someone actually reads aloud.
+function splitSentences(text) {
+  const parts = text.match(/[^.!?]+[.!?]+(\s+|$)|[^.!?]+$/g);
+  return (parts || [text]).map((s) => s.trim()).filter(Boolean);
+}
+
+// Not every installed voice sounds the same -- browsers list several, and
+// the first one isn't always the best. Favors ones that advertise
+// themselves as higher quality over generic/robotic defaults, without
+// requiring the user to pick anything.
+function pickVoice() {
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices.length) return null;
+  const english = voices.filter((v) => /^en/i.test(v.lang));
+  const pool = english.length ? english : voices;
+  return pool.find((v) => /(natural|enhanced|premium|neural)/i.test(v.name))
+    || pool.find((v) => /google/i.test(v.name))
+    || pool[0];
+}
+
 // Uses the browser's own built-in voice (Web Speech API) -- free, no
 // account, no per-character cost, works for as long as the page is open.
 // Cancelled whenever the text it's reading changes (moving sections,
@@ -30,10 +52,18 @@ function ListenButton({ text }) {
   if (!supported || !text?.trim()) return null;
   function toggle() {
     if (state === "idle") {
-      const u = new SpeechSynthesisUtterance(text);
-      u.onend = () => setState("idle");
-      u.onerror = () => setState("idle");
-      window.speechSynthesis.speak(u);
+      const voice = pickVoice();
+      const sentences = splitSentences(text);
+      sentences.forEach((sentence, i) => {
+        const u = new SpeechSynthesisUtterance(sentence);
+        u.rate = 0.94; // a touch slower than default reads as more deliberate, less rushed
+        if (voice) u.voice = voice;
+        if (i === sentences.length - 1) {
+          u.onend = () => setState("idle");
+          u.onerror = () => setState("idle");
+        }
+        window.speechSynthesis.speak(u);
+      });
       setState("playing");
     } else if (state === "playing") {
       window.speechSynthesis.pause();
