@@ -12,8 +12,23 @@ import { SectionHeader, NotifBell, WelcomeTour, SidebarLink, LogoMark, Spine, Te
 
 function stripHtml(html) {
   if (!html) return "";
-  const doc = new DOMParser().parseFromString(html, "text/html");
-  return doc.body.textContent || "";
+  // textContent on a parsed document runs every block together with no
+  // separator at all -- a heading butts straight into the next paragraph,
+  // list items run into each other ("Module 1!Learn XLearn Y") -- which is
+  // exactly what made this read like it was jumping between unrelated
+  // lines. Real lecture content also often has headings and bullet points
+  // with no punctuation at all, so a plain space alone still leaves the
+  // sentence-splitter below nothing to split on. Ending every block with
+  // its own period fixes both: a natural pause wherever the page itself
+  // shows a break, whether or not the original text had any punctuation.
+  const spaced = html
+    .replace(/<br\s*\/?>/gi, ". ")
+    .replace(/<\/(p|li|h[1-6]|div)>/gi, "$&. ");
+  const doc = new DOMParser().parseFromString(spaced, "text/html");
+  return (doc.body.textContent || "")
+    .replace(/([.!?])[.!?]+/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 // One long utterance reads flat and run-on, with no breath between ideas
@@ -47,7 +62,11 @@ function ListenButton({ text }) {
   const [state, setState] = useState("idle"); // idle | playing | paused
   const supported = typeof window !== "undefined" && "speechSynthesis" in window;
   useEffect(() => {
-    return () => { if (supported) window.speechSynthesis.cancel(); };
+    // The content moving on (a new section, leaving the step) stops the
+    // audio, but without this the button itself stayed stuck on "Pause"
+    // for text that was no longer playing -- tapping it then just called
+    // pause() on an already-cancelled, empty queue and did nothing.
+    return () => { if (supported) window.speechSynthesis.cancel(); setState("idle"); };
   }, [text]);
   if (!supported || !text?.trim()) return null;
   function toggle() {
