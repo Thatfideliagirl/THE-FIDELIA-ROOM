@@ -43,7 +43,7 @@ function splitSentences(text) {
 // the first one isn't always the best. Favors ones that advertise
 // themselves as higher quality over generic/robotic defaults, without
 // requiring the user to pick anything.
-function pickVoice() {
+function choosePreferredVoice() {
   const voices = window.speechSynthesis.getVoices();
   if (!voices.length) return null;
   const english = voices.filter((v) => /^en/i.test(v.lang));
@@ -51,6 +51,29 @@ function pickVoice() {
   return pool.find((v) => /(natural|enhanced|premium|neural)/i.test(v.name))
     || pool.find((v) => /google/i.test(v.name))
     || pool[0];
+}
+// Chrome reports an empty voice list for a moment after the page loads,
+// before filling it in asynchronously -- picking fresh on every press
+// meant the very first Listen (before that list was ready) fell back to
+// a different default voice than every press after it, switching
+// mid-lecture between a male and female voice. Resolved once, reused for
+// the rest of the session, so it's always the same voice everywhere.
+let preferredVoicePromise = null;
+function getPreferredVoice() {
+  if (preferredVoicePromise) return preferredVoicePromise;
+  preferredVoicePromise = new Promise((resolve) => {
+    const existing = choosePreferredVoice();
+    if (existing) { resolve(existing); return; }
+    const onVoicesChanged = () => {
+      const v = choosePreferredVoice();
+      if (v) { window.speechSynthesis.removeEventListener("voiceschanged", onVoicesChanged); resolve(v); }
+    };
+    window.speechSynthesis.addEventListener("voiceschanged", onVoicesChanged);
+    // Some browsers never fire voiceschanged at all -- fall back to
+    // whatever's available after a short wait rather than hang forever.
+    setTimeout(() => { window.speechSynthesis.removeEventListener("voiceschanged", onVoicesChanged); resolve(choosePreferredVoice()); }, 1000);
+  });
+  return preferredVoicePromise;
 }
 
 // Uses the browser's own built-in voice (Web Speech API) -- free, no
@@ -61,17 +84,29 @@ function pickVoice() {
 function ListenButton({ text }) {
   const [state, setState] = useState("idle"); // idle | playing | paused
   const supported = typeof window !== "undefined" && "speechSynthesis" in window;
+  // A ref, not the state value itself -- state read inside toggle() below
+  // is a snapshot from when the click happened, so comparing it after an
+  // await always sees the pre-click value, never the update. The ref is
+  // read fresh at check-time, so it actually reflects whether this step
+  // was left while the voice lookup was still in flight.
+  const tokenRef = useRef(0);
   useEffect(() => {
     // The content moving on (a new section, leaving the step) stops the
     // audio, but without this the button itself stayed stuck on "Pause"
     // for text that was no longer playing -- tapping it then just called
     // pause() on an already-cancelled, empty queue and did nothing.
-    return () => { if (supported) window.speechSynthesis.cancel(); setState("idle"); };
+    return () => { tokenRef.current++; if (supported) window.speechSynthesis.cancel(); setState("idle"); };
   }, [text]);
   if (!supported || !text?.trim()) return null;
-  function toggle() {
+  async function toggle() {
     if (state === "idle") {
-      const voice = pickVoice();
+      const myToken = tokenRef.current;
+      setState("playing");
+      const voice = await getPreferredVoice();
+      // Left this step (or it re-rendered with new text) while that
+      // voice lookup was still in flight -- don't start speaking into
+      // content that's no longer on screen.
+      if (tokenRef.current !== myToken) return;
       const sentences = splitSentences(text);
       sentences.forEach((sentence, i) => {
         const u = new SpeechSynthesisUtterance(sentence);
@@ -83,7 +118,6 @@ function ListenButton({ text }) {
         }
         window.speechSynthesis.speak(u);
       });
-      setState("playing");
     } else if (state === "playing") {
       window.speechSynthesis.pause();
       setState("paused");
