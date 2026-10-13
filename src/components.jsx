@@ -509,6 +509,34 @@ export function FileField({ label, value, onChange, accept }) {
     </div>
   );
 }
+// Shared between the admin's task view and the student's -- a video file
+// plays inline, an image shows inline, anything else (PDF, doc, etc.) is
+// just a clear download link. Same files, same component, so they never
+// drift apart.
+function taskFileKind(name) {
+  const ext = (name.split(".").pop() || "").toLowerCase();
+  if (["mp4", "mov", "webm", "m4v"].includes(ext)) return "video";
+  if (["png", "jpg", "jpeg", "gif", "webp"].includes(ext)) return "image";
+  return "file";
+}
+export function TaskFileList({ files }) {
+  if (!files || files.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-3">
+      {files.map((row) => {
+        const file = row.file || row;
+        const kind = taskFileKind(file.name);
+        return (
+          <div key={row.id || file.name} className="rounded-lg overflow-hidden" style={{ border: "1px solid #E7DEC9" }}>
+            {kind === "video" && <video controls src={file.dataUrl} className="w-full" style={{ maxHeight: 320, display: "block", background: "#000" }} />}
+            {kind === "image" && <img src={file.dataUrl} alt={file.name} style={{ maxWidth: "100%", maxHeight: 320, display: "block" }} />}
+            <a href={file.dataUrl} download={file.name} target={kind === "file" ? undefined : "_blank"} rel="noreferrer" className="flex items-center gap-2 px-3 py-2.5 text-[13px]" style={{ color: "var(--accent)", fontWeight: 700 }}><Download size={14} /> {file.name}</a>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 export function TextArea({ label, ...props }) { return <label className="block">{label && <div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>{label}</div>}<textarea className="input-field rounded-lg px-3.5 py-2.5 resize-y leading-relaxed" rows={3} {...props} /></label>; }
 export function SelectF({ label, options, ...props }) { return <label className="block">{label && <div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>{label}</div>}<select className="input-field rounded-lg px-3.5 py-2.5" {...props}>{options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>; }
 export function ImgField({ label, value, onChange }) {

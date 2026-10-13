@@ -8,7 +8,7 @@ import {
   Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Compass, Home, Repeat, Pause
 } from "lucide-react";
 import { pairKey, moduleStatus, scoreSubmission, AUTO_APPROVE_THRESHOLD, LINK_TYPES } from "./lib/data.js";
-import { SectionHeader, NotifBell, WelcomeTour, SidebarLink, LogoMark, Spine, TextArea, ProgressBar, ResourceDetail, Field, ChangePasswordCard, RichText, RichTextEditor, DashboardShell } from "./components.jsx";
+import { SectionHeader, NotifBell, WelcomeTour, SidebarLink, LogoMark, Spine, TextArea, ProgressBar, ResourceDetail, Field, ChangePasswordCard, RichText, RichTextEditor, DashboardShell, TaskFileList } from "./components.jsx";
 
 // List markers (•, ‣, etc.) are sometimes present as literal characters
 // in the text itself, not just a CSS bullet -- left in, the speech engine
@@ -616,6 +616,7 @@ export function TaskDetailStudent({ task, student, allStudents, setTasks, onBack
         <div className="f-display text-[23px] mb-2" style={{ fontWeight: 800 }}>{task.title}</div>
         <RichText html={task.description} className="rich-content text-[15px] mb-4" style={{ color: "#4A4237" }} />
         {task.tools && <div className="text-[14px] mb-2" style={{ color: "#71675A" }}><strong>Tools:</strong> {task.tools}</div>}
+        {task.files?.length > 0 && <div className="mb-4"><div className="f-label text-[11px] mb-2" style={{ color: "#71675A" }}>FILES FOR THIS TASK</div><TaskFileList files={task.files} /></div>}
         {!hasLinks && <div className="text-[14px] mb-2" style={{ color: "#71675A" }}><strong>Submit:</strong> {proofLabel}</div>}
         {task.deadlineAt ? (
           <div className="f-code text-[11px] mb-1 flex items-center gap-1.5" style={{ color: isPastDeadline ? "#B04A3A" : "#A79B84" }}><Clock size={11} /> {isPastDeadline ? "CLOSED" : "CLOSES"} {new Date(task.deadlineAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</div>

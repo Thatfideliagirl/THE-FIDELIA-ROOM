@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from "recharts";
 import { genCode, pairKey, ADMIN_EMAIL, TEAM_PERMISSION_TABS, LINK_TYPES, STUDENT_ACCESS_TABS } from "./lib/data.js";
-import { Field, SectionHeader, NotifBell, SidebarLink, LogoMark, TextArea, SelectF, ImgField, FileField, ChangePasswordCard, RichTextEditor, RichText, DashboardShell, WelcomeTour, TEAM_TOUR_STEPS } from "./components.jsx";
+import { Field, SectionHeader, NotifBell, SidebarLink, LogoMark, TextArea, SelectF, ImgField, FileField, TaskFileList, ChangePasswordCard, RichTextEditor, RichText, DashboardShell, WelcomeTour, TEAM_TOUR_STEPS } from "./components.jsx";
 import { CommunityPanel } from "./student.jsx";
 import { fetchTeamMembers, addTeamMember, updateTeamMember, removeTeamMember, fetchTeamActivity, updateMyTeamProfile, markTourSeen } from "./lib/team.js";
 
@@ -685,7 +685,14 @@ export function TaskForm({ students, courses, cohorts, initial, onSave, onClose 
   // these specific links instead.
   const [requiredLinks, setRequiredLinks] = useState(initial?.requiredLinks || []);
   const [isCapstone, setIsCapstone] = useState(initial?.isCapstone || false);
+  // What SHE gives them to complete the task (a template, a brief, a
+  // sample) -- separate from requiredLinks/proofType above, which is what
+  // THEY submit back. Any number of files, each optional.
+  const [files, setFiles] = useState(initial?.files || []);
   function toggle(id) { setAssigned((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]); }
+  function addFileRow() { setFiles((prev) => [...prev, { id: "f" + Date.now(), file: null }]); }
+  function updateFileRow(i, patch) { setFiles((prev) => prev.map((f, idx) => idx === i ? { ...f, ...patch } : f)); }
+  function removeFileRow(i) { setFiles((prev) => prev.filter((_, idx) => idx !== i)); }
   const eligible = students.filter((s) => s.enrollments.some((e) => e.courseId === courseId));
   const cohortEligible = cohortId === "all" ? eligible : eligible.filter((s) => s.cohortId === cohortId);
   const effectiveAssigned = cohortId === "all" ? assigned : cohortEligible.map((s) => s.id);
@@ -701,6 +708,22 @@ export function TaskForm({ students, courses, cohorts, initial, onSave, onClose 
       <Field label="Task title" value={title} onChange={(e) => setTitle(e.target.value)} />
       <div><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Full description / instructions</div><RichTextEditor value={description} onChange={setDescription} minRows={4} /></div>
       <Field label="Tools needed (optional)" value={tools} onChange={(e) => setTools(e.target.value)} placeholder="e.g. Calendly, a laptop" />
+
+      <div>
+        <div className="f-label text-[11px] mb-2" style={{ color: "#71675A" }}>FILES FOR STUDENTS (OPTIONAL)</div>
+        <div className="text-[12px] mb-2" style={{ color: "#A79B84" }}>Anything they need to do this task — a template, a brief, a sample. They can view and download it; separate from what they submit back to you below.</div>
+        {files.length > 0 && (
+          <div className="flex flex-col gap-2 mb-2">
+            {files.map((f, i) => (
+              <div key={f.id} className="flex items-center gap-2 rounded-lg p-2.5" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
+                <div className="flex-1"><FileField value={f.file} onChange={(file) => updateFileRow(i, { file })} /></div>
+                <button onClick={() => removeFileRow(i)}><X size={15} color="#A79B84" /></button>
+              </div>
+            ))}
+          </div>
+        )}
+        <button onClick={addFileRow} className="text-[13px] accent-text flex items-center gap-1.5" style={{ fontWeight: 700 }}><Plus size={14} /> Add a file</button>
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <SelectF label="Course" value={courseId} onChange={(e) => setCourseId(e.target.value)} options={courses.map((c) => ({ value: c.id, label: c.title }))} />
         <SelectF label="Cohort" value={cohortId} onChange={(e) => setCohortId(e.target.value)} options={[{ value: "all", label: "Pick students myself" }, ...cohorts.map((c) => ({ value: c.id, label: c.name }))]} />
@@ -745,7 +768,7 @@ export function TaskForm({ students, courses, cohorts, initial, onSave, onClose 
         <span>This is the <strong>capstone</strong> for {courses.find((c) => c.id === courseId)?.title || "this course"} — counts toward certificate eligibility in the Gradebook. Only one task per course can be the capstone.</span>
       </label>
 
-      <div className="flex gap-3 mt-1"><button onClick={() => { if (title) onSave({ title, description, tools, courseId, cohortId, dueInDays: Number(dueInDays), deadlineAt: deadlineAt || null, proofType, requiredLinks, isCapstone, assigned: effectiveAssigned }); }} className="btn-primary rounded-lg px-5 py-2.5 text-[14px]">Save task</button><button onClick={onClose} className="text-[14px]" style={{ color: "#A79B84" }}>Cancel</button></div>
+      <div className="flex gap-3 mt-1"><button onClick={() => { if (title) onSave({ title, description, tools, courseId, cohortId, dueInDays: Number(dueInDays), deadlineAt: deadlineAt || null, proofType, requiredLinks, isCapstone, files: files.filter((f) => f.file), assigned: effectiveAssigned }); }} className="btn-primary rounded-lg px-5 py-2.5 text-[14px]">Save task</button><button onClick={onClose} className="text-[14px]" style={{ color: "#A79B84" }}>Cancel</button></div>
     </div>
   );
 }
@@ -785,6 +808,7 @@ export function TaskDetail({ task, setTasks, students, courses, cohorts, onClose
       <div className="f-display text-[22px] mt-3 mb-1" style={{ fontWeight: 800 }}>{task.title}</div>
       <RichText html={task.description} className="rich-content text-[15px] mb-2" style={{ color: "#4A4237" }} />
       {task.tools && <div className="text-[14px] mb-2" style={{ color: "#71675A" }}><strong>Tools:</strong> {task.tools}</div>}
+      {task.files?.length > 0 && <div className="mb-4"><div className="f-label text-[11px] mb-2" style={{ color: "#71675A" }}>FILES FOR STUDENTS</div><TaskFileList files={task.files} /></div>}
       <div className="text-[14px] mb-1" style={{ color: "#71675A" }}><strong>Required proof:</strong> {task.requiredLinks?.length > 0 ? task.requiredLinks.map((r) => r.label || r.type).join(", ") : task.proofType}</div>
       {task.isCapstone && <div className="text-[12px] mb-1"><span className="f-code px-2 py-0.5 rounded-full tint-badge">CAPSTONE</span></div>}
       {task.deadlineAt && <div className="text-[14px] mb-6" style={{ color: "#71675A" }}><strong>Closes:</strong> {new Date(task.deadlineAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</div>}
