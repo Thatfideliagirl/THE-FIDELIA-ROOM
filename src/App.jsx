@@ -1,8 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import {
-  seedStudents, seedApplicants, seedTasks,
-  seedTestimonials, seedFaqs, FONT_STYLE, genCode, nextStudentId,
-} from "./lib/data.js";
+import { FONT_STYLE, genCode, nextStudentId } from "./lib/data.js";
 import {
   Landing, CoursesIndex, CourseDetail, ResourcesPage, ApplicationForm,
   SignInScreen, InReviewScreen, CodeRedeemScreen, LogoMark, Field, ResourceDetail,
@@ -51,14 +48,21 @@ export default function App() {
   const [sharedResourceId, setSharedResourceId] = useState(() => new URLSearchParams(window.location.search).get("r"));
   const [courses, setCourses] = useState([]);
   const [cohorts, setCohorts] = useState([]);
-  const [students, setStudents] = useState(seedStudents);
-  const [applicants, setApplicants] = useState(seedApplicants);
-  const [tasks, setTasks] = useState(seedTasks);
+  // These all start empty and get replaced within moments by their real
+  // fetch below -- never seed/demo data. Starting from seedX here was a
+  // leftover from before the database existed: for that brief window
+  // before the real fetch resolves, admin screens were showing sample
+  // tasks/students/testimonials that looked exactly like real (if stale
+  // or already-deleted) data, which is exactly what made deleted tasks
+  // appear to "come back" for a moment on every page load.
+  const [students, setStudents] = useState([]);
+  const [applicants, setApplicants] = useState([]);
+  const [tasks, setTasks] = useState([]);
   const [resources, setResources] = useState([]);
-  const [testimonials, setTestimonials] = useState(seedTestimonials);
-  const [faqs, setFaqs] = useState(seedFaqs);
+  const [testimonials, setTestimonials] = useState([]);
+  const [faqs, setFaqs] = useState([]);
   const [community, setCommunity] = useState([]);
-  const [notices, setNotices] = useState([{ id: "n0", text: "Welcome to Virtual Assistant Foundations, cohort!", cohortId: "all", seenBy: [] }]);
+  const [notices, setNotices] = useState([]);
   const [directThreads, setDirectThreads] = useState({});
   const [brand, setBrand] = useState({ name: "FJ Room", accent: "#1C6FA0", email: "FJRoomm@gmail.com", whatsapp: "2348135793935", instagram: "VA_WEY_DEY_PAMPER", twitter: "VA_WeyDeyPamper" });
   const [adminProfile, setAdminProfile] = useState({ name: "Fidelia Joseph", photo: null, bio: "" });
