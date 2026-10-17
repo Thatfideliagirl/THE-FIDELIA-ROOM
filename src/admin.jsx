@@ -5,7 +5,7 @@ import {
   ChevronDown, Sparkles, Plus, Check, Send, X, Heart, MessageSquare,
   FileText, Download, GraduationCap, Mail, Phone, Award,
   UserCircle, FolderPlus, Folder, UploadCloud, ClipboardCheck, HelpCircle as HelpIcon,
-  Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Home, UserCog, Repeat
+  Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Home, UserCog, Repeat, RotateCcw
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from "recharts";
 import { genCode, pairKey, ADMIN_EMAIL, TEAM_PERMISSION_TABS, LINK_TYPES, STUDENT_ACCESS_TABS, linkShare, deriveSubmissionStatus, sumLinkScores } from "./lib/data.js";
@@ -810,18 +810,18 @@ export function SubmissionDetail({ sid, student, sub, task, onGrade, onGradeLink
                   <div className="text-[13.5px]" style={{ fontWeight: 700 }}>{r.label || r.type}</div>
                   {url ? <a href={url} target="_blank" rel="noreferrer" className="text-[12.5px] accent-text break-all">{url} ↗</a> : <span className="text-[12.5px]" style={{ color: "#A79B84" }}>Not submitted</span>}
                 </div>
-                {locked === "approved" && <span className="f-code text-[10px] px-2.5 py-1 rounded-full shrink-0" style={{ background: "#E4F3E9", color: "#2F7D4F" }}>✓ APPROVED · {sub.linkGrades[i].score}%</span>}
+                {locked === "approved" && <span className="f-code text-[10px] px-2.5 py-1 rounded-full shrink-0 flex items-center gap-1" style={{ background: "#E4F3E9", color: "#2F7D4F" }}><Check size={11} /> APPROVED · {sub.linkGrades[i].score}%</span>}
                 {locked === "resubmit" && <span className="f-code text-[10px] px-2.5 py-1 rounded-full shrink-0" style={{ background: "#FBEAE0", color: "#B2572B" }}>WAITING ON STUDENT</span>}
               </div>
               {locked === "resubmit" && sub.linkGrades[i].feedback && <div className="text-[12.5px] mt-2 rounded-lg px-3 py-2" style={{ background: "#FFFFFF", color: "#4A4237" }}>Your feedback: "{sub.linkGrades[i].feedback}"</div>}
               {draft && (
                 <div className="mt-3">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <button onClick={() => setDraft(i, { decision: "approved" })} className="f-label text-[11px] px-3 py-1.5 rounded-full" style={{ background: draft.decision === "approved" ? "#2F7D4F" : "#FFFFFF", color: draft.decision === "approved" ? "#fff" : "#4A4237", border: "1px solid #E7DEC9" }}>✓ Approve</button>
-                    <button onClick={() => setDraft(i, { decision: "resubmit" })} className="f-label text-[11px] px-3 py-1.5 rounded-full" style={{ background: draft.decision === "resubmit" ? "#B2572B" : "#FFFFFF", color: draft.decision === "resubmit" ? "#fff" : "#4A4237", border: "1px solid #E7DEC9" }}>↩ Resubmit</button>
+                    <button onClick={() => setDraft(i, { decision: "approved" })} className="f-label text-[11px] px-3 py-1.5 rounded-full flex items-center gap-1" style={{ background: draft.decision === "approved" ? "#2F7D4F" : "#FFFFFF", color: draft.decision === "approved" ? "#fff" : "#4A4237", border: "1px solid #E7DEC9" }}><Check size={12} /> Approve</button>
+                    <button onClick={() => setDraft(i, { decision: "resubmit" })} className="f-label text-[11px] px-3 py-1.5 rounded-full flex items-center gap-1" style={{ background: draft.decision === "resubmit" ? "#B2572B" : "#FFFFFF", color: draft.decision === "resubmit" ? "#fff" : "#4A4237", border: "1px solid #E7DEC9" }}><RotateCcw size={12} /> Resubmit</button>
                     {draft.decision === "approved" && <div className="flex items-center gap-1.5 ml-auto"><input type="number" className="input-field rounded-lg px-2.5 py-1.5 text-[13px]" style={{ width: 70 }} value={draft.score} onChange={(e) => setDraft(i, { score: e.target.value })} /><span className="text-[12px]" style={{ color: "#71675A" }}>%</span></div>}
                   </div>
-                  {draft.decision === "resubmit" && <textarea className="input-field rounded-lg px-3 py-2 text-[13px] w-full mt-2" rows={2} placeholder="Why is this going back to them?" value={draft.feedback} onChange={(e) => setDraft(i, { feedback: e.target.value })} />}
+                  {draft.decision === "resubmit" && <textarea className="input-field rounded-lg px-3 py-2 text-[13px] w-full mt-2" rows={3} placeholder="Why is this going back to them?" value={draft.feedback} onChange={(e) => setDraft(i, { feedback: e.target.value })} />}
                 </div>
               )}
             </div>

@@ -652,15 +652,15 @@ export function TaskDetailStudent({ task, student, allStudents, setTasks, onBack
                 const url = sub.links[i];
                 if (!url) return null;
                 if (grade?.decision === "approved") return (
-                  <div key={i} className="rounded-lg px-3.5 py-2.5 text-[13.5px]" style={{ background: "#E4F3E9" }}><span style={{ fontWeight: 700 }}>{r.label || r.type}</span> <span style={{ color: "#2F7D4F" }}>✓ Approved · {grade.score}%</span></div>
+                  <div key={i} className="rounded-lg px-3.5 py-2.5 text-[13.5px] flex items-center gap-1.5" style={{ background: "#E4F3E9" }}><span style={{ fontWeight: 700 }}>{r.label || r.type}</span> <span className="flex items-center gap-1" style={{ color: "#2F7D4F" }}><Check size={13} /> Approved · {grade.score}%</span></div>
                 );
                 if (grade?.decision === "resubmit") return (
                   <div key={i} className="rounded-lg px-3.5 py-3 text-[13.5px]" style={{ background: "#FBEAE0" }}>
                     <div style={{ fontWeight: 700 }}>{r.label || r.type} — needs a resubmission</div>
                     {grade.feedback && <div className="text-[13px] mt-1.5 rounded-lg px-3 py-2" style={{ background: "#FFFFFF", color: "#4A4237" }}>"{grade.feedback}"</div>}
-                    <div className="flex items-center gap-2 mt-2">
-                      <input className="input-field rounded-lg px-3 py-2 text-[13.5px] flex-1" placeholder="Paste your new link…" value={resubmitDrafts[i] || ""} onChange={(e) => setResubmitDrafts((p) => ({ ...p, [i]: e.target.value }))} />
-                      <button onClick={() => resubmitLink(i)} disabled={!(resubmitDrafts[i] || "").trim()} className="btn-primary rounded-lg px-4 py-2 text-[13px] shrink-0 disabled:opacity-40">Resubmit</button>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
+                      <input className="input-field rounded-lg px-3 py-2 text-[13.5px] flex-1 min-w-0" placeholder="Paste your new link…" value={resubmitDrafts[i] || ""} onChange={(e) => setResubmitDrafts((p) => ({ ...p, [i]: e.target.value }))} />
+                      <button onClick={() => resubmitLink(i)} disabled={!(resubmitDrafts[i] || "").trim()} className="btn-primary rounded-lg px-4 py-2 text-[13px] sm:shrink-0 disabled:opacity-40">Resubmit</button>
                     </div>
                   </div>
                 );
