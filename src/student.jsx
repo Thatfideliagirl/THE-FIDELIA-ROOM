@@ -601,7 +601,7 @@ export function TaskDetailStudent({ task, student, allStudents, setTasks, onBack
     if (isPastDeadline) return;
     if (hasLinks) {
       const linksObj = {}; links.forEach((v, i) => { linksObj[i] = v; });
-      setTasks((prev) => prev.map((t) => t.id !== task.id ? t : { ...t, submissions: { ...t.submissions, [student.id]: { status: "in review", links: linksObj, linkGrades: {}, note: "", score: null } } }));
+      setTasks((prev) => prev.map((t) => t.id !== task.id ? t : { ...t, submissions: { ...t.submissions, [student.id]: { status: "needs review", links: linksObj, linkGrades: {}, note: "", score: null, round: 0 } } }));
     } else {
       if (!note.trim()) return;
       setTasks((prev) => prev.map((t) => t.id !== task.id ? t : { ...t, submissions: { ...t.submissions, [student.id]: { status: "in review", note, score: null } } }));
@@ -616,7 +616,7 @@ export function TaskDetailStudent({ task, student, allStudents, setTasks, onBack
     setTasks((prev) => prev.map((t) => {
       if (t.id !== task.id) return t;
       const prevSub = t.submissions[student.id];
-      const nextSub = { ...prevSub, links: { ...prevSub.links, [i]: newUrl }, linkGrades: { ...prevSub.linkGrades, [i]: { decision: null, score: null, feedback: "" } } };
+      const nextSub = { ...prevSub, links: { ...prevSub.links, [i]: newUrl }, linkGrades: { ...prevSub.linkGrades, [i]: { decision: null, score: null, feedback: "" } }, round: (prevSub.round || 0) + 1 };
       nextSub.status = deriveSubmissionStatus(t, nextSub);
       return { ...t, submissions: { ...t.submissions, [student.id]: nextSub } };
     }));

@@ -865,7 +865,12 @@ export function TaskDetail({ task, setTasks, students, courses, cohorts, onClose
     setTasks((prev) => prev.map((t) => {
       if (t.id !== task.id) return t;
       const prevSub = t.submissions[sid];
-      const nextSub = { ...prevSub, linkGrades };
+      // Bumped on every save (and matched by a bump on every student
+      // resubmission, in student.jsx) so a notification id from one round
+      // can never be mistaken for one already marked seen from an earlier
+      // round -- otherwise a second resubmission on the same task would
+      // reuse the exact id the student or admin already dismissed.
+      const nextSub = { ...prevSub, linkGrades, round: (prevSub.round || 0) + 1 };
       nextSub.status = deriveSubmissionStatus(t, nextSub);
       nextSub.score = sumLinkScores(t, nextSub);
       return { ...t, submissions: { ...t.submissions, [sid]: nextSub } };

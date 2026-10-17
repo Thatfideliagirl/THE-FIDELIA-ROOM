@@ -480,7 +480,11 @@ export default function App() {
 
   const adminNotifItems = [
     ...applicants.filter((a) => a.status === "pending").map((a) => ({ id: `ap-${a.id}`, t: `${a.name} applied for a course` })),
-    ...tasks.flatMap((t) => Object.entries(t.submissions).filter(([, v]) => v.status === "in review").map(([sid]) => ({ id: `sub-${t.id}-${sid}`, t: `New submission for "${t.title}"` }))),
+    // "needs review" covers both a first submission and a resubmission on
+    // a task with required links -- the round number keeps the id fresh
+    // each time, so a resubmission can't get silently swallowed by the
+    // "seen" flag the first submission already earned.
+    ...tasks.flatMap((t) => Object.entries(t.submissions).filter(([, v]) => v.status === "in review" || v.status === "needs review").map(([sid, v]) => ({ id: `sub-${t.id}-${sid}-${v.round || 0}`, t: `New submission for "${t.title}"` }))),
     ...students.flatMap((s) => s.enrollments.filter((e) => e.pendingReview).map((e) => ({ id: `mod-${e.id}`, t: `${s.name} submitted a module quick check for review` }))),
     ...community.filter((p) => p.mentionedIds?.includes("admin")).map((p) => ({ id: `mention-${p.id}`, t: `${p.author} tagged you in the community` })),
     // Messages have no id or seen-flag of their own -- the key + its index
@@ -507,8 +511,12 @@ export default function App() {
       if (!otherName) return [];
       return msgs.flatMap((m, i) => m.from !== liveStudent.id ? [{ id: `chat-${key}-${i}`, t: `New message from ${otherName}` }] : []);
     }),
-    ...tasks.filter((t) => t.assigned.includes(liveStudent.id)).flatMap((t) => { const sub = t.submissions[liveStudent.id]; return sub && sub.status === "approved" ? [{ id: `grade-${t.id}`, t: `Your task "${t.title}" was reviewed — ${sub.score}%` }] : []; }),
-    ...tasks.filter((t) => t.assigned.includes(liveStudent.id)).flatMap((t) => { const sub = t.submissions[liveStudent.id]; return sub && sub.status === "waiting on student" ? [{ id: `resubmit-${t.id}`, t: `Your task "${t.title}" has feedback — one or more links need a resubmission` }] : []; }),
+    // Both ids carry the submission's round number for the same reason as
+    // the admin's "new submission" notif above -- a task can be approved
+    // or sent back more than once across its lifetime (a different link
+    // each time), and a stable id would only ever notify the first time.
+    ...tasks.filter((t) => t.assigned.includes(liveStudent.id)).flatMap((t) => { const sub = t.submissions[liveStudent.id]; return sub && sub.status === "approved" ? [{ id: `grade-${t.id}-${sub.round || 0}`, t: `Your task "${t.title}" was reviewed — ${sub.score}%` }] : []; }),
+    ...tasks.filter((t) => t.assigned.includes(liveStudent.id)).flatMap((t) => { const sub = t.submissions[liveStudent.id]; return sub && sub.status === "waiting on student" ? [{ id: `resubmit-${t.id}-${sub.round || 0}`, t: `Your task "${t.title}" has feedback — one or more links need a resubmission` }] : []; }),
     // A written/file-upload/milestone submission reviewed by an admin never
     // gave the student any feedback at all -- unlike an auto-graded quick
     // check, which shows "well done" the instant it passes, this happened in
