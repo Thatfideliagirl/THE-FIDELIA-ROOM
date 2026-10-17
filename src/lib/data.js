@@ -160,12 +160,20 @@ export const seedResources = [
 // of "verify it" is confirming the link's shape plus a one-click preview,
 // not a false promise that the system checked the page really exists.
 export const LINK_TYPES = [
-  { key: "gdoc", label: "Google Doc", placeholder: "https://docs.google.com/document/…", test: (u) => /docs\.google\.com/.test(u) },
+  { key: "gdoc", label: "Google Doc", placeholder: "https://docs.google.com/document/…", test: (u) => /docs\.google\.com\/document/.test(u) },
   { key: "gsheet", label: "Google Sheet", placeholder: "https://docs.google.com/spreadsheets/…", test: (u) => /docs\.google\.com\/spreadsheets/.test(u) },
   { key: "gslides", label: "Google Slides", placeholder: "https://docs.google.com/presentation/…", test: (u) => /docs\.google\.com\/presentation/.test(u) },
+  { key: "gform", label: "Google Form", placeholder: "https://docs.google.com/forms/…", test: (u) => /docs\.google\.com\/forms/.test(u) },
+  { key: "gdrive", label: "Google Drive", placeholder: "https://drive.google.com/…", test: (u) => /drive\.google\.com/.test(u) },
+  { key: "gmeet", label: "Google Meet", placeholder: "https://meet.google.com/…", test: (u) => /meet\.google\.com/.test(u) },
   { key: "canva", label: "Canva", placeholder: "https://www.canva.com/design/…", test: (u) => /canva\.com/.test(u) },
   { key: "notion", label: "Notion", placeholder: "https://www.notion.so/…", test: (u) => /notion\.(so|site)/.test(u) },
   { key: "trello", label: "Trello", placeholder: "https://trello.com/b/…", test: (u) => /trello\.com/.test(u) },
+  { key: "asana", label: "Asana", placeholder: "https://app.asana.com/…", test: (u) => /asana\.com/.test(u) },
+  { key: "monday", label: "Monday.com", placeholder: "https://…monday.com/…", test: (u) => /monday\.com/.test(u) },
+  { key: "clickup", label: "ClickUp", placeholder: "https://app.clickup.com/…", test: (u) => /clickup\.com/.test(u) },
+  { key: "teams", label: "Microsoft Teams", placeholder: "https://teams.microsoft.com/…", test: (u) => /teams\.(microsoft|live)\.com/.test(u) },
+  { key: "zoom", label: "Zoom", placeholder: "https://zoom.us/…", test: (u) => /zoom\.us/.test(u) },
   { key: "figma", label: "Figma", placeholder: "https://www.figma.com/file/…", test: (u) => /figma\.com/.test(u) },
   { key: "other", label: "Other link", placeholder: "https://…", test: (u) => /^https?:\/\/.+/.test(u) },
 ];
