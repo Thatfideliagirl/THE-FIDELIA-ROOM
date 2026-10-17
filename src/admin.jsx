@@ -792,8 +792,9 @@ export function SubmissionDetail({ sid, student, sub, task, onGrade, onGradeLink
   function setDraft(i, patch) { setDrafts((p) => ({ ...p, [i]: { ...p[i], ...patch } })); }
   const allDecided = hasLinks && Object.values(drafts).every((d) => d.decision != null);
   function saveLinks() {
+    const maxShare = linkShare(task.requiredLinks.length);
     const linkGrades = { ...sub.linkGrades };
-    Object.entries(drafts).forEach(([i, d]) => { linkGrades[i] = { decision: d.decision, score: d.decision === "approved" ? Number(d.score) || 0 : null, feedback: d.decision === "resubmit" ? d.feedback : "" }; });
+    Object.entries(drafts).forEach(([i, d]) => { linkGrades[i] = { decision: d.decision, score: d.decision === "approved" ? Math.min(maxShare, Math.max(0, Number(d.score) || 0)) : null, feedback: d.decision === "resubmit" ? d.feedback : "" }; });
     onGradeLinks(sid, linkGrades);
   }
   return <div className="card modal-in rounded-2xl p-6 mb-4">
@@ -804,6 +805,7 @@ export function SubmissionDetail({ sid, student, sub, task, onGrade, onGradeLink
           const url = links[i];
           const locked = sub.linkGrades?.[i]?.decision ?? null;
           const draft = drafts[i];
+          const maxShare = linkShare(task.requiredLinks.length);
           return (
             <div key={i} className="rounded-xl p-4" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
               <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -820,7 +822,7 @@ export function SubmissionDetail({ sid, student, sub, task, onGrade, onGradeLink
                   <div className="flex items-center gap-2 flex-wrap">
                     <button onClick={() => setDraft(i, { decision: "approved" })} className="f-label text-[11px] px-3 py-1.5 rounded-full flex items-center gap-1" style={{ background: draft.decision === "approved" ? "#2F7D4F" : "#FFFFFF", color: draft.decision === "approved" ? "#fff" : "#4A4237", border: "1px solid #E7DEC9" }}><Check size={12} /> Approve</button>
                     <button onClick={() => setDraft(i, { decision: "resubmit" })} className="f-label text-[11px] px-3 py-1.5 rounded-full flex items-center gap-1" style={{ background: draft.decision === "resubmit" ? "#B2572B" : "#FFFFFF", color: draft.decision === "resubmit" ? "#fff" : "#4A4237", border: "1px solid #E7DEC9" }}><RotateCcw size={12} /> Resubmit</button>
-                    {draft.decision === "approved" && <div className="flex items-center gap-1.5 ml-auto"><input type="number" className="input-field rounded-lg px-2.5 py-1.5 text-[13px]" style={{ width: 70 }} value={draft.score} onChange={(e) => setDraft(i, { score: e.target.value })} /><span className="text-[12px]" style={{ color: "#71675A" }}>%</span></div>}
+                    {draft.decision === "approved" && <div className="flex items-center gap-1.5 ml-auto"><input type="number" min={0} max={maxShare} className="input-field rounded-lg px-2.5 py-1.5 text-[13px]" style={{ width: 70 }} value={draft.score} onChange={(e) => setDraft(i, { score: Math.min(maxShare, Math.max(0, Number(e.target.value) || 0)) })} /><span className="text-[12px]" style={{ color: "#71675A" }}>/ {maxShare}% max</span></div>}
                   </div>
                   {draft.decision === "resubmit" && <textarea className="input-field rounded-lg px-3 py-2 text-[13px] w-full mt-2" rows={3} placeholder="Why is this going back to them?" value={draft.feedback} onChange={(e) => setDraft(i, { feedback: e.target.value })} />}
                 </div>
