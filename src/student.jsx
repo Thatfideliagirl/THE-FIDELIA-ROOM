@@ -598,6 +598,10 @@ export function CertificateTab({ course, enrollment, student, tasks, setStudents
   // elig.eligible` guard) whenever there's no template or the student
   // isn't eligible yet, rather than being skipped by an early return.
   const elig = template ? courseEligibility(tasks, course, enrollment, student.id) : null;
+  // Rendered and shown even while locked (blurred, behind the padlock) --
+  // like Meko Meko's own certificate screen, seeing your own name already
+  // sitting there is part of what makes "not yet eligible" feel like
+  // something you're working toward rather than a blank wall.
   const [finalUrl, setFinalUrl] = useState(null);
 
   // The issue date is fixed the moment someone first becomes eligible, not
@@ -609,18 +613,20 @@ export function CertificateTab({ course, enrollment, student, tasks, setStudents
   }, [template, elig?.eligible, enrollment.certificateIssuedAt, enrollment.id, student.id, setStudents]);
 
   useEffect(() => {
-    if (!template || !elig.eligible) { setFinalUrl(null); return; }
+    if (!template) { setFinalUrl(null); return; }
     let cancelled = false;
     renderCertificate(template.file.dataUrl, {
       name: student.name,
       namePos: template.namePos,
       fontSizePct: template.fontSizePct,
+      // Before they're actually eligible there's no real issue date yet --
+      // today's date previews where it'll sit, same as the name does.
       date: template.includeDate ? formatIssueDate(enrollment.certificateIssuedAt || new Date().toISOString()) : null,
       datePos: template.datePos,
       dateFontSizePct: template.dateFontSizePct,
     }).then((url) => { if (!cancelled) setFinalUrl(url); }).catch((e) => console.error("renderCertificate failed", e));
     return () => { cancelled = true; };
-  }, [template, elig?.eligible, template?.file.dataUrl, template?.namePos.xPct, template?.namePos.yPct, template?.fontSizePct, template?.includeDate, template?.datePos?.xPct, template?.datePos?.yPct, template?.dateFontSizePct, student.name, enrollment.certificateIssuedAt]);
+  }, [template, template?.file.dataUrl, template?.namePos.xPct, template?.namePos.yPct, template?.fontSizePct, template?.includeDate, template?.datePos?.xPct, template?.datePos?.yPct, template?.dateFontSizePct, student.name, enrollment.certificateIssuedAt]);
 
   if (!template) {
     return enrollment.certificateReady && enrollment.certificateFile ? (
@@ -640,7 +646,7 @@ export function CertificateTab({ course, enrollment, student, tasks, setStudents
   return (
     <div className="card rounded-2xl p-6 max-w-[460px] mx-auto">
       <div className="relative rounded-xl overflow-hidden mb-5" style={{ border: "1px solid #E7DEC9" }}>
-        <img src={elig.eligible && finalUrl ? finalUrl : template.file.dataUrl} alt="" style={{ display: "block", width: "100%", filter: elig.eligible ? "none" : "blur(2px)" }} />
+        <img src={finalUrl || template.file.dataUrl} alt="" style={{ display: "block", width: "100%", filter: elig.eligible ? "none" : "blur(2px)" }} />
         {!elig.eligible && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2" style={{ background: "rgba(38,32,25,.6)" }}>
             <Lock size={26} color="#fff" />
