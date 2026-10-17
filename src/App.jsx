@@ -508,6 +508,7 @@ export default function App() {
       return msgs.flatMap((m, i) => m.from !== liveStudent.id ? [{ id: `chat-${key}-${i}`, t: `New message from ${otherName}` }] : []);
     }),
     ...tasks.filter((t) => t.assigned.includes(liveStudent.id)).flatMap((t) => { const sub = t.submissions[liveStudent.id]; return sub && sub.status === "approved" ? [{ id: `grade-${t.id}`, t: `Your task "${t.title}" was reviewed — ${sub.score}%` }] : []; }),
+    ...tasks.filter((t) => t.assigned.includes(liveStudent.id)).flatMap((t) => { const sub = t.submissions[liveStudent.id]; return sub && sub.status === "waiting on student" ? [{ id: `resubmit-${t.id}`, t: `Your task "${t.title}" has feedback — one or more links need a resubmission` }] : []; }),
     // A written/file-upload/milestone submission reviewed by an admin never
     // gave the student any feedback at all -- unlike an auto-graded quick
     // check, which shows "well done" the instant it passes, this happened in

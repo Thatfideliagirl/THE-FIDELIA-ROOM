@@ -178,6 +178,41 @@ export const LINK_TYPES = [
   { key: "other", label: "Other link", placeholder: "https://…", test: (u) => /^https?:\/\/.+/.test(u) },
 ];
 
+// Each required link is worth an equal share of 100, reviewed on its own
+// rather than as one pass/fail for the whole task -- so a submission with
+// 3 links can land at 67% (2 approved, 1 sent back) instead of forcing an
+// all-or-nothing call across every link.
+export const linkShare = (n) => Math.round((100 / n) * 10) / 10;
+
+// A link's grade stays null until the admin decides on it, "resubmit" once
+// they send it back (locked on the admin's side until the student acts),
+// or "approved" (locked for good -- an approved link is never re-opened).
+// Deriving the whole submission's status from these every time, rather
+// than storing it separately, means there's only one place that can ever
+// disagree with itself about whether something is still waiting on someone.
+export function deriveSubmissionStatus(task, sub) {
+  if (!task.requiredLinks?.length) return sub.status;
+  let allApproved = true, anyPending = false;
+  task.requiredLinks.forEach((_, i) => {
+    const decision = sub.linkGrades?.[i]?.decision;
+    if (decision == null) { anyPending = true; allApproved = false; }
+    else if (decision === "resubmit") { allApproved = false; }
+  });
+  if (allApproved) return "approved";
+  if (anyPending) return "needs review";
+  return "waiting on student";
+}
+
+export function sumLinkScores(task, sub) {
+  if (!task.requiredLinks?.length) return sub.score;
+  let total = 0;
+  task.requiredLinks.forEach((_, i) => {
+    const g = sub.linkGrades?.[i];
+    if (g?.decision === "approved") total += Number(g.score) || 0;
+  });
+  return Math.round(total * 10) / 10;
+}
+
 export const seedTasks = [
   { id: "t1", courseId: "va", title: "Reach out to 3 potential clients", description: "Send a short, genuine intro message to 3 people in your network.", tools: "LinkedIn or WhatsApp, your intro template from Module 6", proofType: "link", dueInDays: 7, assigned: [], submissions: {} },
   { id: "t2", courseId: "va", title: "Set up your calendar tool", description: "Have a working Calendly (or similar) link ready.", tools: "Calendly, Google Calendar", proofType: "link", dueInDays: 3, assigned: [], submissions: {} },

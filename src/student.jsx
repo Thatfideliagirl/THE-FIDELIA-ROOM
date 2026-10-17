@@ -7,7 +7,7 @@ import {
   UserCircle, FolderPlus, Folder, UploadCloud, ClipboardCheck, HelpCircle as HelpIcon,
   Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Compass, Home, Repeat, Pause
 } from "lucide-react";
-import { pairKey, moduleStatus, scoreSubmission, AUTO_APPROVE_THRESHOLD, LINK_TYPES } from "./lib/data.js";
+import { pairKey, moduleStatus, scoreSubmission, AUTO_APPROVE_THRESHOLD, LINK_TYPES, deriveSubmissionStatus } from "./lib/data.js";
 import { SectionHeader, NotifBell, WelcomeTour, SidebarLink, LogoMark, Spine, TextArea, ProgressBar, ResourceDetail, Field, ChangePasswordCard, RichText, RichTextEditor, DashboardShell, TaskFileList } from "./components.jsx";
 
 // List markers (•, ‣, etc.) are sometimes present as literal characters
@@ -592,16 +592,35 @@ export function TaskDetailStudent({ task, student, allStudents, setTasks, onBack
   // seeing them). Each gets checked against that link type's own pattern as
   // the student types, same rule the admin side previews when building it.
   const [links, setLinks] = useState(() => (task.requiredLinks || []).map(() => ""));
+  // Only used once a submission already exists and a link has been sent
+  // back -- keyed by link index, not one shared field, since several links
+  // could be flagged for resubmission at once.
+  const [resubmitDrafts, setResubmitDrafts] = useState({});
   const isPastDeadline = task.deadlineAt ? Date.now() > new Date(task.deadlineAt).getTime() : false;
   function submit() {
     if (isPastDeadline) return;
     if (hasLinks) {
       const linksObj = {}; links.forEach((v, i) => { linksObj[i] = v; });
-      setTasks((prev) => prev.map((t) => t.id !== task.id ? t : { ...t, submissions: { ...t.submissions, [student.id]: { status: "in review", links: linksObj, note: "", score: null } } }));
+      setTasks((prev) => prev.map((t) => t.id !== task.id ? t : { ...t, submissions: { ...t.submissions, [student.id]: { status: "in review", links: linksObj, linkGrades: {}, note: "", score: null } } }));
     } else {
       if (!note.trim()) return;
       setTasks((prev) => prev.map((t) => t.id !== task.id ? t : { ...t, submissions: { ...t.submissions, [student.id]: { status: "in review", note, score: null } } }));
     }
+  }
+  // Resubmitting one flagged link only reopens that link -- every other
+  // link keeps whatever the admin already decided, so nothing already
+  // approved gets re-reviewed just because one other link came back.
+  function resubmitLink(i) {
+    const newUrl = (resubmitDrafts[i] || "").trim();
+    if (!newUrl) return;
+    setTasks((prev) => prev.map((t) => {
+      if (t.id !== task.id) return t;
+      const prevSub = t.submissions[student.id];
+      const nextSub = { ...prevSub, links: { ...prevSub.links, [i]: newUrl }, linkGrades: { ...prevSub.linkGrades, [i]: { decision: null, score: null, feedback: "" } } };
+      nextSub.status = deriveSubmissionStatus(t, nextSub);
+      return { ...t, submissions: { ...t.submissions, [student.id]: nextSub } };
+    }));
+    setResubmitDrafts((p) => ({ ...p, [i]: "" }));
   }
   const allLinksValid = hasLinks && task.requiredLinks.every((r, i) => {
     const type = LINK_TYPES.find((t) => t.key === r.type);
@@ -628,7 +647,25 @@ export function TaskDetailStudent({ task, student, allStudents, setTasks, onBack
           <div className="rounded-xl p-4 mt-2" style={{ background: "#FAF6EC" }}>
             <span className="f-code text-[10px] tint-badge px-2.5 py-1 rounded-full">{sub.status.toUpperCase()}{sub.score != null ? ` · ${sub.score}%` : ""}</span>
             {sub.links ? (
-              <div className="flex flex-col gap-1.5 mt-3">{task.requiredLinks.map((r, i) => sub.links[i] && <a key={i} href={sub.links[i]} target="_blank" rel="noreferrer" className="text-[13.5px] accent-text flex items-center gap-1.5" style={{ fontWeight: 700 }}>{r.label || r.type} ↗</a>)}</div>
+              <div className="flex flex-col gap-2.5 mt-3">{task.requiredLinks.map((r, i) => {
+                const grade = sub.linkGrades?.[i];
+                const url = sub.links[i];
+                if (!url) return null;
+                if (grade?.decision === "approved") return (
+                  <div key={i} className="rounded-lg px-3.5 py-2.5 text-[13.5px]" style={{ background: "#E4F3E9" }}><span style={{ fontWeight: 700 }}>{r.label || r.type}</span> <span style={{ color: "#2F7D4F" }}>✓ Approved · {grade.score}%</span></div>
+                );
+                if (grade?.decision === "resubmit") return (
+                  <div key={i} className="rounded-lg px-3.5 py-3 text-[13.5px]" style={{ background: "#FBEAE0" }}>
+                    <div style={{ fontWeight: 700 }}>{r.label || r.type} — needs a resubmission</div>
+                    {grade.feedback && <div className="text-[13px] mt-1.5 rounded-lg px-3 py-2" style={{ background: "#FFFFFF", color: "#4A4237" }}>"{grade.feedback}"</div>}
+                    <div className="flex items-center gap-2 mt-2">
+                      <input className="input-field rounded-lg px-3 py-2 text-[13.5px] flex-1" placeholder="Paste your new link…" value={resubmitDrafts[i] || ""} onChange={(e) => setResubmitDrafts((p) => ({ ...p, [i]: e.target.value }))} />
+                      <button onClick={() => resubmitLink(i)} disabled={!(resubmitDrafts[i] || "").trim()} className="btn-primary rounded-lg px-4 py-2 text-[13px] shrink-0 disabled:opacity-40">Resubmit</button>
+                    </div>
+                  </div>
+                );
+                return <a key={i} href={url} target="_blank" rel="noreferrer" className="text-[13.5px] accent-text flex items-center gap-1.5" style={{ fontWeight: 700 }}>{r.label || r.type} ↗</a>;
+              })}</div>
             ) : <div className="text-[14px] mt-3" style={{ color: "#4A4237" }}>{sub.note}</div>}
           </div>
         ) : isPastDeadline ? (

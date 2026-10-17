@@ -8,7 +8,7 @@ import {
   Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Home, UserCog, Repeat
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from "recharts";
-import { genCode, pairKey, ADMIN_EMAIL, TEAM_PERMISSION_TABS, LINK_TYPES, STUDENT_ACCESS_TABS } from "./lib/data.js";
+import { genCode, pairKey, ADMIN_EMAIL, TEAM_PERMISSION_TABS, LINK_TYPES, STUDENT_ACCESS_TABS, linkShare, deriveSubmissionStatus, sumLinkScores } from "./lib/data.js";
 import { Field, SectionHeader, NotifBell, SidebarLink, LogoMark, TextArea, SelectF, ImgField, FileField, TaskFileList, ChangePasswordCard, RichTextEditor, RichText, DashboardShell, WelcomeTour, TEAM_TOUR_STEPS } from "./components.jsx";
 import { CommunityPanel } from "./student.jsx";
 import { fetchTeamMembers, addTeamMember, updateTeamMember, removeTeamMember, fetchTeamActivity, updateMyTeamProfile, markTourSeen } from "./lib/team.js";
@@ -772,21 +772,70 @@ export function TaskForm({ students, courses, cohorts, initial, onSave, onClose 
     </div>
   );
 }
-export function SubmissionDetail({ sid, student, sub, task, onGrade, onClose }) {
+export function SubmissionDetail({ sid, student, sub, task, onGrade, onGradeLinks, onClose }) {
   const [score, setScore] = useState(sub?.score || 100);
   const links = sub?.links || {};
+  const hasLinks = task?.requiredLinks?.length > 0;
+  // Local working copy of this round's decisions -- a link already locked
+  // (approved for good, or sent back and still waiting on the student) is
+  // never in here, since there's nothing left for this screen to decide
+  // about it. Only links with no decision yet start with a row to fill in,
+  // defaulting to an even split of 100 that the admin can type over.
+  const [drafts, setDrafts] = useState(() => {
+    const d = {};
+    task?.requiredLinks?.forEach((_, i) => {
+      if (sub?.linkGrades?.[i]?.decision == null) d[i] = { decision: null, score: linkShare(task.requiredLinks.length), feedback: "" };
+    });
+    return d;
+  });
+  function setDraft(i, patch) { setDrafts((p) => ({ ...p, [i]: { ...p[i], ...patch } })); }
+  const allDecided = hasLinks && Object.values(drafts).every((d) => d.decision != null);
+  function saveLinks() {
+    const linkGrades = { ...sub.linkGrades };
+    Object.entries(drafts).forEach(([i, d]) => { linkGrades[i] = { decision: d.decision, score: d.decision === "approved" ? Number(d.score) || 0 : null, feedback: d.decision === "resubmit" ? d.feedback : "" }; });
+    onGradeLinks(sid, linkGrades);
+  }
   return <div className="card modal-in rounded-2xl p-6 mb-4">
     <div className="flex items-center justify-between mb-3"><div className="text-[15px]" style={{ fontWeight: 700 }}>{student?.name}'s submission</div><button onClick={onClose}><X size={16} color="#A79B84" /></button></div>
-    {task?.requiredLinks?.length > 0 ? (
-      <div className="flex flex-col gap-2 mb-4">
-        {task.requiredLinks.map((r, i) => links[i] ? (
-          <a key={i} href={links[i]} target="_blank" rel="noreferrer" className="rounded-lg px-3.5 py-2.5 text-[13.5px] flex items-center justify-between" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9", color: "var(--accent)", fontWeight: 700 }}>{r.label || r.type} <span style={{ color: "#71675A", fontWeight: 400 }}>{links[i]} ↗</span></a>
-        ) : (
-          <div key={i} className="rounded-lg px-3.5 py-2.5 text-[13.5px]" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9", color: "#A79B84" }}>{r.label || r.type} — not submitted</div>
-        ))}
+    {hasLinks ? (
+      <div className="flex flex-col gap-3 mb-2">
+        {task.requiredLinks.map((r, i) => {
+          const url = links[i];
+          const locked = sub.linkGrades?.[i]?.decision ?? null;
+          const draft = drafts[i];
+          return (
+            <div key={i} className="rounded-xl p-4" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="min-w-0">
+                  <div className="text-[13.5px]" style={{ fontWeight: 700 }}>{r.label || r.type}</div>
+                  {url ? <a href={url} target="_blank" rel="noreferrer" className="text-[12.5px] accent-text break-all">{url} ↗</a> : <span className="text-[12.5px]" style={{ color: "#A79B84" }}>Not submitted</span>}
+                </div>
+                {locked === "approved" && <span className="f-code text-[10px] px-2.5 py-1 rounded-full shrink-0" style={{ background: "#E4F3E9", color: "#2F7D4F" }}>✓ APPROVED · {sub.linkGrades[i].score}%</span>}
+                {locked === "resubmit" && <span className="f-code text-[10px] px-2.5 py-1 rounded-full shrink-0" style={{ background: "#FBEAE0", color: "#B2572B" }}>WAITING ON STUDENT</span>}
+              </div>
+              {locked === "resubmit" && sub.linkGrades[i].feedback && <div className="text-[12.5px] mt-2 rounded-lg px-3 py-2" style={{ background: "#FFFFFF", color: "#4A4237" }}>Your feedback: "{sub.linkGrades[i].feedback}"</div>}
+              {draft && (
+                <div className="mt-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button onClick={() => setDraft(i, { decision: "approved" })} className="f-label text-[11px] px-3 py-1.5 rounded-full" style={{ background: draft.decision === "approved" ? "#2F7D4F" : "#FFFFFF", color: draft.decision === "approved" ? "#fff" : "#4A4237", border: "1px solid #E7DEC9" }}>✓ Approve</button>
+                    <button onClick={() => setDraft(i, { decision: "resubmit" })} className="f-label text-[11px] px-3 py-1.5 rounded-full" style={{ background: draft.decision === "resubmit" ? "#B2572B" : "#FFFFFF", color: draft.decision === "resubmit" ? "#fff" : "#4A4237", border: "1px solid #E7DEC9" }}>↩ Resubmit</button>
+                    {draft.decision === "approved" && <div className="flex items-center gap-1.5 ml-auto"><input type="number" className="input-field rounded-lg px-2.5 py-1.5 text-[13px]" style={{ width: 70 }} value={draft.score} onChange={(e) => setDraft(i, { score: e.target.value })} /><span className="text-[12px]" style={{ color: "#71675A" }}>%</span></div>}
+                  </div>
+                  {draft.decision === "resubmit" && <textarea className="input-field rounded-lg px-3 py-2 text-[13px] w-full mt-2" rows={2} placeholder="Why is this going back to them?" value={draft.feedback} onChange={(e) => setDraft(i, { feedback: e.target.value })} />}
+                </div>
+              )}
+            </div>
+          );
+        })}
+        <button disabled={!allDecided} onClick={saveLinks} className="btn-primary rounded-lg px-5 py-2.5 text-[13px] mt-1 self-start disabled:opacity-40">Save &amp; notify {student?.name?.split(" ")[0]}</button>
+        {!allDecided && <div className="text-[12px]" style={{ color: "#A79B84" }}>Decide on every link still waiting on a decision before saving.</div>}
       </div>
-    ) : <div className="text-[14px] mb-4" style={{ color: "#4A4237" }}>{sub.note}</div>}
-    <div className="flex items-center gap-3"><Field label="Score (%)" type="number" value={score} onChange={(e) => setScore(e.target.value)} /><button onClick={() => onGrade(sid, "approved", Number(score))} className="btn-primary rounded-lg px-5 py-2.5 text-[13px] shrink-0 mt-6">Mark reviewed</button></div>
+    ) : (
+      <>
+        <div className="text-[14px] mb-4" style={{ color: "#4A4237" }}>{sub.note}</div>
+        <div className="flex items-center gap-3"><Field label="Score (%)" type="number" value={score} onChange={(e) => setScore(e.target.value)} /><button onClick={() => onGrade(sid, "approved", Number(score))} className="btn-primary rounded-lg px-5 py-2.5 text-[13px] shrink-0 mt-6">Mark reviewed</button></div>
+      </>
+    )}
   </div>;
 }
 // Only one task per course can be the capstone -- picking a new one for a
@@ -797,11 +846,41 @@ function applyCapstoneExclusivity(prev, taskId, courseId, isCapstone) {
   if (!isCapstone) return prev;
   return prev.map((t) => (t.id !== taskId && t.courseId === courseId && t.isCapstone) ? { ...t, isCapstone: false } : t);
 }
+const SUBMISSION_FILTERS = [
+  { key: "all", label: "All" },
+  { key: "needs review", label: "Needs review" },
+  { key: "waiting on student", label: "Waiting on student" },
+  { key: "approved", label: "Approved" },
+  { key: "not submitted", label: "Not submitted" },
+];
 export function TaskDetail({ task, setTasks, students, courses, cohorts, onClose, onDelete }) {
   const [editing, setEditing] = useState(false); const [viewingSub, setViewingSub] = useState(null);
+  const [filter, setFilter] = useState("all");
   function grade(sid, status, score) { setTasks((prev) => prev.map((t) => t.id !== task.id ? t : { ...t, submissions: { ...t.submissions, [sid]: { ...t.submissions[sid], status, score } } })); setViewingSub(null); }
+  // Per-link review: merge in this round's decisions, then let the status
+  // and total score fall out of them rather than setting either by hand --
+  // that's the one place deriveSubmissionStatus/sumLinkScores are trusted
+  // to agree with what the admin just clicked.
+  function gradeLinks(sid, linkGrades) {
+    setTasks((prev) => prev.map((t) => {
+      if (t.id !== task.id) return t;
+      const prevSub = t.submissions[sid];
+      const nextSub = { ...prevSub, linkGrades };
+      nextSub.status = deriveSubmissionStatus(t, nextSub);
+      nextSub.score = sumLinkScores(t, nextSub);
+      return { ...t, submissions: { ...t.submissions, [sid]: nextSub } };
+    }));
+    setViewingSub(null);
+  }
   function save(data) { setTasks((prev) => applyCapstoneExclusivity(prev, task.id, data.courseId, data.isCapstone).map((t) => t.id !== task.id ? t : { ...t, ...data })); setEditing(false); }
   if (editing) return <TaskForm students={students} courses={courses} cohorts={cohorts} initial={task} onSave={save} onClose={() => setEditing(false)} />;
+  const rows = task.assigned.map((sid) => {
+    const s = students.find((x) => x.id === sid);
+    const sub = task.submissions[sid];
+    const status = !sub ? "not submitted" : (task.requiredLinks?.length > 0 ? deriveSubmissionStatus(task, sub) : sub.status === "approved" ? "approved" : "needs review");
+    return { sid, s, sub, status };
+  });
+  const visibleRows = filter === "all" ? rows : rows.filter((r) => r.status === filter);
   return (
     <div className="card rounded-2xl p-7 mb-6">
       <div className="flex items-center justify-between mb-2"><button onClick={onClose} className="flex items-center gap-1.5 text-[13px]" style={{ color: "#71675A" }}><ArrowLeft size={14} /> Back to tasks</button><div className="flex gap-3"><button onClick={() => setEditing(true)} className="flex items-center gap-1.5 text-[13px] accent-text" style={{ fontWeight: 700 }}><Pencil size={13} /> Edit</button><button onClick={() => onDelete(task.id)} className="flex items-center gap-1.5 text-[13px]" style={{ color: "#B04A3A" }}><Trash2 size={13} /> Delete</button></div></div>
@@ -813,12 +892,13 @@ export function TaskDetail({ task, setTasks, students, courses, cohorts, onClose
       {task.isCapstone && <div className="text-[12px] mb-1"><span className="f-code px-2 py-0.5 rounded-full tint-badge">CAPSTONE</span></div>}
       {task.deadlineAt && <div className="text-[14px] mb-6" style={{ color: "#71675A" }}><strong>Closes:</strong> {new Date(task.deadlineAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</div>}
       <div className="f-label text-[12px] mb-3" style={{ color: "#71675A" }}>SUBMISSIONS</div>
-      <div className="flex flex-col gap-3">{task.assigned.map((sid) => { const s = students.find((x) => x.id === sid); const sub = task.submissions[sid]; return (
+      <div className="flex items-center gap-2 mb-4 flex-wrap">{SUBMISSION_FILTERS.map((f) => <button key={f.key} onClick={() => setFilter(f.key)} className="f-label text-[11px] px-3 py-1.5 rounded-full" style={{ background: filter === f.key ? "var(--accent)" : "#F0E7D6", color: filter === f.key ? "#FAF6EC" : "#71675A" }}>{f.label}</button>)}</div>
+      <div className="flex flex-col gap-3">{visibleRows.map(({ sid, s, sub, status }) => (
         <div key={sid}>
-          <div className="rounded-xl p-4 flex items-center justify-between" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}><div><span className="text-[14px]" style={{ fontWeight: 700 }}>{s?.name}</span>{sub && <span className="f-code text-[10px] tint-badge px-2 py-1 rounded-full ml-2">{sub.status.toUpperCase()}{sub.score != null ? ` · ${sub.score}%` : ""}</span>}</div>{sub ? <button onClick={() => setViewingSub(viewingSub === sid ? null : sid)} className="f-label text-[11px] accent-text flex items-center gap-1"><Eye size={12} /> View</button> : <span className="f-code text-[10px]" style={{ color: "#C9BFAE" }}>NOT SUBMITTED</span>}</div>
-          {viewingSub === sid && <SubmissionDetail sid={sid} student={s} sub={sub} task={task} onGrade={grade} onClose={() => setViewingSub(null)} />}
+          <div className="rounded-xl p-4 flex items-center justify-between" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}><div><span className="text-[14px]" style={{ fontWeight: 700 }}>{s?.name}</span>{sub && <span className="f-code text-[10px] tint-badge px-2 py-1 rounded-full ml-2">{status.toUpperCase()}{sub.score != null ? ` · ${sub.score}%` : ""}</span>}</div>{sub ? <button onClick={() => setViewingSub(viewingSub === sid ? null : sid)} className="f-label text-[11px] accent-text flex items-center gap-1"><Eye size={12} /> View</button> : <span className="f-code text-[10px]" style={{ color: "#C9BFAE" }}>NOT SUBMITTED</span>}</div>
+          {viewingSub === sid && <SubmissionDetail sid={sid} student={s} sub={sub} task={task} onGrade={grade} onGradeLinks={gradeLinks} onClose={() => setViewingSub(null)} />}
         </div>
-      ); })}</div>
+      ))}</div>
     </div>
   );
 }
@@ -1046,13 +1126,17 @@ export function AdminProfileTab({ adminProfile, setAdminProfile }) {
 // A course with no capstone task set has nothing to grade, so it doesn't
 // hold eligibility back -- capstone counts as "done" by default and only
 // starts actually gating once an admin marks one task as the capstone.
+// Passing the capstone means 80-100%, not a flat 100 -- a student can lose
+// one required link's share and still clear the bar, which is also why
+// "eligible" below checks this score and not whether every single link
+// was approved.
 function capstoneStatus(tasks, courseId, studentId) {
   const capstone = tasks.find((t) => t.courseId === courseId && t.isCapstone);
-  if (!capstone) return { pct: 100, label: "—", hasCapstone: false };
+  if (!capstone) return { pct: 100, label: "—", hasCapstone: false, passed: true };
   const sub = capstone.submissions[studentId];
-  if (!sub) return { pct: 0, label: "Not started", hasCapstone: true };
-  if (sub.status === "approved") return { pct: 100, label: "100%", hasCapstone: true };
-  return { pct: 50, label: "In review", hasCapstone: true };
+  if (!sub) return { pct: 0, label: "Not started", hasCapstone: true, passed: false };
+  if (sub.status === "approved") { const score = sub.score ?? 100; return { pct: score, label: `${score}%`, hasCapstone: true, passed: score >= 80 }; }
+  return { pct: sub.score ?? 50, label: sub.score != null ? `${sub.score}% so far` : "In review", hasCapstone: true, passed: false };
 }
 export function GradebookTab({ students, courses, cohorts, tasks }) {
   const [cohortFilter, setCohortFilter] = useState("all");
@@ -1061,7 +1145,7 @@ export function GradebookTab({ students, courses, cohorts, tasks }) {
     const c = courses.find((x) => x.id === e.courseId);
     const coursePct = c ? Math.round((e.completedModuleIds.length / c.modules.length) * 100) : 0;
     const capstone = capstoneStatus(tasks, e.courseId, s.id);
-    return { student: s.name, course: c?.title, coursePct, capstone, eligible: coursePct >= 100 && capstone.pct >= 100 };
+    return { student: s.name, course: c?.title, coursePct, capstone, eligible: coursePct >= 100 && capstone.passed };
   }));
   return (
     <>
