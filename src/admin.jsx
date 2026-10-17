@@ -1003,7 +1003,10 @@ function CertificateTemplateEditor({ course, onSave, onClose }) {
   return (
     <div className="card rounded-2xl p-6 mb-4">
       <div className="flex items-center justify-between mb-4"><div className="text-[15px]" style={{ fontWeight: 700 }}>Certificate template — {course.title}</div><button onClick={onClose}><X size={16} color="#A79B84" /></button></div>
-      <label className="btn-soft rounded-full px-4 py-2 text-[13px] cursor-pointer inline-flex items-center gap-1.5 mb-4" style={{ fontWeight: 600 }}><UploadCloud size={14} /> {file ? "Replace template image" : "Upload template image"}<input type="file" accept="image/*" onChange={onFilePick} style={{ display: "none" }} /></label>
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <label className="btn-soft rounded-full px-4 py-2 text-[13px] cursor-pointer inline-flex items-center gap-1.5" style={{ fontWeight: 600 }}><UploadCloud size={14} /> {file ? "Replace template image" : "Upload template image"}<input type="file" accept="image/*" onChange={onFilePick} style={{ display: "none" }} /></label>
+        {file && <button onClick={() => { setFile(null); setNamePos({ xPct: 50, yPct: 55 }); setFontSizePct(6); }} className="rounded-full px-4 py-2 text-[13px] flex items-center gap-1.5" style={{ fontWeight: 600, color: "#B04A3A", border: "1px solid #E7DEC9" }}><Trash2 size={14} /> Delete image</button>}
+      </div>
       {file && (
         <>
           <div className="text-[12px] mb-2" style={{ color: "#71675A" }}>Drag the name to where it should sit on the certificate.</div>
