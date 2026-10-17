@@ -7,7 +7,8 @@ import {
   UserCircle, FolderPlus, Folder, UploadCloud, ClipboardCheck, HelpCircle as HelpIcon,
   Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Compass, Home, Repeat, Pause
 } from "lucide-react";
-import { pairKey, moduleStatus, scoreSubmission, AUTO_APPROVE_THRESHOLD, LINK_TYPES, deriveSubmissionStatus } from "./lib/data.js";
+import { pairKey, moduleStatus, scoreSubmission, AUTO_APPROVE_THRESHOLD, LINK_TYPES, deriveSubmissionStatus, courseEligibility } from "./lib/data.js";
+import { renderCertificate } from "./lib/certificate.js";
 import { SectionHeader, NotifBell, WelcomeTour, SidebarLink, LogoMark, Spine, TextArea, ProgressBar, ResourceDetail, Field, ChangePasswordCard, RichText, RichTextEditor, DashboardShell, TaskFileList } from "./components.jsx";
 
 // List markers (•, ‣, etc.) are sometimes present as literal characters
@@ -562,7 +563,7 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
 
         {tab === "tasks" && (openTask ? <TaskDetailStudent task={openTask} student={student} allStudents={allStudents} setTasks={setTasks} onBack={() => setOpenTaskId(null)} /> : <><SectionHeader eyebrow="ASSIGNED TO YOU" title="Tasks" />{myTasks.length === 0 && <div className="text-[15px]" style={{ color: "#A79B84" }}>No tasks assigned yet.</div>}<div className="flex flex-col gap-3">{myTasks.map((t) => { const sub = t.submissions[student.id]; return <button key={t.id} onClick={() => setOpenTaskId(t.id)} className="card card-pop rounded-xl p-5 text-left"><div className="flex items-center justify-between mb-1.5"><div className="text-[16px]" style={{ fontWeight: 700 }}>{t.title}</div>{sub ? <span className="f-code text-[10px] px-2.5 py-1 rounded-full tint-badge">{sub.status.toUpperCase()}</span> : t.deadlineAt && Date.now() > new Date(t.deadlineAt).getTime() ? <span className="f-code text-[10px] flex items-center gap-1" style={{ color: "#B04A3A" }}><Clock size={11} /> CLOSED</span> : <span className="f-code text-[10px] flex items-center gap-1" style={{ color: "#A79B84" }}><Clock size={11} /> {t.deadlineAt ? new Date(t.deadlineAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : `${t.dueInDays}D LEFT`}</span>}</div><RichText html={t.description} className="rich-content text-[14px] line-clamp-2" style={{ color: "#71675A" }} /></button>; })}</div></>)}
 
-        {tab === "certificate" && <><SectionHeader eyebrow="YOUR ACHIEVEMENT" title="Certificate" />{enrollment.certificateReady && enrollment.certificateFile ? <div className="card rounded-2xl p-10 text-center" style={{ background: "linear-gradient(155deg, color-mix(in srgb, var(--accent) 16%, white), #F0E7D6)" }}><Award size={40} color="var(--accent)" className="mx-auto mb-4" /><div className="f-display text-[22px] mb-2" style={{ fontWeight: 800 }}>Certificate of Completion</div><div className="text-[14px] mb-6" style={{ color: "#4A4237" }}>{course.title} — issued to {student.name}</div><a href={enrollment.certificateFile} download className="btn-primary rounded-full px-6 py-3 text-[14px] inline-block">Download certificate</a></div> : <div className="card rounded-2xl p-10 text-center"><Award size={32} color="#C9BFAE" className="mx-auto mb-3" /><div className="text-[15px]" style={{ color: "#A79B84" }}>Not yet available — finish all modules and it will be issued here.</div></div>}</>}
+        {tab === "certificate" && <><SectionHeader eyebrow="YOUR ACHIEVEMENT" title="Certificate" /><CertificateTab course={course} enrollment={enrollment} student={student} tasks={tasks} /></>}
 
         {tab === "chat" && (
           <>
@@ -582,6 +583,65 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
           </div>
         ); })}</div></>}
     </DashboardShell>
+  );
+}
+// When the course has a template set up, this replaces the old
+// upload-per-student flow entirely -- eligibility (same rule the
+// gradebook uses) decides locked vs. unlocked, and the name gets baked
+// onto the admin's image right here rather than anyone uploading a file
+// per student. A course with no template still gets the original
+// manual certificateReady/certificateFile behavior, untouched.
+export function CertificateTab({ course, enrollment, student, tasks }) {
+  const template = course.certificateTemplate;
+  // Hooks run every render regardless of which branch below ends up
+  // rendering -- the effect itself is a no-op (via the `template &&
+  // elig.eligible` guard) whenever there's no template or the student
+  // isn't eligible yet, rather than being skipped by an early return.
+  const elig = template ? courseEligibility(tasks, course, enrollment, student.id) : null;
+  const [finalUrl, setFinalUrl] = useState(null);
+  useEffect(() => {
+    if (!template || !elig.eligible) { setFinalUrl(null); return; }
+    let cancelled = false;
+    renderCertificate(template.file.dataUrl, student.name, template.namePos, template.fontSizePct)
+      .then((url) => { if (!cancelled) setFinalUrl(url); })
+      .catch((e) => console.error("renderCertificate failed", e));
+    return () => { cancelled = true; };
+  }, [template, elig?.eligible, template?.file.dataUrl, template?.namePos.xPct, template?.namePos.yPct, template?.fontSizePct, student.name]);
+
+  if (!template) {
+    return enrollment.certificateReady && enrollment.certificateFile ? (
+      <div className="card rounded-2xl p-10 text-center" style={{ background: "linear-gradient(155deg, color-mix(in srgb, var(--accent) 16%, white), #F0E7D6)" }}>
+        <Award size={40} color="var(--accent)" className="mx-auto mb-4" />
+        <div className="f-display text-[22px] mb-2" style={{ fontWeight: 800 }}>Certificate of Completion</div>
+        <div className="text-[14px] mb-6" style={{ color: "#4A4237" }}>{course.title} — issued to {student.name}</div>
+        <a href={enrollment.certificateFile} download className="btn-primary rounded-full px-6 py-3 text-[14px] inline-block">Download certificate</a>
+      </div>
+    ) : (
+      <div className="card rounded-2xl p-10 text-center">
+        <Award size={32} color="#C9BFAE" className="mx-auto mb-3" />
+        <div className="text-[15px]" style={{ color: "#A79B84" }}>Not yet available — finish all modules and it will be issued here.</div>
+      </div>
+    );
+  }
+  return (
+    <div className="card rounded-2xl p-6 max-w-[460px] mx-auto">
+      <div className="relative rounded-xl overflow-hidden mb-5" style={{ border: "1px solid #E7DEC9" }}>
+        <img src={elig.eligible && finalUrl ? finalUrl : template.file.dataUrl} alt="" style={{ display: "block", width: "100%", filter: elig.eligible ? "none" : "blur(2px)" }} />
+        {!elig.eligible && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2" style={{ background: "rgba(38,32,25,.6)" }}>
+            <Lock size={26} color="#fff" />
+            <span className="f-code text-[11px]" style={{ color: "#fff", fontWeight: 700, letterSpacing: "0.04em" }}>LOCKED</span>
+          </div>
+        )}
+      </div>
+      <div className="mb-2"><div className="flex items-center justify-between text-[12px] mb-1"><span style={{ color: "#71675A" }}>Course progress</span><span className="f-code" style={{ fontWeight: 700 }}>{elig.coursePct}%</span></div><div className="progress-track" style={{ height: 7 }}><div className="progress-fill" style={{ width: `${elig.coursePct}%` }} /></div></div>
+      {elig.capstone.hasCapstone && <div className="mb-4"><div className="flex items-center justify-between text-[12px] mb-1"><span style={{ color: "#71675A" }}>Capstone score</span><span className="f-code" style={{ fontWeight: 700 }}>{elig.capstone.label}</span></div><div className="progress-track" style={{ height: 7 }}><div className="progress-fill" style={{ width: `${Math.min(100, elig.capstone.pct)}%`, background: elig.capstone.passed ? undefined : "#B2572B" }} /></div></div>}
+      {elig.eligible ? (
+        <a href={finalUrl || "#"} download={`${student.name} — Certificate.png`} className="btn-primary rounded-full px-6 py-3 text-[14px] w-full text-center block" style={{ opacity: finalUrl ? 1 : 0.5, pointerEvents: finalUrl ? "auto" : "none" }}>{finalUrl ? "Download certificate" : "Preparing…"}</a>
+      ) : (
+        <div className="f-code text-[11px] text-center" style={{ color: "#A79B84" }}>Needs 100% course progress{elig.capstone.hasCapstone ? " and an 80%+ capstone score" : ""} to unlock.</div>
+      )}
+    </div>
   );
 }
 export function TaskDetailStudent({ task, student, allStudents, setTasks, onBack }) {

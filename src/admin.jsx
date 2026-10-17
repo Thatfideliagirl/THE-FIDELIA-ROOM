@@ -8,7 +8,8 @@ import {
   Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Home, UserCog, Repeat, RotateCcw
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from "recharts";
-import { genCode, pairKey, ADMIN_EMAIL, TEAM_PERMISSION_TABS, LINK_TYPES, STUDENT_ACCESS_TABS, linkShare, deriveSubmissionStatus, sumLinkScores } from "./lib/data.js";
+import { genCode, pairKey, ADMIN_EMAIL, TEAM_PERMISSION_TABS, LINK_TYPES, STUDENT_ACCESS_TABS, linkShare, deriveSubmissionStatus, sumLinkScores, capstoneStatus, courseEligibility } from "./lib/data.js";
+import { renderCertificate } from "./lib/certificate.js";
 import { Field, SectionHeader, NotifBell, SidebarLink, LogoMark, TextArea, SelectF, ImgField, FileField, TaskFileList, ChangePasswordCard, RichTextEditor, RichText, DashboardShell, WelcomeTour, TEAM_TOUR_STEPS } from "./components.jsx";
 import { CommunityPanel } from "./student.jsx";
 import { fetchTeamMembers, addTeamMember, updateTeamMember, removeTeamMember, fetchTeamActivity, updateMyTeamProfile, markTourSeen } from "./lib/team.js";
@@ -980,18 +981,87 @@ export function LibraryTab({ resources, onAdd, onEdit, onRemove, courses }) {
     </>
   );
 }
-export function CertificatesTab({ students, setStudents, courses }) {
+// Drag-to-place the name on the admin's own certificate image, once per
+// course -- not once per student. "Jane Doe" previews at the saved size
+// and spot using the same xPct/yPct/fontSizePct that renderCertificate
+// later draws onto the real PNG, so what's dragged here is exactly what
+// students get, never an approximation of it.
+function CertificateTemplateEditor({ course, onSave, onClose }) {
+  const existing = course.certificateTemplate;
+  const [file, setFile] = useState(existing?.file || null);
+  const [namePos, setNamePos] = useState(existing?.namePos || { xPct: 50, yPct: 55 });
+  const [fontSizePct, setFontSizePct] = useState(existing?.fontSizePct || 6);
+  const boxRef = useRef(null);
+  const draggingRef = useRef(false);
+  function onFilePick(e) { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = () => setFile({ name: f.name, dataUrl: r.result }); r.readAsDataURL(f); }
+  function posFromEvent(e) {
+    const rect = boxRef.current.getBoundingClientRect();
+    return { xPct: Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100)), yPct: Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100)) };
+  }
+  return (
+    <div className="card rounded-2xl p-6 mb-4">
+      <div className="flex items-center justify-between mb-4"><div className="text-[15px]" style={{ fontWeight: 700 }}>Certificate template — {course.title}</div><button onClick={onClose}><X size={16} color="#A79B84" /></button></div>
+      <label className="btn-soft rounded-full px-4 py-2 text-[13px] cursor-pointer inline-flex items-center gap-1.5 mb-4" style={{ fontWeight: 600 }}><UploadCloud size={14} /> {file ? "Replace template image" : "Upload template image"}<input type="file" accept="image/*" onChange={onFilePick} style={{ display: "none" }} /></label>
+      {file && (
+        <>
+          <div className="text-[12px] mb-2" style={{ color: "#71675A" }}>Drag the name to where it should sit on the certificate.</div>
+          <div
+            ref={boxRef}
+            onPointerDown={(e) => { draggingRef.current = true; setNamePos(posFromEvent(e)); }}
+            onPointerMove={(e) => { if (draggingRef.current) setNamePos(posFromEvent(e)); }}
+            onPointerUp={() => { draggingRef.current = false; }}
+            onPointerLeave={() => { draggingRef.current = false; }}
+            className="relative rounded-xl overflow-hidden mb-4"
+            style={{ border: "1px solid #E7DEC9", touchAction: "none", cursor: "crosshair", containerType: "inline-size" }}
+          >
+            <img src={file.dataUrl} alt="" style={{ display: "block", width: "100%" }} draggable={false} />
+            <div style={{ position: "absolute", left: `${namePos.xPct}%`, top: `${namePos.yPct}%`, transform: "translate(-50%,-50%)", fontFamily: "Georgia, serif", fontWeight: 600, fontSize: `${fontSizePct}cqw`, color: "#2A2620", pointerEvents: "none", whiteSpace: "nowrap" }}>Jane Doe</div>
+          </div>
+          <label className="block mb-4"><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Name size</div><input type="range" min={2} max={14} step={0.5} value={fontSizePct} onChange={(e) => setFontSizePct(Number(e.target.value))} style={{ width: "100%" }} /></label>
+        </>
+      )}
+      <div className="flex items-center gap-4">
+        <button disabled={!file} onClick={() => onSave({ file, namePos, fontSizePct })} className="btn-primary rounded-lg px-5 py-2.5 text-[13px] disabled:opacity-40">Save template</button>
+        {existing && <button onClick={() => onSave(null)} className="text-[13px]" style={{ color: "#B04A3A" }}>Remove template — back to manual upload</button>}
+      </div>
+    </div>
+  );
+}
+export function CertificatesTab({ students, setStudents, courses, setCourses, tasks }) {
+  const [editingCourseId, setEditingCourseId] = useState(null);
   function upload(sid, eid, e) { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = () => setStudents((prev) => prev.map((s) => s.id !== sid ? s : { ...s, enrollments: s.enrollments.map((en) => en.id === eid ? { ...en, certificateFile: r.result } : en) })); r.readAsDataURL(f); }
   function toggle(sid, eid) { setStudents((prev) => prev.map((s) => s.id !== sid ? s : { ...s, enrollments: s.enrollments.map((en) => en.id === eid ? { ...en, certificateReady: !en.certificateReady } : en) })); }
+  function saveTemplate(courseId, template) { setCourses((prev) => prev.map((c) => c.id !== courseId ? c : { ...c, certificateTemplate: template })); setEditingCourseId(null); }
+  const editingCourse = courses.find((c) => c.id === editingCourseId);
   return (
     <>
       <SectionHeader eyebrow="ISSUE" title="Certificates" />
-      <div className="flex flex-col gap-3">{students.flatMap((s) => s.enrollments.filter((e) => e.status === "active").map((e) => ({ s, e }))).map(({ s, e }) => (
-        <div key={e.id} className="card rounded-xl p-5 flex items-center justify-between flex-wrap gap-3">
-          <div><div className="text-[16px]" style={{ fontWeight: 700 }}>{s.name}</div><div className="text-[13px] mt-1" style={{ color: "#71675A" }}>{courses.find((c) => c.id === e.courseId)?.title} · {e.completedModuleIds.length}/{courses.find((c) => c.id === e.courseId)?.modules.length || 8} modules</div></div>
-          <div className="flex items-center gap-2"><label className="btn-soft rounded-full px-4 py-2 text-[13px] cursor-pointer flex items-center gap-1.5" style={{ fontWeight: 600 }}><UploadCloud size={14} /> {e.certificateFile ? "Replace file" : "Upload certificate"}<input type="file" onChange={(ev) => upload(s.id, e.id, ev)} style={{ display: "none" }} /></label><button disabled={!e.certificateFile} onClick={() => toggle(s.id, e.id)} className={e.certificateReady ? "btn-soft" : "btn-primary"} style={{ borderRadius: 999, padding: "9px 18px", fontSize: 13, fontWeight: 700, opacity: !e.certificateFile ? 0.4 : 1 }}>{e.certificateReady ? "Ready — Revoke" : "Mark ready & assign"}</button></div>
+      <div className="f-label text-[12px] mb-3" style={{ color: "#71675A" }}>COURSE TEMPLATES</div>
+      <div className="flex flex-col gap-3 mb-8">{courses.map((c) => (
+        <div key={c.id} className="card rounded-xl p-5 flex items-center justify-between flex-wrap gap-3">
+          <div><div className="text-[15px]" style={{ fontWeight: 700 }}>{c.title}</div><div className="text-[13px] mt-1" style={{ color: "#71675A" }}>{c.certificateTemplate ? "Template set — eligible students are issued their certificate automatically." : "No template yet — certificates for this course are uploaded one at a time below."}</div></div>
+          <button onClick={() => setEditingCourseId(c.id)} className="btn-soft rounded-full px-4 py-2 text-[13px]" style={{ fontWeight: 600 }}>{c.certificateTemplate ? "Edit template" : "Set up template"}</button>
         </div>
       ))}</div>
+      {editingCourse && <CertificateTemplateEditor course={editingCourse} onSave={(t) => saveTemplate(editingCourse.id, t)} onClose={() => setEditingCourseId(null)} />}
+      <div className="f-label text-[12px] mb-3" style={{ color: "#71675A" }}>STUDENTS</div>
+      <div className="flex flex-col gap-3">{students.flatMap((s) => s.enrollments.filter((e) => e.status === "active").map((e) => ({ s, e }))).map(({ s, e }) => {
+        const course = courses.find((c) => c.id === e.courseId);
+        const hasTemplate = !!course?.certificateTemplate;
+        const elig = hasTemplate ? courseEligibility(tasks, course, e, s.id) : null;
+        return (
+          <div key={e.id} className="card rounded-xl p-5 flex items-center justify-between flex-wrap gap-3">
+            <div><div className="text-[16px]" style={{ fontWeight: 700 }}>{s.name}</div><div className="text-[13px] mt-1" style={{ color: "#71675A" }}>{course?.title} · {e.completedModuleIds.length}/{course?.modules.length || 8} modules</div></div>
+            {hasTemplate ? (
+              elig.eligible
+                ? <span className="f-code text-[11px] px-3 py-1.5 rounded-full" style={{ background: "#E4F3E9", color: "#2F7D4F" }}>AUTO-ISSUED — ELIGIBLE</span>
+                : <span className="f-code text-[11px] px-3 py-1.5 rounded-full" style={{ background: "#F0E7D6", color: "#71675A" }}>NOT YET ELIGIBLE · {elig.coursePct}% course, capstone {elig.capstone.label}</span>
+            ) : (
+              <div className="flex items-center gap-2"><label className="btn-soft rounded-full px-4 py-2 text-[13px] cursor-pointer flex items-center gap-1.5" style={{ fontWeight: 600 }}><UploadCloud size={14} /> {e.certificateFile ? "Replace file" : "Upload certificate"}<input type="file" onChange={(ev) => upload(s.id, e.id, ev)} style={{ display: "none" }} /></label><button disabled={!e.certificateFile} onClick={() => toggle(s.id, e.id)} className={e.certificateReady ? "btn-soft" : "btn-primary"} style={{ borderRadius: 999, padding: "9px 18px", fontSize: 13, fontWeight: 700, opacity: !e.certificateFile ? 0.4 : 1 }}>{e.certificateReady ? "Ready — Revoke" : "Mark ready & assign"}</button></div>
+            )}
+          </div>
+        );
+      })}</div>
     </>
   );
 }
@@ -1127,21 +1197,6 @@ export function AdminProfileTab({ adminProfile, setAdminProfile }) {
       <div className="max-w-[520px]"><ChangePasswordCard email={ADMIN_EMAIL} /></div>
     </>
   );
-}
-// A course with no capstone task set has nothing to grade, so it doesn't
-// hold eligibility back -- capstone counts as "done" by default and only
-// starts actually gating once an admin marks one task as the capstone.
-// Passing the capstone means 80-100%, not a flat 100 -- a student can lose
-// one required link's share and still clear the bar, which is also why
-// "eligible" below checks this score and not whether every single link
-// was approved.
-function capstoneStatus(tasks, courseId, studentId) {
-  const capstone = tasks.find((t) => t.courseId === courseId && t.isCapstone);
-  if (!capstone) return { pct: 100, label: "—", hasCapstone: false, passed: true };
-  const sub = capstone.submissions[studentId];
-  if (!sub) return { pct: 0, label: "Not started", hasCapstone: true, passed: false };
-  if (sub.status === "approved") { const score = sub.score ?? 100; return { pct: score, label: `${score}%`, hasCapstone: true, passed: score >= 80 }; }
-  return { pct: sub.score ?? 50, label: sub.score != null ? `${sub.score}% so far` : "In review", hasCapstone: true, passed: false };
 }
 export function GradebookTab({ students, courses, cohorts, tasks }) {
   const [cohortFilter, setCohortFilter] = useState("all");
@@ -1428,7 +1483,7 @@ export function AdminDashboard({ courses, setCourses, students, setStudents, onR
         {tab === "gradebook" && <GradebookTab students={students} courses={courses} cohorts={cohorts} tasks={tasks} />}
         {tab === "tasks" && <TasksTab tasks={tasks} setTasks={setTasks} students={students} courses={courses} cohorts={cohorts} />}
         {tab === "library" && <LibraryTab resources={resources} onAdd={onAddResource} onEdit={onEditResource} onRemove={onRemoveResource} courses={courses} />}
-        {tab === "certificates" && <CertificatesTab students={students} setStudents={setStudents} courses={courses} />}
+        {tab === "certificates" && <CertificatesTab students={students} setStudents={setStudents} courses={courses} setCourses={setCourses} tasks={tasks} />}
         {tab === "testimonials" && <TestimonialsTab testimonials={testimonials} setTestimonials={setTestimonials} />}
         {tab === "faq" && <FaqTab faqs={faqs} setFaqs={setFaqs} />}
         {tab === "chat" && <AdminChatTab students={students} directThreads={directThreads} setDirectThreads={setDirectThreads} />}

@@ -213,6 +213,31 @@ export function sumLinkScores(task, sub) {
   return Math.round(total * 10) / 10;
 }
 
+// A course with no capstone task set has nothing to grade, so it doesn't
+// hold eligibility back -- capstone counts as "done" by default and only
+// starts actually gating once an admin marks one task as the capstone.
+// Passing the capstone means 80-100%, not a flat 100 -- a student can lose
+// one required link's share and still clear the bar, which is also why
+// "eligible" below checks this score and not whether every single link
+// was approved.
+export function capstoneStatus(tasks, courseId, studentId) {
+  const capstone = tasks.find((t) => t.courseId === courseId && t.isCapstone);
+  if (!capstone) return { pct: 100, label: "—", hasCapstone: false, passed: true };
+  const sub = capstone.submissions[studentId];
+  if (!sub) return { pct: 0, label: "Not started", hasCapstone: true, passed: false };
+  if (sub.status === "approved") { const score = sub.score ?? 100; return { pct: score, label: `${score}%`, hasCapstone: true, passed: score >= 80 }; }
+  return { pct: sub.score ?? 50, label: sub.score != null ? `${sub.score}% so far` : "In review", hasCapstone: true, passed: false };
+}
+
+// Shared by the gradebook, the certificates screen and the student's own
+// Certificate tab, so all three always agree on who's actually eligible --
+// full course progress, plus a passing (or nonexistent) capstone.
+export function courseEligibility(tasks, course, enrollment, studentId) {
+  const coursePct = course ? Math.round((enrollment.completedModuleIds.length / course.modules.length) * 100) : 0;
+  const capstone = capstoneStatus(tasks, course?.id, studentId);
+  return { eligible: coursePct >= 100 && capstone.passed, coursePct, capstone };
+}
+
 export const seedTasks = [
   { id: "t1", courseId: "va", title: "Reach out to 3 potential clients", description: "Send a short, genuine intro message to 3 people in your network.", tools: "LinkedIn or WhatsApp, your intro template from Module 6", proofType: "link", dueInDays: 7, assigned: [], submissions: {} },
   { id: "t2", courseId: "va", title: "Set up your calendar tool", description: "Have a working Calendly (or similar) link ready.", tools: "Calendly, Google Calendar", proofType: "link", dueInDays: 3, assigned: [], submissions: {} },
