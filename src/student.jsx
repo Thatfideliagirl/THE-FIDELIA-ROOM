@@ -8,7 +8,7 @@ import {
   Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Compass, Home, Repeat, Pause
 } from "lucide-react";
 import { pairKey, moduleStatus, scoreSubmission, AUTO_APPROVE_THRESHOLD, LINK_TYPES, deriveSubmissionStatus, courseEligibility } from "./lib/data.js";
-import { renderCertificate } from "./lib/certificate.js";
+import { renderCertificate, formatIssueDate } from "./lib/certificate.js";
 import { SectionHeader, NotifBell, WelcomeTour, SidebarLink, LogoMark, Spine, TextArea, ProgressBar, ResourceDetail, Field, ChangePasswordCard, RichText, RichTextEditor, DashboardShell, TaskFileList } from "./components.jsx";
 
 // List markers (•, ‣, etc.) are sometimes present as literal characters
@@ -563,7 +563,7 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
 
         {tab === "tasks" && (openTask ? <TaskDetailStudent task={openTask} student={student} allStudents={allStudents} setTasks={setTasks} onBack={() => setOpenTaskId(null)} /> : <><SectionHeader eyebrow="ASSIGNED TO YOU" title="Tasks" />{myTasks.length === 0 && <div className="text-[15px]" style={{ color: "#A79B84" }}>No tasks assigned yet.</div>}<div className="flex flex-col gap-3">{myTasks.map((t) => { const sub = t.submissions[student.id]; return <button key={t.id} onClick={() => setOpenTaskId(t.id)} className="card card-pop rounded-xl p-5 text-left"><div className="flex items-center justify-between mb-1.5"><div className="text-[16px]" style={{ fontWeight: 700 }}>{t.title}</div>{sub ? <span className="f-code text-[10px] px-2.5 py-1 rounded-full tint-badge">{sub.status.toUpperCase()}</span> : t.deadlineAt && Date.now() > new Date(t.deadlineAt).getTime() ? <span className="f-code text-[10px] flex items-center gap-1" style={{ color: "#B04A3A" }}><Clock size={11} /> CLOSED</span> : <span className="f-code text-[10px] flex items-center gap-1" style={{ color: "#A79B84" }}><Clock size={11} /> {t.deadlineAt ? new Date(t.deadlineAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : `${t.dueInDays}D LEFT`}</span>}</div><RichText html={t.description} className="rich-content text-[14px] line-clamp-2" style={{ color: "#71675A" }} /></button>; })}</div></>)}
 
-        {tab === "certificate" && <><SectionHeader eyebrow="YOUR ACHIEVEMENT" title="Certificate" /><CertificateTab course={course} enrollment={enrollment} student={student} tasks={tasks} /></>}
+        {tab === "certificate" && <><SectionHeader eyebrow="YOUR ACHIEVEMENT" title="Certificate" /><CertificateTab course={course} enrollment={enrollment} student={student} tasks={tasks} setStudents={setStudents} /></>}
 
         {tab === "chat" && (
           <>
@@ -591,7 +591,7 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
 // onto the admin's image right here rather than anyone uploading a file
 // per student. A course with no template still gets the original
 // manual certificateReady/certificateFile behavior, untouched.
-export function CertificateTab({ course, enrollment, student, tasks }) {
+export function CertificateTab({ course, enrollment, student, tasks, setStudents }) {
   const template = course.certificateTemplate;
   // Hooks run every render regardless of which branch below ends up
   // rendering -- the effect itself is a no-op (via the `template &&
@@ -599,14 +599,28 @@ export function CertificateTab({ course, enrollment, student, tasks }) {
   // isn't eligible yet, rather than being skipped by an early return.
   const elig = template ? courseEligibility(tasks, course, enrollment, student.id) : null;
   const [finalUrl, setFinalUrl] = useState(null);
+
+  // The issue date is fixed the moment someone first becomes eligible, not
+  // whatever day they happen to open this tab or finally click download --
+  // written once into the enrollment itself so it can never drift later.
+  useEffect(() => {
+    if (!template || !elig.eligible || enrollment.certificateIssuedAt) return;
+    setStudents((prev) => prev.map((s) => s.id !== student.id ? s : { ...s, enrollments: s.enrollments.map((e) => e.id !== enrollment.id ? e : { ...e, certificateIssuedAt: new Date().toISOString() }) }));
+  }, [template, elig?.eligible, enrollment.certificateIssuedAt, enrollment.id, student.id, setStudents]);
+
   useEffect(() => {
     if (!template || !elig.eligible) { setFinalUrl(null); return; }
     let cancelled = false;
-    renderCertificate(template.file.dataUrl, student.name, template.namePos, template.fontSizePct)
-      .then((url) => { if (!cancelled) setFinalUrl(url); })
-      .catch((e) => console.error("renderCertificate failed", e));
+    renderCertificate(template.file.dataUrl, {
+      name: student.name,
+      namePos: template.namePos,
+      fontSizePct: template.fontSizePct,
+      date: template.includeDate ? formatIssueDate(enrollment.certificateIssuedAt || new Date().toISOString()) : null,
+      datePos: template.datePos,
+      dateFontSizePct: template.dateFontSizePct,
+    }).then((url) => { if (!cancelled) setFinalUrl(url); }).catch((e) => console.error("renderCertificate failed", e));
     return () => { cancelled = true; };
-  }, [template, elig?.eligible, template?.file.dataUrl, template?.namePos.xPct, template?.namePos.yPct, template?.fontSizePct, student.name]);
+  }, [template, elig?.eligible, template?.file.dataUrl, template?.namePos.xPct, template?.namePos.yPct, template?.fontSizePct, template?.includeDate, template?.datePos?.xPct, template?.datePos?.yPct, template?.dateFontSizePct, student.name, enrollment.certificateIssuedAt]);
 
   if (!template) {
     return enrollment.certificateReady && enrollment.certificateFile ? (

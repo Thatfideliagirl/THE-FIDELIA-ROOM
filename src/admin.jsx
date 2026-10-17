@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from "recharts";
 import { genCode, pairKey, ADMIN_EMAIL, TEAM_PERMISSION_TABS, LINK_TYPES, STUDENT_ACCESS_TABS, linkShare, deriveSubmissionStatus, sumLinkScores, capstoneStatus, courseEligibility } from "./lib/data.js";
-import { renderCertificate } from "./lib/certificate.js";
+import { renderCertificate, formatIssueDate } from "./lib/certificate.js";
 import { Field, SectionHeader, NotifBell, SidebarLink, LogoMark, TextArea, SelectF, ImgField, FileField, TaskFileList, ChangePasswordCard, RichTextEditor, RichText, DashboardShell, WelcomeTour, TEAM_TOUR_STEPS } from "./components.jsx";
 import { CommunityPanel } from "./student.jsx";
 import { fetchTeamMembers, addTeamMember, updateTeamMember, removeTeamMember, fetchTeamActivity, updateMyTeamProfile, markTourSeen } from "./lib/team.js";
@@ -993,8 +993,15 @@ function CertificateTemplateEditor({ course, onSave, onClose }) {
   const [file, setFile] = useState(existing?.file || null);
   const [namePos, setNamePos] = useState(existing?.namePos || { xPct: 50, yPct: 55 });
   const [fontSizePct, setFontSizePct] = useState(existing?.fontSizePct || 6);
+  const [includeDate, setIncludeDate] = useState(existing?.includeDate ?? true);
+  const [datePos, setDatePos] = useState(existing?.datePos || { xPct: 50, yPct: 75 });
+  const [dateFontSizePct, setDateFontSizePct] = useState(existing?.dateFontSizePct || 2.5);
   const boxRef = useRef(null);
-  const draggingRef = useRef(false);
+  // Which tag is being dragged right now -- "name", "date", or null. Set
+  // on the tag itself (pointerdown), tracked while the pointer moves
+  // anywhere over the preview, cleared on release -- so dragging the
+  // name never accidentally grabs the date tag sitting near it.
+  const draggingRef = useRef(null);
   function onFilePick(e) { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = () => setFile({ name: f.name, dataUrl: r.result }); r.readAsDataURL(f); }
   function posFromEvent(e) {
     const rect = boxRef.current.getBoundingClientRect();
@@ -1005,28 +1012,38 @@ function CertificateTemplateEditor({ course, onSave, onClose }) {
       <div className="flex items-center justify-between mb-4"><div className="text-[15px]" style={{ fontWeight: 700 }}>Certificate template — {course.title}</div><button onClick={onClose}><X size={16} color="#A79B84" /></button></div>
       <div className="flex items-center gap-2 mb-4 flex-wrap">
         <label className="btn-soft rounded-full px-4 py-2 text-[13px] cursor-pointer inline-flex items-center gap-1.5" style={{ fontWeight: 600 }}><UploadCloud size={14} /> {file ? "Replace template image" : "Upload template image"}<input type="file" accept="image/*" onChange={onFilePick} style={{ display: "none" }} /></label>
-        {file && <button onClick={() => { setFile(null); setNamePos({ xPct: 50, yPct: 55 }); setFontSizePct(6); }} className="rounded-full px-4 py-2 text-[13px] flex items-center gap-1.5" style={{ fontWeight: 600, color: "#B04A3A", border: "1px solid #E7DEC9" }}><Trash2 size={14} /> Delete image</button>}
+        {file && <button onClick={() => { setFile(null); setNamePos({ xPct: 50, yPct: 55 }); setFontSizePct(6); setDatePos({ xPct: 50, yPct: 75 }); }} className="rounded-full px-4 py-2 text-[13px] flex items-center gap-1.5" style={{ fontWeight: 600, color: "#B04A3A", border: "1px solid #E7DEC9" }}><Trash2 size={14} /> Delete image</button>}
       </div>
       {file && (
         <>
-          <div className="text-[12px] mb-2" style={{ color: "#71675A" }}>Drag the name to where it should sit on the certificate.</div>
+          <div className="text-[12px] mb-2" style={{ color: "#71675A" }}>Drag the name{includeDate ? " and the date" : ""} to where each should sit on the certificate.</div>
           <div
             ref={boxRef}
-            onPointerDown={(e) => { draggingRef.current = true; setNamePos(posFromEvent(e)); }}
-            onPointerMove={(e) => { if (draggingRef.current) setNamePos(posFromEvent(e)); }}
-            onPointerUp={() => { draggingRef.current = false; }}
-            onPointerLeave={() => { draggingRef.current = false; }}
+            onPointerMove={(e) => { if (draggingRef.current === "name") setNamePos(posFromEvent(e)); else if (draggingRef.current === "date") setDatePos(posFromEvent(e)); }}
+            onPointerUp={() => { draggingRef.current = null; }}
+            onPointerLeave={() => { draggingRef.current = null; }}
             className="relative rounded-xl overflow-hidden mb-4"
-            style={{ border: "1px solid #E7DEC9", touchAction: "none", cursor: "crosshair", containerType: "inline-size" }}
+            style={{ border: "1px solid #E7DEC9", touchAction: "none", containerType: "inline-size" }}
           >
             <img src={file.dataUrl} alt="" style={{ display: "block", width: "100%" }} draggable={false} />
-            <div style={{ position: "absolute", left: `${namePos.xPct}%`, top: `${namePos.yPct}%`, transform: "translate(-50%,-50%)", fontFamily: "Georgia, serif", fontWeight: 600, fontSize: `${fontSizePct}cqw`, color: "#2A2620", pointerEvents: "none", whiteSpace: "nowrap" }}>Jane Doe</div>
+            <div
+              onPointerDown={(e) => { e.preventDefault(); draggingRef.current = "name"; setNamePos(posFromEvent(e)); }}
+              style={{ position: "absolute", left: `${namePos.xPct}%`, top: `${namePos.yPct}%`, transform: "translate(-50%,-50%)", fontFamily: "Georgia, serif", fontWeight: 600, fontSize: `${fontSizePct}cqw`, color: "#2A2620", cursor: "grab", whiteSpace: "nowrap", padding: "2px 6px" }}
+            >Jane Doe</div>
+            {includeDate && (
+              <div
+                onPointerDown={(e) => { e.preventDefault(); draggingRef.current = "date"; setDatePos(posFromEvent(e)); }}
+                style={{ position: "absolute", left: `${datePos.xPct}%`, top: `${datePos.yPct}%`, transform: "translate(-50%,-50%)", fontFamily: "Georgia, serif", fontStyle: "italic", fontSize: `${dateFontSizePct}cqw`, color: "#2A2620", cursor: "grab", whiteSpace: "nowrap", padding: "2px 6px" }}
+              >{formatIssueDate(new Date().toISOString())}</div>
+            )}
           </div>
           <label className="block mb-4"><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Name size</div><input type="range" min={2} max={14} step={0.5} value={fontSizePct} onChange={(e) => setFontSizePct(Number(e.target.value))} style={{ width: "100%" }} /></label>
+          <label className="flex items-center gap-2 mb-3 text-[13px] cursor-pointer" style={{ fontWeight: 600 }}><input type="checkbox" checked={includeDate} onChange={(e) => setIncludeDate(e.target.checked)} /> Also show the date it was issued</label>
+          {includeDate && <label className="block mb-4"><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Date size</div><input type="range" min={1} max={6} step={0.25} value={dateFontSizePct} onChange={(e) => setDateFontSizePct(Number(e.target.value))} style={{ width: "100%" }} /></label>}
         </>
       )}
       <div className="flex items-center gap-4">
-        <button disabled={!file} onClick={() => onSave({ file, namePos, fontSizePct })} className="btn-primary rounded-lg px-5 py-2.5 text-[13px] disabled:opacity-40">Save template</button>
+        <button disabled={!file} onClick={() => onSave({ file, namePos, fontSizePct, includeDate, datePos, dateFontSizePct })} className="btn-primary rounded-lg px-5 py-2.5 text-[13px] disabled:opacity-40">Save template</button>
         {existing && <button onClick={() => onSave(null)} className="text-[13px]" style={{ color: "#B04A3A" }}>Remove template — back to manual upload</button>}
       </div>
     </div>
