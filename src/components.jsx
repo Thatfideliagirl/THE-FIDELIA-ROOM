@@ -610,7 +610,13 @@ export function NotifBell({ items, seen, onMarkSeen }) {
       setPos({ top: r.bottom + 8, left: Math.max(12, Math.min(r.right - PANEL_WIDTH, window.innerWidth - PANEL_WIDTH - 12)) });
     }
     setOpen((o) => !o);
-    if (!open && unseen.length) onMarkSeen(items.map((n) => n.id));
+    // Merge into whatever was already marked seen -- never replace it.
+    // Right after a page reload, tasks/students/community all start empty
+    // and fill in moments later from their real fetch, so `items` can be
+    // briefly incomplete; replacing the saved seen-list with that partial
+    // snapshot would permanently "unsee" notifications that were already
+    // read, and they'd reappear as new on the next reload.
+    if (!open && unseen.length) onMarkSeen((prev) => [...new Set([...prev, ...items.map((n) => n.id)])]);
   }
 
   useEffect(() => {
