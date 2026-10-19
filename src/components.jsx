@@ -530,7 +530,7 @@ export function TaskFileList({ files }) {
           <div key={row.id || file.name} className="rounded-lg overflow-hidden" style={{ border: "1px solid #E7DEC9" }}>
             {kind === "video" && <video controls src={file.dataUrl} className="w-full" style={{ maxHeight: 320, display: "block", background: "#000" }} />}
             {kind === "image" && <img src={file.dataUrl} alt={file.name} style={{ maxWidth: "100%", maxHeight: 320, display: "block" }} />}
-            <a href={file.dataUrl} download={file.name} target={kind === "file" ? undefined : "_blank"} rel="noreferrer" className="flex items-center gap-2 px-3 py-2.5 text-[13px]" style={{ color: "var(--accent)", fontWeight: 700 }}><Download size={14} /> {file.name}</a>
+            <a href={file.dataUrl} download={file.name} target={kind === "file" ? undefined : "_blank"} rel="noreferrer" className="flex items-center gap-2 px-3 py-2.5 text-[13px]" style={{ color: "var(--accent)", fontWeight: 700 }}><Download size={14} /> {row.label || file.name}</a>
           </div>
         );
       })}

@@ -315,10 +315,11 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
                 <>
                   <div className="f-label text-[11px] mb-3" style={{ color: "#A79B84" }}>SLIDE DECK</div>
                   {module.slideDescription && <p className="text-[15px] leading-relaxed mb-5" style={{ color: "#4A4237", whiteSpace: "pre-wrap" }}>{module.slideDescription}</p>}
-                  <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-3 flex-wrap mb-5">
                     {module.slideUrl && <a href={module.slideUrl} target="_blank" rel="noreferrer" className="btn-primary rounded-lg px-5 py-2.5 text-[14px] flex items-center gap-1.5" style={{ fontWeight: 700 }}><FileText size={14} /> View slides</a>}
                     {module.slideFile && <a href={module.slideFile.dataUrl} download={module.slideFile.name} className="btn-primary rounded-lg px-5 py-2.5 text-[14px] flex items-center gap-1.5" style={{ fontWeight: 700 }}><Download size={14} /> Download {module.slideFile.name}</a>}
                   </div>
+                  {module.resourceFiles?.length > 0 && <><div className="f-label text-[11px] mb-2" style={{ color: "#A79B84" }}>RESOURCES</div><TaskFileList files={module.resourceFiles} /></>}
                 </>
               )}
               <div className="flex items-center justify-between mt-6">
@@ -725,14 +726,25 @@ export function TaskDetailStudent({ task, student, allStudents, setTasks, onBack
         {others.length > 0 && <div className="text-[13px] mb-6" style={{ color: "#A79B84" }}>Also assigned to: {others.join(", ")}</div>}
         {sub ? (
           <div className="rounded-xl p-4 mt-2" style={{ background: "#FAF6EC" }}>
-            <span className="f-code text-[10px] tint-badge px-2.5 py-1 rounded-full">{sub.status.toUpperCase()}{sub.score != null ? ` · ${sub.score}%` : ""}</span>
+            {sub.status === "approved" && hasLinks ? (
+              <div className="rounded-xl p-4 mb-3" style={{ background: "linear-gradient(155deg, color-mix(in srgb, var(--accent) 14%, white), #F0E7D6)" }}>
+                <div className="f-label text-[11px] mb-1" style={{ color: "#71675A" }}>YOUR RESULT</div>
+                <div className="f-display text-[28px]" style={{ fontWeight: 800 }}>{sub.score}%</div>
+                {sub.comment && <div className="text-[13.5px] mt-2 rounded-lg px-3 py-2.5" style={{ background: "#FFFFFF", color: "#4A4237" }}>"{sub.comment}"</div>}
+              </div>
+            ) : (
+              <span className="f-code text-[10px] tint-badge px-2.5 py-1 rounded-full">{sub.status.toUpperCase()}{sub.score != null ? ` · ${sub.score}%` : ""}</span>
+            )}
             {sub.links ? (
               <div className="flex flex-col gap-2.5 mt-3">{task.requiredLinks.map((r, i) => {
                 const grade = sub.linkGrades?.[i];
                 const url = sub.links[i];
                 if (!url) return null;
                 if (grade?.decision === "approved") return (
-                  <div key={i} className="rounded-lg px-3.5 py-2.5 text-[13.5px] flex items-center gap-1.5" style={{ background: "#E4F3E9" }}><span style={{ fontWeight: 700 }}>{r.label || r.type}</span> <span className="flex items-center gap-1" style={{ color: "#2F7D4F" }}><Check size={13} /> Approved · {grade.score}%</span></div>
+                  <div key={i} className="rounded-lg px-3.5 py-2.5 text-[13.5px]" style={{ background: "#E4F3E9" }}>
+                    <div className="flex items-center gap-1.5"><span style={{ fontWeight: 700 }}>{r.label || r.type}</span> <span className="flex items-center gap-1" style={{ color: "#2F7D4F" }}><Check size={13} /> Approved · {grade.score}%</span></div>
+                    {grade.feedback && <div className="text-[13px] mt-1.5 rounded-lg px-3 py-2" style={{ background: "#FFFFFF", color: "#4A4237" }}>"{grade.feedback}"</div>}
+                  </div>
                 );
                 if (grade?.decision === "resubmit") return (
                   <div key={i} className="rounded-lg px-3.5 py-3 text-[13.5px]" style={{ background: "#FBEAE0" }}>

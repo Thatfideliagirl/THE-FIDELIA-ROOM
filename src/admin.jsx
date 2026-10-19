@@ -183,6 +183,14 @@ export function ModuleEditor({ course, module, setCourses, onBack }) {
   // shown between Summary and Quick Check.
   const [videoIntro, setVideoIntro] = useState(module.videoIntro || "");
   const [videos, setVideos] = useState(module.videos || []);
+  // Separate from the single slide deck above -- any number of extra
+  // downloads for this module (a template, a checklist, a cheat sheet),
+  // each with its own title so students see something meaningful instead
+  // of a raw filename, same request she made for task files.
+  const [resourceFiles, setResourceFiles] = useState(module.resourceFiles || []);
+  function addResourceFile() { setResourceFiles((r) => [...r, { id: "rf" + Date.now(), label: "", file: null }]); }
+  function updateResourceFile(i, patch) { setResourceFiles((r) => r.map((item, idx) => idx === i ? { ...item, ...patch } : item)); }
+  function removeResourceFile(i) { setResourceFiles((r) => r.filter((_, idx) => idx !== i)); }
   function addQuestion() { setQuiz((q) => [...q, { q: "", options: ["", "", ""], correct: 0 }]); }
   function updateQ(i, field, value) { setQuiz((q) => q.map((item, idx) => idx !== i ? item : { ...item, [field]: value })); }
   function updateOpt(qi, oi, value) { setQuiz((q) => q.map((item, idx) => idx !== qi ? item : { ...item, options: item.options.map((o, oidx) => oidx === oi ? value : o) })); }
@@ -190,7 +198,7 @@ export function ModuleEditor({ course, module, setCourses, onBack }) {
   function addVideo() { setVideos((v) => [...v, { id: "v" + Date.now(), label: "", url: "", file: null }]); }
   function updateVideo(i, patch) { setVideos((v) => v.map((item, idx) => idx === i ? { ...item, ...patch } : item)); }
   function removeVideo(i) { setVideos((v) => v.filter((_, idx) => idx !== i)); }
-  function save() { setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, modules: c.modules.map((m) => m.id !== module.id ? m : { ...m, title, brief, notes, summary, videoUrl, slideUrl, slideFile, slideDescription, testType, passPct: Number(passPct), proofType, linkType, markingGuide, questionPrompt, quiz, meetings, videoIntro, videos }) })); onBack(); }
+  function save() { setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, modules: c.modules.map((m) => m.id !== module.id ? m : { ...m, title, brief, notes, summary, videoUrl, slideUrl, slideFile, slideDescription, testType, passPct: Number(passPct), proofType, linkType, markingGuide, questionPrompt, quiz, meetings, videoIntro, videos, resourceFiles: resourceFiles.filter((r) => r.file) }) })); onBack(); }
   const [confirmDelete, setConfirmDelete] = useState(false);
   function deleteModuleNow() { setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, modules: c.modules.filter((m) => m.id !== module.id) })); onBack(); }
   return (
@@ -211,6 +219,18 @@ export function ModuleEditor({ course, module, setCourses, onBack }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Field label="Video link (max ~50MB if uploading elsewhere)" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://…" /><Field label="Slide deck link (optional if uploading a file below)" value={slideUrl} onChange={(e) => setSlideUrl(e.target.value)} placeholder="https://…" /></div>
         <FileField label="Or upload a slide deck file (PDF, PPT, etc.)" value={slideFile} onChange={setSlideFile} accept=".pdf,.ppt,.pptx,.key" />
         {(slideUrl || slideFile) && <TextArea label="Description shown to students on the slide-deck step (optional)" value={slideDescription} onChange={(e) => setSlideDescription(e.target.value)} rows={2} placeholder="e.g. Slides from this week's session — the checklist and examples we reviewed together." />}
+        <div className="f-label text-[11px] mt-2" style={{ color: "#71675A" }}>ADDITIONAL RESOURCES (OPTIONAL)</div>
+        <div className="text-[13px]" style={{ color: "#71675A" }}>Any other downloads for this module — a template, a checklist, a cheat sheet — shown alongside the slide deck. As many as you like, each with its own title.</div>
+        <div className="flex flex-col gap-3">
+          {resourceFiles.map((r, i) => (
+            <div key={r.id} className="rounded-xl p-4 flex flex-col gap-2.5" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
+              <div className="flex items-center justify-between"><div className="f-label text-[11px]" style={{ color: "#71675A" }}>RESOURCE {i + 1}</div><button onClick={() => removeResourceFile(i)}><Trash2 size={14} color="#B04A3A" /></button></div>
+              <Field label="Title (shown to students instead of the filename)" value={r.label} onChange={(e) => updateResourceFile(i, { label: e.target.value })} placeholder="e.g. Client Onboarding Checklist" />
+              <FileField label="File" value={r.file} onChange={(file) => updateResourceFile(i, { file })} />
+            </div>
+          ))}
+          <button onClick={addResourceFile} className="text-[13px] accent-text flex items-center gap-1.5 self-start" style={{ fontWeight: 700 }}><Plus size={14} /> Add a resource</button>
+        </div>
       </div>
 
       <div className="card rounded-2xl p-7 flex flex-col gap-4 mb-6">
@@ -791,11 +811,15 @@ export function SubmissionDetail({ sid, student, sub, task, onGrade, onGradeLink
   });
   function setDraft(i, patch) { setDrafts((p) => ({ ...p, [i]: { ...p[i], ...patch } })); }
   const allDecided = hasLinks && Object.values(drafts).every((d) => d.decision != null);
+  // Separate from each link's own feedback -- a closing note on the whole
+  // submission rather than any one piece of it ("Great work overall, keep
+  // this pace up for the next one").
+  const [comment, setComment] = useState(sub?.comment || "");
   function saveLinks() {
     const maxShare = linkShare(task.requiredLinks.length);
     const linkGrades = { ...sub.linkGrades };
-    Object.entries(drafts).forEach(([i, d]) => { linkGrades[i] = { decision: d.decision, score: d.decision === "approved" ? Math.min(maxShare, Math.max(0, Number(d.score) || 0)) : null, feedback: d.decision === "resubmit" ? d.feedback : "" }; });
-    onGradeLinks(sid, linkGrades);
+    Object.entries(drafts).forEach(([i, d]) => { linkGrades[i] = { decision: d.decision, score: d.decision === "approved" ? Math.min(maxShare, Math.max(0, Number(d.score) || 0)) : null, feedback: d.feedback || "" }; });
+    onGradeLinks(sid, linkGrades, comment);
   }
   return <div className="card modal-in rounded-2xl p-6 mb-4">
     <div className="flex items-center justify-between mb-3"><div className="text-[15px]" style={{ fontWeight: 700 }}>{student?.name}'s submission</div><button onClick={onClose}><X size={16} color="#A79B84" /></button></div>
@@ -816,7 +840,7 @@ export function SubmissionDetail({ sid, student, sub, task, onGrade, onGradeLink
                 {locked === "approved" && <span className="f-code text-[10px] px-2.5 py-1 rounded-full shrink-0 flex items-center gap-1" style={{ background: "#E4F3E9", color: "#2F7D4F" }}><Check size={11} /> APPROVED · {sub.linkGrades[i].score}%</span>}
                 {locked === "resubmit" && <span className="f-code text-[10px] px-2.5 py-1 rounded-full shrink-0" style={{ background: "#FBEAE0", color: "#B2572B" }}>WAITING ON STUDENT</span>}
               </div>
-              {locked === "resubmit" && sub.linkGrades[i].feedback && <div className="text-[12.5px] mt-2 rounded-lg px-3 py-2" style={{ background: "#FFFFFF", color: "#4A4237" }}>Your feedback: "{sub.linkGrades[i].feedback}"</div>}
+              {locked && sub.linkGrades[i].feedback && <div className="text-[12.5px] mt-2 rounded-lg px-3 py-2" style={{ background: "#FFFFFF", color: "#4A4237" }}>Your feedback: "{sub.linkGrades[i].feedback}"</div>}
               {draft && (
                 <div className="mt-3">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -824,12 +848,13 @@ export function SubmissionDetail({ sid, student, sub, task, onGrade, onGradeLink
                     <button onClick={() => setDraft(i, { decision: "resubmit" })} className="f-label text-[11px] px-3 py-1.5 rounded-full flex items-center gap-1" style={{ background: draft.decision === "resubmit" ? "#B2572B" : "#FFFFFF", color: draft.decision === "resubmit" ? "#fff" : "#4A4237", border: "1px solid #E7DEC9" }}><RotateCcw size={12} /> Resubmit</button>
                     {draft.decision === "approved" && <div className="flex items-center gap-1.5 ml-auto"><input type="number" min={0} max={maxShare} className="input-field rounded-lg px-2.5 py-1.5 text-[13px]" style={{ width: 70 }} value={draft.score} onChange={(e) => setDraft(i, { score: Math.min(maxShare, Math.max(0, Number(e.target.value) || 0)) })} /><span className="text-[12px]" style={{ color: "#71675A" }}>/ {maxShare}% max</span></div>}
                   </div>
-                  {draft.decision === "resubmit" && <textarea className="input-field rounded-lg px-3 py-2 text-[13px] w-full mt-2" rows={3} placeholder="Why is this going back to them?" value={draft.feedback} onChange={(e) => setDraft(i, { feedback: e.target.value })} />}
+                  {draft.decision && <textarea className="input-field rounded-lg px-3 py-2 text-[13px] w-full mt-2" rows={draft.decision === "resubmit" ? 3 : 2} placeholder={draft.decision === "resubmit" ? "Why is this going back to them?" : "Feedback on this one (optional)"} value={draft.feedback} onChange={(e) => setDraft(i, { feedback: e.target.value })} />}
                 </div>
               )}
             </div>
           );
         })}
+        <label className="block mt-1"><div className="f-label text-[11px] mb-1.5" style={{ color: "#71675A" }}>Overall comment (optional — shown to {student?.name?.split(" ")[0]} with their result)</div><textarea className="input-field rounded-lg px-3 py-2 text-[13px] w-full" rows={2} placeholder="e.g. Great work overall — keep this pace up for the next one." value={comment} onChange={(e) => setComment(e.target.value)} /></label>
         <button disabled={!allDecided} onClick={saveLinks} className="btn-primary rounded-lg px-5 py-2.5 text-[13px] mt-1 self-start disabled:opacity-40">Save &amp; notify {student?.name?.split(" ")[0]}</button>
         {!allDecided && <div className="text-[12px]" style={{ color: "#A79B84" }}>Decide on every link still waiting on a decision before saving.</div>}
       </div>
@@ -864,7 +889,7 @@ export function TaskDetail({ task, setTasks, students, courses, cohorts, onClose
   // and total score fall out of them rather than setting either by hand --
   // that's the one place deriveSubmissionStatus/sumLinkScores are trusted
   // to agree with what the admin just clicked.
-  function gradeLinks(sid, linkGrades) {
+  function gradeLinks(sid, linkGrades, comment) {
     setTasks((prev) => prev.map((t) => {
       if (t.id !== task.id) return t;
       const prevSub = t.submissions[sid];
@@ -873,7 +898,7 @@ export function TaskDetail({ task, setTasks, students, courses, cohorts, onClose
       // can never be mistaken for one already marked seen from an earlier
       // round -- otherwise a second resubmission on the same task would
       // reuse the exact id the student or admin already dismissed.
-      const nextSub = { ...prevSub, linkGrades, round: (prevSub.round || 0) + 1 };
+      const nextSub = { ...prevSub, linkGrades, comment, round: (prevSub.round || 0) + 1 };
       nextSub.status = deriveSubmissionStatus(t, nextSub);
       nextSub.score = sumLinkScores(t, nextSub);
       return { ...t, submissions: { ...t.submissions, [sid]: nextSub } };
