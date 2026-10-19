@@ -1,8 +1,15 @@
 // Draws a student's name -- and optionally an issue date -- onto the
-// admin's uploaded certificate template and hands back a finished PNG.
-// This is the only place that actually "bakes" text into the image, so
-// the admin's drag-to-position preview and the student's real downloaded
-// certificate can never drift apart.
+// admin's uploaded certificate template and hands back a finished PNG as
+// a blob: URL, not a data: URI. This is the only place that actually
+// "bakes" text into the image, so the admin's drag-to-position preview
+// and the student's real downloaded certificate can never drift apart.
+//
+// toBlob()+createObjectURL() instead of toDataURL() is not a style choice
+// -- a data: URI is exactly what this app already avoids for every other
+// upload (see storage.js) because most mobile browsers, iPhone Safari
+// especially, don't reliably download a data: link at all; tapping
+// "Download" would just open or do nothing instead of saving the file.
+// A blob: URL downloads the same way a real uploaded file would.
 export function renderCertificate(templateDataUrl, { name, namePos, fontSizePct, date, datePos, dateFontSizePct }, color = "#2A2620") {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -23,7 +30,10 @@ export function renderCertificate(templateDataUrl, { name, namePos, fontSizePct,
         ctx.font = `italic 400 ${dateSize}px Georgia, 'Times New Roman', serif`;
         ctx.fillText(date, canvas.width * (datePos.xPct / 100), canvas.height * (datePos.yPct / 100));
       }
-      resolve(canvas.toDataURL("image/png"));
+      canvas.toBlob((blob) => {
+        if (!blob) { reject(new Error("Couldn't finish building the certificate image.")); return; }
+        resolve(URL.createObjectURL(blob));
+      }, "image/png");
     };
     img.onerror = () => reject(new Error("Couldn't load the certificate template image."));
     img.src = templateDataUrl;

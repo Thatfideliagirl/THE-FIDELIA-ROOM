@@ -616,6 +616,7 @@ export function CertificateTab({ course, enrollment, student, tasks, setStudents
   useEffect(() => {
     if (!template) { setFinalUrl(null); return; }
     let cancelled = false;
+    let objectUrl = null;
     renderCertificate(template.file.dataUrl, {
       name: student.name,
       namePos: template.namePos,
@@ -625,8 +626,11 @@ export function CertificateTab({ course, enrollment, student, tasks, setStudents
       date: template.includeDate ? formatIssueDate(enrollment.certificateIssuedAt || new Date().toISOString()) : null,
       datePos: template.datePos,
       dateFontSizePct: template.dateFontSizePct,
-    }).then((url) => { if (!cancelled) setFinalUrl(url); }).catch((e) => console.error("renderCertificate failed", e));
-    return () => { cancelled = true; };
+    }).then((url) => { if (cancelled) { URL.revokeObjectURL(url); return; } objectUrl = url; setFinalUrl(url); }).catch((e) => console.error("renderCertificate failed", e));
+    // Each re-render (a dragged position changing, a new name) makes a new
+    // blob: URL -- revoke the one this effect made so they don't pile up
+    // in memory across edits.
+    return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [template, template?.file.dataUrl, template?.namePos.xPct, template?.namePos.yPct, template?.fontSizePct, template?.includeDate, template?.datePos?.xPct, template?.datePos?.yPct, template?.dateFontSizePct, student.name, enrollment.certificateIssuedAt]);
 
   if (!template) {
@@ -658,7 +662,11 @@ export function CertificateTab({ course, enrollment, student, tasks, setStudents
       <div className="mb-2"><div className="flex items-center justify-between text-[12px] mb-1"><span style={{ color: "#71675A" }}>Course progress</span><span className="f-code" style={{ fontWeight: 700 }}>{elig.coursePct}%</span></div><div className="progress-track" style={{ height: 7 }}><div className="progress-fill" style={{ width: `${elig.coursePct}%` }} /></div></div>
       {elig.capstone.hasCapstone && <div className="mb-4"><div className="flex items-center justify-between text-[12px] mb-1"><span style={{ color: "#71675A" }}>Capstone score</span><span className="f-code" style={{ fontWeight: 700 }}>{elig.capstone.label}</span></div><div className="progress-track" style={{ height: 7 }}><div className="progress-fill" style={{ width: `${Math.min(100, elig.capstone.pct)}%`, background: elig.capstone.passed ? undefined : "#B2572B" }} /></div></div>}
       {elig.eligible ? (
-        <a href={finalUrl || "#"} download={`${student.name} — Certificate.png`} className="btn-primary rounded-full px-6 py-3 text-[14px] w-full text-center block" style={{ opacity: finalUrl ? 1 : 0.5, pointerEvents: finalUrl ? "auto" : "none" }}>{finalUrl ? "Download certificate" : "Preparing…"}</a>
+        // An em dash in the download filename silently breaks it in
+        // Chromium -- the browser falls back to a bare "download" with no
+        // name or extension instead of erroring, so this is easy to miss
+        // testing on desktop. A plain hyphen is the safe, boring choice.
+        <a href={finalUrl || "#"} download={`${student.name} - Certificate.png`} className="btn-primary rounded-full px-6 py-3 text-[14px] w-full text-center block" style={{ opacity: finalUrl ? 1 : 0.5, pointerEvents: finalUrl ? "auto" : "none" }}>{finalUrl ? "Download certificate" : "Preparing…"}</a>
       ) : (
         <div className="f-code text-[11px] text-center" style={{ color: "#A79B84" }}>Needs 100% course progress{elig.capstone.hasCapstone ? " and an 80%+ capstone score" : ""} to unlock.</div>
       )}
