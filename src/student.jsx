@@ -731,6 +731,7 @@ export function TaskDetailStudent({ task, student, allStudents, setTasks, onBack
                 <div className="f-label text-[11px] mb-1" style={{ color: "#71675A" }}>YOUR RESULT</div>
                 <div className="f-display text-[28px]" style={{ fontWeight: 800 }}>{sub.score}%</div>
                 {sub.comment && <div className="text-[13.5px] mt-2 rounded-lg px-3 py-2.5" style={{ background: "#FFFFFF", color: "#4A4237" }}>"{sub.comment}"</div>}
+                {task.isCapstone && <div className="text-[13px] mt-3 flex items-start gap-1.5" style={{ color: "#71675A" }}><Award size={14} color="var(--accent)" style={{ flexShrink: 0, marginTop: 2 }} /><span>This was your capstone — head to your <strong>Certificate</strong> tab to see where you stand.</span></div>}
               </div>
             ) : (
               <span className="f-code text-[10px] tint-badge px-2.5 py-1 rounded-full">{sub.status.toUpperCase()}{sub.score != null ? ` · ${sub.score}%` : ""}</span>
