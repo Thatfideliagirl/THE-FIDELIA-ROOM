@@ -7,7 +7,7 @@ import {
   UserCircle, FolderPlus, Folder, UploadCloud, ClipboardCheck, HelpCircle as HelpIcon,
   Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Compass, Home, Repeat, Pause
 } from "lucide-react";
-import { pairKey, moduleStatus, scoreSubmission, AUTO_APPROVE_THRESHOLD, LINK_TYPES, deriveSubmissionStatus, courseEligibility } from "./lib/data.js";
+import { pairKey, moduleStatus, scoreSubmission, AUTO_APPROVE_THRESHOLD, LINK_TYPES, deriveSubmissionStatus, courseEligibility, formatDateTime } from "./lib/data.js";
 import { renderCertificate, formatIssueDate } from "./lib/certificate.js";
 import { SectionHeader, NotifBell, WelcomeTour, SidebarLink, LogoMark, Spine, TextArea, ProgressBar, ResourceDetail, Field, ChangePasswordCard, RichText, RichTextEditor, DashboardShell, TaskFileList } from "./components.jsx";
 
@@ -454,7 +454,7 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
   function toggleSeenNotice(noticeId) { setNotices((prev) => prev.map((n) => n.id !== noticeId ? n : { ...n, seenBy: (n.seenBy || []).includes(student.id) ? n.seenBy.filter((id) => id !== student.id) : [...(n.seenBy || []), student.id] })); }
   function postCommunity() { if (!communityMsg.trim()) return; setCommunity((p) => [...p, { id: Date.now(), author: student.name, text: communityMsg, image: null, likes: 0, liked: false, comments: [] }]); setCommunityMsg(""); }
   function toggleLike(id) { setCommunity((p) => p.map((post) => post.id === id ? { ...post, liked: !post.liked, likes: post.likes + (post.liked ? -1 : 1) } : post)); }
-  function sendMsg() { if (!msg.trim()) return; setDirectThreads((p) => ({ ...p, [key]: [...(p[key] || []), { from: student.id, text: msg }] })); setMsg(""); }
+  function sendMsg() { if (!msg.trim()) return; setDirectThreads((p) => ({ ...p, [key]: [...(p[key] || []), { from: student.id, text: msg, at: Date.now() }] })); setMsg(""); }
   const openTask = openTaskId ? myTasks.find((t) => t.id === openTaskId) : null;
 
   const sidebar = (
@@ -690,10 +690,10 @@ export function TaskDetailStudent({ task, student, allStudents, setTasks, onBack
     if (isPastDeadline) return;
     if (hasLinks) {
       const linksObj = {}; links.forEach((v, i) => { linksObj[i] = v; });
-      setTasks((prev) => prev.map((t) => t.id !== task.id ? t : { ...t, submissions: { ...t.submissions, [student.id]: { status: "needs review", links: linksObj, linkGrades: {}, note: "", score: null, round: 0 } } }));
+      setTasks((prev) => prev.map((t) => t.id !== task.id ? t : { ...t, submissions: { ...t.submissions, [student.id]: { status: "needs review", links: linksObj, linkGrades: {}, note: "", score: null, round: 0, submittedAt: Date.now(), lastActivityAt: Date.now() } } }));
     } else {
       if (!note.trim()) return;
-      setTasks((prev) => prev.map((t) => t.id !== task.id ? t : { ...t, submissions: { ...t.submissions, [student.id]: { status: "in review", note, score: null } } }));
+      setTasks((prev) => prev.map((t) => t.id !== task.id ? t : { ...t, submissions: { ...t.submissions, [student.id]: { status: "in review", note, score: null, submittedAt: Date.now(), lastActivityAt: Date.now() } } }));
     }
   }
   // Resubmitting one flagged link only reopens that link -- every other
@@ -705,7 +705,7 @@ export function TaskDetailStudent({ task, student, allStudents, setTasks, onBack
     setTasks((prev) => prev.map((t) => {
       if (t.id !== task.id) return t;
       const prevSub = t.submissions[student.id];
-      const nextSub = { ...prevSub, links: { ...prevSub.links, [i]: newUrl }, linkGrades: { ...prevSub.linkGrades, [i]: { decision: null, score: null, feedback: "" } }, round: (prevSub.round || 0) + 1 };
+      const nextSub = { ...prevSub, links: { ...prevSub.links, [i]: newUrl }, linkGrades: { ...prevSub.linkGrades, [i]: { decision: null, score: null, feedback: "" } }, round: (prevSub.round || 0) + 1, lastActivityAt: Date.now() };
       nextSub.status = deriveSubmissionStatus(t, nextSub);
       return { ...t, submissions: { ...t.submissions, [student.id]: nextSub } };
     }));
@@ -742,7 +742,7 @@ export function TaskDetailStudent({ task, student, allStudents, setTasks, onBack
                 {task.isCapstone && <div className="text-[13px] mt-3 flex items-start gap-1.5" style={{ color: "#71675A" }}><Award size={14} color="var(--accent)" style={{ flexShrink: 0, marginTop: 2 }} /><span>This was your capstone — head to your <strong>Certificate</strong> tab to see where you stand.</span></div>}
               </div>
             ) : (
-              <span className="f-code text-[10px] tint-badge px-2.5 py-1 rounded-full">{sub.status.toUpperCase()}{sub.score != null ? ` · ${sub.score}%` : ""}</span>
+              <div className="flex items-center gap-2 flex-wrap"><span className="f-code text-[10px] tint-badge px-2.5 py-1 rounded-full">{sub.status.toUpperCase()}{sub.score != null ? ` · ${sub.score}%` : ""}</span>{sub.submittedAt && <span className="text-[11.5px]" style={{ color: "#A79B84" }}>Submitted {formatDateTime(sub.submittedAt)}</span>}</div>
             )}
             {sub.links ? (
               <div className="flex flex-col gap-2.5 mt-3">{task.requiredLinks.map((r, i) => {

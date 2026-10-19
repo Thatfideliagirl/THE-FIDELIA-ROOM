@@ -8,7 +8,7 @@ import {
   Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Home, UserCog, Repeat, RotateCcw
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from "recharts";
-import { genCode, pairKey, ADMIN_EMAIL, TEAM_PERMISSION_TABS, LINK_TYPES, STUDENT_ACCESS_TABS, linkShare, deriveSubmissionStatus, sumLinkScores, capstoneStatus, courseEligibility } from "./lib/data.js";
+import { genCode, pairKey, ADMIN_EMAIL, TEAM_PERMISSION_TABS, LINK_TYPES, STUDENT_ACCESS_TABS, linkShare, deriveSubmissionStatus, sumLinkScores, capstoneStatus, courseEligibility, formatDateTime, formatRelativeTime } from "./lib/data.js";
 import { renderCertificate, formatIssueDate } from "./lib/certificate.js";
 import { Field, SectionHeader, NotifBell, SidebarLink, LogoMark, TextArea, SelectF, ImgField, FileField, TaskFileList, ChangePasswordCard, RichTextEditor, RichText, DashboardShell, WelcomeTour, TEAM_TOUR_STEPS } from "./components.jsx";
 import { CommunityPanel } from "./student.jsx";
@@ -41,7 +41,7 @@ export function ApplicantsTab({ applicants, setApplicants, onRemove, students, s
       {pending.length === 0 && <div className="text-[15px] mb-8" style={{ color: "#A79B84" }}>No pending applications.</div>}
       <div className="flex flex-col gap-4 mb-10">{pending.map((a) => (
         <div key={a.id} className="card rounded-2xl p-6">
-          <button className="w-full flex items-center justify-between" onClick={() => setOpenId(openId === a.id ? null : a.id)}><div className="text-left"><div className="text-[17px]" style={{ fontWeight: 700 }}>{a.name} {a.studentRef && <span className="f-code text-[10px] tint-badge px-2 py-0.5 rounded-full ml-1">EXISTING STUDENT</span>}</div><div className="text-[13px] mt-1" style={{ color: "#71675A" }}>{a.email} · applying to {course(a.courseId)?.title}</div></div><ChevronDown size={18} color="#A79B84" style={{ transform: openId === a.id ? "rotate(180deg)" : "none" }} /></button>
+          <button className="w-full flex items-center justify-between" onClick={() => setOpenId(openId === a.id ? null : a.id)}><div className="text-left"><div className="text-[17px]" style={{ fontWeight: 700 }}>{a.name} {a.studentRef && <span className="f-code text-[10px] tint-badge px-2 py-0.5 rounded-full ml-1">EXISTING STUDENT</span>}</div><div className="text-[13px] mt-1" style={{ color: "#71675A" }}>{a.email} · applying to {course(a.courseId)?.title}{a.createdAt && <> · applied {formatDateTime(a.createdAt)}</>}</div></div><ChevronDown size={18} color="#A79B84" style={{ transform: openId === a.id ? "rotate(180deg)" : "none" }} /></button>
           {openId === a.id && <div className="mt-5 pt-5" style={{ borderTop: "1px solid #F0E7D6" }}>{(course(a.courseId)?.applicationQuestions || []).map((q, i) => <div key={i} className="mb-3"><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>{q.toUpperCase()}</div><div className="text-[14px]">{a.answers[i]}</div></div>)}{!a.studentRef && <div className="mt-4 mb-4" style={{ maxWidth: 220 }}><SelectF label="Cohort" value={cohortInput} onChange={(e) => setCohortInput(e.target.value)} options={cohorts.map((c) => ({ value: c.id, label: c.name }))} /></div>}{accepting !== a.id && acceptError && <div className="text-[13px] mb-3" style={{ color: "#B04A3A" }}>{acceptError}</div>}
           <div className="flex items-center justify-between">
             <div className="flex gap-3"><button disabled={accepting === a.id} onClick={() => accept(a)} className="btn-primary rounded-lg px-5 py-2.5 text-[14px]">{accepting === a.id ? "Accepting…" : "Accept & generate code"}</button><button onClick={() => decline(a)} className="btn-ghost rounded-lg px-5 py-2.5 text-[14px]">Decline</button></div>
@@ -899,7 +899,7 @@ const SUBMISSION_FILTERS = [
 export function TaskDetail({ task, setTasks, students, courses, cohorts, onClose, onDelete }) {
   const [editing, setEditing] = useState(false); const [viewingSub, setViewingSub] = useState(null);
   const [filter, setFilter] = useState("all");
-  function grade(sid, status, score) { setTasks((prev) => prev.map((t) => t.id !== task.id ? t : { ...t, submissions: { ...t.submissions, [sid]: { ...t.submissions[sid], status, score } } })); setViewingSub(null); }
+  function grade(sid, status, score) { setTasks((prev) => prev.map((t) => t.id !== task.id ? t : { ...t, submissions: { ...t.submissions, [sid]: { ...t.submissions[sid], status, score, lastActivityAt: Date.now() } } })); setViewingSub(null); }
   // Per-link review: merge in this round's decisions, then let the status
   // and total score fall out of them rather than setting either by hand --
   // that's the one place deriveSubmissionStatus/sumLinkScores are trusted
@@ -913,7 +913,7 @@ export function TaskDetail({ task, setTasks, students, courses, cohorts, onClose
       // can never be mistaken for one already marked seen from an earlier
       // round -- otherwise a second resubmission on the same task would
       // reuse the exact id the student or admin already dismissed.
-      const nextSub = { ...prevSub, linkGrades, comment, round: (prevSub.round || 0) + 1 };
+      const nextSub = { ...prevSub, linkGrades, comment, round: (prevSub.round || 0) + 1, lastActivityAt: Date.now() };
       nextSub.status = deriveSubmissionStatus(t, nextSub);
       nextSub.score = sumLinkScores(t, nextSub);
       return { ...t, submissions: { ...t.submissions, [sid]: nextSub } };
@@ -955,7 +955,7 @@ export function TaskDetail({ task, setTasks, students, courses, cohorts, onClose
       <div className="flex items-center gap-2 mb-4 flex-wrap">{SUBMISSION_FILTERS.map((f) => <button key={f.key} onClick={() => setFilter(f.key)} className="f-label text-[11px] px-3 py-1.5 rounded-full" style={{ background: filter === f.key ? "var(--accent)" : "#F0E7D6", color: filter === f.key ? "#FAF6EC" : "#71675A" }}>{f.label}</button>)}</div>
       <div className="flex flex-col gap-3">{visibleRows.map(({ sid, s, sub, status }) => (
         <div key={sid}>
-          <div className="rounded-xl p-4 flex items-center justify-between" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}><div><span className="text-[14px]" style={{ fontWeight: 700 }}>{s?.name}</span>{sub && <span className="f-code text-[10px] tint-badge px-2 py-1 rounded-full ml-2">{status.toUpperCase()}{sub.score != null ? ` · ${sub.score}%` : ""}</span>}</div>{sub ? <button onClick={() => setViewingSub(viewingSub === sid ? null : sid)} className="f-label text-[11px] accent-text flex items-center gap-1"><Eye size={12} /> View</button> : <span className="f-code text-[10px]" style={{ color: "#C9BFAE" }}>NOT SUBMITTED</span>}</div>
+          <div className="rounded-xl p-4 flex items-center justify-between" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}><div><span className="text-[14px]" style={{ fontWeight: 700 }}>{s?.name}</span>{sub && <span className="f-code text-[10px] tint-badge px-2 py-1 rounded-full ml-2">{status.toUpperCase()}{sub.score != null ? ` · ${sub.score}%` : ""}</span>}{sub?.lastActivityAt && <span className="text-[11.5px] ml-2" style={{ color: "#A79B84" }}>{formatDateTime(sub.lastActivityAt)}</span>}</div>{sub ? <button onClick={() => setViewingSub(viewingSub === sid ? null : sid)} className="f-label text-[11px] accent-text flex items-center gap-1"><Eye size={12} /> View</button> : <span className="f-code text-[10px]" style={{ color: "#C9BFAE" }}>NOT SUBMITTED</span>}</div>
           {viewingSub === sid && <SubmissionDetail sid={sid} student={s} sub={sub} task={task} onGrade={grade} onGradeLinks={gradeLinks} onUpdateFeedback={updateLinkFeedback} onClose={() => setViewingSub(null)} />}
         </div>
       ))}</div>
@@ -1173,7 +1173,7 @@ export function FaqTab({ faqs, setFaqs }) {
 export function AdminChatTab({ students, directThreads, setDirectThreads }) {
   const [activeId, setActiveId] = useState(null); const [msg, setMsg] = useState("");
   const key = activeId ? pairKey("admin", activeId) : null; const thread = key ? (directThreads[key] || []) : [];
-  function send() { if (!msg.trim() || !key) return; setDirectThreads((p) => ({ ...p, [key]: [...(p[key] || []), { from: "admin", text: msg }] })); setMsg(""); }
+  function send() { if (!msg.trim() || !key) return; setDirectThreads((p) => ({ ...p, [key]: [...(p[key] || []), { from: "admin", text: msg, at: Date.now() }] })); setMsg(""); }
   return (
     <>
       <SectionHeader eyebrow="TALK TO STUDENTS" title="Chat" />

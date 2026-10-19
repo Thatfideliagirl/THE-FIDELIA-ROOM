@@ -2,6 +2,30 @@
 
 export const ADMIN_EMAIL = "fjroomm@gmail.com";
 
+// A full date + time for list rows (applicants, submissions) where knowing
+// exactly when something happened matters more than a glance -- she asked
+// for this specifically after noticing neither showed one at all.
+export function formatDateTime(ts) {
+  if (!ts) return "";
+  return new Date(ts).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+// "5m ago" style, for the notification panel -- falls back to a short date
+// once something's more than a day old, so "3 weeks ago" doesn't sit there
+// forever next to things that still need a decision.
+export function formatRelativeTime(ts) {
+  if (!ts) return "";
+  const diffMs = Date.now() - new Date(ts).getTime();
+  const min = Math.floor(diffMs / 60000);
+  if (min < 1) return "just now";
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const day = Math.floor(hr / 24);
+  if (day < 7) return `${day}d ago`;
+  return new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
 // The full set of admin tabs a team member's access can be built from.
 // "profile" and "team" are deliberately excluded -- profile is always
 // available (it's their own account), and managing the roster itself

@@ -4,6 +4,9 @@ const applicantOut = (a) => ({
   id: a.id, name: a.name, email: a.email, phone: a.phone,
   courseId: a.course_id, cohortId: a.cohort_id, studentRef: a.student_ref,
   answers: a.answers || [], status: a.status, authUserId: a.auth_user_id,
+  // Already written by Postgres on every insert and already used to order
+  // this list -- just never handed to the UI before now.
+  createdAt: a.created_at,
 });
 const applicantIn = (a) => ({
   name: a.name, email: a.email, phone: a.phone || null,

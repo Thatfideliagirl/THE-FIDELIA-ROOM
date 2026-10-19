@@ -9,7 +9,7 @@ import {
   Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Menu
 } from "lucide-react";
 import { LOGO_SRC, HERO_SRC, CREATOR_SRC, HOWITWORKS_SRC } from "./assets/brandImages.js";
-import { moduleStatus } from "./lib/data.js";
+import { moduleStatus, formatRelativeTime } from "./lib/data.js";
 import { changePassword } from "./lib/auth.js";
 import { uploadFile } from "./lib/storage.js";
 import { useEditor, EditorContent, NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
@@ -635,7 +635,12 @@ export function NotifBell({ items, seen, onMarkSeen }) {
       {open && createPortal(
         <div className="card modal-in rounded-xl p-4 fixed z-[999]" style={{ width: PANEL_WIDTH, top: pos.top, left: pos.left, maxHeight: "70vh", overflowY: "auto" }}>
           <div className="f-label text-[11px] mb-3" style={{ color: "#71675A" }}>NOTIFICATIONS</div>
-          {items.length === 0 ? <div className="text-[13px]" style={{ color: "#A79B84" }}>Nothing new.</div> : items.slice().reverse().map((n, i) => <div key={n.id} className="text-[13px] py-2.5" style={{ borderTop: i > 0 ? "1px solid #F0E7D6" : "none" }}>{n.t}</div>)}
+          {items.length === 0 ? <div className="text-[13px]" style={{ color: "#A79B84" }}>Nothing new.</div> : items.slice().sort((a, b) => (b.at || 0) - (a.at || 0)).map((n, i) => (
+            <div key={n.id} className="py-2.5" style={{ borderTop: i > 0 ? "1px solid #F0E7D6" : "none" }}>
+              <div className="text-[13px]">{n.t}</div>
+              {n.at && <div className="f-code text-[10.5px] mt-1" style={{ color: "#A79B84" }}>{formatRelativeTime(n.at)}</div>}
+            </div>
+          ))}
         </div>,
         document.body
       )}
