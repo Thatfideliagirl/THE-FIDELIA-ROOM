@@ -618,7 +618,7 @@ export function CertificateTab({ course, enrollment, student, tasks, setStudents
     let cancelled = false;
     let objectUrl = null;
     renderCertificate(template.file.dataUrl, {
-      name: student.name,
+      name: enrollment.certificateName || student.name,
       namePos: template.namePos,
       fontSizePct: template.fontSizePct,
       // Before they're actually eligible there's no real issue date yet --
@@ -631,14 +631,14 @@ export function CertificateTab({ course, enrollment, student, tasks, setStudents
     // blob: URL -- revoke the one this effect made so they don't pile up
     // in memory across edits.
     return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [template, template?.file.dataUrl, template?.namePos.xPct, template?.namePos.yPct, template?.fontSizePct, template?.includeDate, template?.datePos?.xPct, template?.datePos?.yPct, template?.dateFontSizePct, student.name, enrollment.certificateIssuedAt]);
+  }, [template, template?.file.dataUrl, template?.namePos.xPct, template?.namePos.yPct, template?.fontSizePct, template?.includeDate, template?.datePos?.xPct, template?.datePos?.yPct, template?.dateFontSizePct, student.name, enrollment.certificateName, enrollment.certificateIssuedAt]);
 
   if (!template) {
     return enrollment.certificateReady && enrollment.certificateFile ? (
       <div className="card rounded-2xl p-10 text-center" style={{ background: "linear-gradient(155deg, color-mix(in srgb, var(--accent) 16%, white), #F0E7D6)" }}>
         <Award size={40} color="var(--accent)" className="mx-auto mb-4" />
         <div className="f-display text-[22px] mb-2" style={{ fontWeight: 800 }}>Certificate of Completion</div>
-        <div className="text-[14px] mb-6" style={{ color: "#4A4237" }}>{course.title} — issued to {student.name}</div>
+        <div className="text-[14px] mb-6" style={{ color: "#4A4237" }}>{course.title} — issued to {enrollment.certificateName || student.name}</div>
         <a href={enrollment.certificateFile} download className="btn-primary rounded-full px-6 py-3 text-[14px] inline-block">Download certificate</a>
       </div>
     ) : (
@@ -666,7 +666,9 @@ export function CertificateTab({ course, enrollment, student, tasks, setStudents
         // Chromium -- the browser falls back to a bare "download" with no
         // name or extension instead of erroring, so this is easy to miss
         // testing on desktop. A plain hyphen is the safe, boring choice.
-        <a href={finalUrl || "#"} download={`${student.name} - Certificate.png`} className="btn-primary rounded-full px-6 py-3 text-[14px] w-full text-center block" style={{ opacity: finalUrl ? 1 : 0.5, pointerEvents: finalUrl ? "auto" : "none" }}>{finalUrl ? "Download certificate" : "Preparing…"}</a>
+        <a href={finalUrl || "#"} download={`${enrollment.certificateName || student.name} - Certificate.png`} className="btn-primary rounded-full px-6 py-3 text-[14px] w-full text-center block" style={{ opacity: finalUrl ? 1 : 0.5, pointerEvents: finalUrl ? "auto" : "none" }}>{finalUrl ? "Download certificate" : "Preparing…"}</a>
+      ) : elig.held ? (
+        <div className="f-code text-[11px] text-center" style={{ color: "#A79B84" }}>Your certificate is being finalized — check back soon.</div>
       ) : (
         <div className="f-code text-[11px] text-center" style={{ color: "#A79B84" }}>Needs 100% course progress{elig.capstone.hasCapstone ? " and an 80%+ capstone score" : ""} to unlock.</div>
       )}

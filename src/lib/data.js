@@ -259,7 +259,8 @@ export function capstoneStatus(tasks, courseId, studentId) {
 export function courseEligibility(tasks, course, enrollment, studentId) {
   const coursePct = course ? Math.round((enrollment.completedModuleIds.length / course.modules.length) * 100) : 0;
   const capstone = capstoneStatus(tasks, course?.id, studentId);
-  return { eligible: coursePct >= 100 && capstone.passed, coursePct, capstone };
+  const held = !!enrollment.certificateHeld;
+  return { eligible: coursePct >= 100 && capstone.passed && !held, coursePct, capstone, held };
 }
 
 export const seedTasks = [

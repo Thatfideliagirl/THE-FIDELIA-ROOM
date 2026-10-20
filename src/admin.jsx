@@ -1080,6 +1080,8 @@ export function CertificatesTab({ students, setStudents, courses, setCourses, ta
   const [editingCourseId, setEditingCourseId] = useState(null);
   function upload(sid, eid, e) { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = () => setStudents((prev) => prev.map((s) => s.id !== sid ? s : { ...s, enrollments: s.enrollments.map((en) => en.id === eid ? { ...en, certificateFile: r.result } : en) })); r.readAsDataURL(f); }
   function toggle(sid, eid) { setStudents((prev) => prev.map((s) => s.id !== sid ? s : { ...s, enrollments: s.enrollments.map((en) => en.id === eid ? { ...en, certificateReady: !en.certificateReady } : en) })); }
+  function toggleHold(sid, eid) { setStudents((prev) => prev.map((s) => s.id !== sid ? s : { ...s, enrollments: s.enrollments.map((en) => en.id === eid ? { ...en, certificateHeld: !en.certificateHeld } : en) })); }
+  function saveCertName(sid, eid, name) { setStudents((prev) => prev.map((s) => s.id !== sid ? s : { ...s, enrollments: s.enrollments.map((en) => en.id === eid ? { ...en, certificateName: name } : en) })); }
   function saveTemplate(courseId, template) { setCourses((prev) => prev.map((c) => c.id !== courseId ? c : { ...c, certificateTemplate: template })); setEditingCourseId(null); }
   const editingCourse = courses.find((c) => c.id === editingCourseId);
   return (
@@ -1099,14 +1101,30 @@ export function CertificatesTab({ students, setStudents, courses, setCourses, ta
         const hasTemplate = !!course?.certificateTemplate;
         const elig = hasTemplate ? courseEligibility(tasks, course, e, s.id) : null;
         return (
-          <div key={e.id} className="card rounded-xl p-5 flex items-center justify-between flex-wrap gap-3">
-            <div><div className="text-[16px]" style={{ fontWeight: 700 }}>{s.name}</div><div className="text-[13px] mt-1" style={{ color: "#71675A" }}>{course?.title} · {e.completedModuleIds.length}/{course?.modules.length || 8} modules</div></div>
-            {hasTemplate ? (
-              elig.eligible
-                ? <span className="f-code text-[11px] px-3 py-1.5 rounded-full" style={{ background: "#E4F3E9", color: "#2F7D4F" }}>AUTO-ISSUED — ELIGIBLE</span>
-                : <span className="f-code text-[11px] px-3 py-1.5 rounded-full" style={{ background: "#F0E7D6", color: "#71675A" }}>NOT YET ELIGIBLE · {elig.coursePct}% course, capstone {elig.capstone.label}</span>
-            ) : (
-              <div className="flex items-center gap-2"><label className="btn-soft rounded-full px-4 py-2 text-[13px] cursor-pointer flex items-center gap-1.5" style={{ fontWeight: 600 }}><UploadCloud size={14} /> {e.certificateFile ? "Replace file" : "Upload certificate"}<input type="file" onChange={(ev) => upload(s.id, e.id, ev)} style={{ display: "none" }} /></label><button disabled={!e.certificateFile} onClick={() => toggle(s.id, e.id)} className={e.certificateReady ? "btn-soft" : "btn-primary"} style={{ borderRadius: 999, padding: "9px 18px", fontSize: 13, fontWeight: 700, opacity: !e.certificateFile ? 0.4 : 1 }}>{e.certificateReady ? "Ready — Revoke" : "Mark ready & assign"}</button></div>
+          <div key={e.id} className="card rounded-xl p-5 flex flex-col gap-3">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div><div className="text-[16px]" style={{ fontWeight: 700 }}>{s.name}</div><div className="text-[13px] mt-1" style={{ color: "#71675A" }}>{course?.title} · {e.completedModuleIds.length}/{course?.modules.length || 8} modules</div></div>
+              {hasTemplate ? (
+                elig.held
+                  ? <span className="f-code text-[11px] px-3 py-1.5 rounded-full" style={{ background: "#F7E6D8", color: "#B2572B" }}>ON HOLD</span>
+                  : elig.eligible
+                    ? <span className="f-code text-[11px] px-3 py-1.5 rounded-full" style={{ background: "#E4F3E9", color: "#2F7D4F" }}>AUTO-ISSUED — ELIGIBLE</span>
+                    : <span className="f-code text-[11px] px-3 py-1.5 rounded-full" style={{ background: "#F0E7D6", color: "#71675A" }}>NOT YET ELIGIBLE · {elig.coursePct}% course, capstone {elig.capstone.label}</span>
+              ) : (
+                <div className="flex items-center gap-2"><label className="btn-soft rounded-full px-4 py-2 text-[13px] cursor-pointer flex items-center gap-1.5" style={{ fontWeight: 600 }}><UploadCloud size={14} /> {e.certificateFile ? "Replace file" : "Upload certificate"}<input type="file" onChange={(ev) => upload(s.id, e.id, ev)} style={{ display: "none" }} /></label><button disabled={!e.certificateFile} onClick={() => toggle(s.id, e.id)} className={e.certificateReady ? "btn-soft" : "btn-primary"} style={{ borderRadius: 999, padding: "9px 18px", fontSize: 13, fontWeight: 700, opacity: !e.certificateFile ? 0.4 : 1 }}>{e.certificateReady ? "Ready — Revoke" : "Mark ready & assign"}</button></div>
+              )}
+            </div>
+            {hasTemplate && (
+              <div className="flex items-center gap-4 flex-wrap pt-3" style={{ borderTop: "1px solid #E7DEC9" }}>
+                <label className="flex items-center gap-2 text-[13px] cursor-pointer shrink-0" style={{ fontWeight: 600 }}>
+                  <input type="checkbox" checked={!!e.certificateHeld} onChange={() => toggleHold(s.id, e.id)} />
+                  Hold this certificate back
+                </label>
+                <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+                  <span className="f-label text-[11px] shrink-0" style={{ color: "#A79B84" }}>NAME ON CERTIFICATE</span>
+                  <input className="input-field rounded-lg px-3 py-1.5 text-[13px] flex-1 min-w-0" value={e.certificateName ?? s.name} onChange={(ev) => saveCertName(s.id, e.id, ev.target.value)} placeholder={s.name} />
+                </div>
+              </div>
             )}
           </div>
         );
