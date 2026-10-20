@@ -793,24 +793,21 @@ export function TaskForm({ students, courses, cohorts, initial, onSave, onClose 
     </div>
   );
 }
-export function SubmissionDetail({ sid, student, sub, task, onGrade, onGradeLinks, onUpdateFeedback, onClose }) {
+export function SubmissionDetail({ sid, student, sub, task, onGrade, onGradeLinks, onClose }) {
   const [score, setScore] = useState(sub?.score || 100);
-  // Edits to an already-decided link's feedback save on their own (via
-  // onUpdateFeedback), separate from the round-based drafts below -- she
-  // wanted to add a note to work she'd already graded without having to
-  // undo and redo the approval to get there.
-  const [lockedFeedbackDrafts, setLockedFeedbackDrafts] = useState({});
   const links = sub?.links || {};
   const hasLinks = task?.requiredLinks?.length > 0;
-  // Local working copy of this round's decisions -- a link already locked
-  // (approved for good, or sent back and still waiting on the student) is
-  // never in here, since there's nothing left for this screen to decide
-  // about it. Only links with no decision yet start with a row to fill in,
-  // defaulting to an even split of 100 that the admin can type over.
+  const maxShare = hasLinks ? linkShare(task.requiredLinks.length) : 0;
+  // Every link is always a working draft, graded before or not -- seeded
+  // from whatever's already saved so re-opening this screen always starts
+  // from the truth, never from a blank slate. Nothing is ever locked: she
+  // asked specifically to be able to go back and rescore work she'd
+  // already approved, not just add a note to it.
   const [drafts, setDrafts] = useState(() => {
     const d = {};
     task?.requiredLinks?.forEach((_, i) => {
-      if (sub?.linkGrades?.[i]?.decision == null) d[i] = { decision: null, score: linkShare(task.requiredLinks.length), feedback: "" };
+      const g = sub?.linkGrades?.[i];
+      d[i] = g ? { decision: g.decision, score: g.score ?? linkShare(task.requiredLinks.length), feedback: g.feedback || "" } : { decision: null, score: linkShare(task.requiredLinks.length), feedback: "" };
     });
     return d;
   });
@@ -820,11 +817,10 @@ export function SubmissionDetail({ sid, student, sub, task, onGrade, onGradeLink
   // submission rather than any one piece of it ("Great work overall, keep
   // this pace up for the next one").
   const [comment, setComment] = useState(sub?.comment || "");
-  function saveLinks() {
-    const maxShare = linkShare(task.requiredLinks.length);
-    const linkGrades = { ...sub.linkGrades };
+  function saveLinks(notify) {
+    const linkGrades = {};
     Object.entries(drafts).forEach(([i, d]) => { linkGrades[i] = { decision: d.decision, score: d.decision === "approved" ? Math.min(maxShare, Math.max(0, Number(d.score) || 0)) : null, feedback: d.feedback || "" }; });
-    onGradeLinks(sid, linkGrades, comment);
+    onGradeLinks(sid, linkGrades, comment, notify);
   }
   return <div className="card modal-in rounded-2xl p-6 mb-4">
     <div className="flex items-center justify-between mb-3"><div className="text-[15px]" style={{ fontWeight: 700 }}>{student?.name}'s submission</div><button onClick={onClose}><X size={16} color="#A79B84" /></button></div>
@@ -832,9 +828,8 @@ export function SubmissionDetail({ sid, student, sub, task, onGrade, onGradeLink
       <div className="flex flex-col gap-3 mb-2">
         {task.requiredLinks.map((r, i) => {
           const url = links[i];
-          const locked = sub.linkGrades?.[i]?.decision ?? null;
+          const everNotified = sub.linkGrades?.[i]?.decision != null && sub.notifiedRound === sub.round;
           const draft = drafts[i];
-          const maxShare = linkShare(task.requiredLinks.length);
           return (
             <div key={i} className="rounded-xl p-4" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
               <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -842,36 +837,25 @@ export function SubmissionDetail({ sid, student, sub, task, onGrade, onGradeLink
                   <div className="text-[13.5px]" style={{ fontWeight: 700 }}>{r.label || r.type}</div>
                   {url ? <a href={url} target="_blank" rel="noreferrer" className="text-[12.5px] accent-text break-all">{url} ↗</a> : <span className="text-[12.5px]" style={{ color: "#A79B84" }}>Not submitted</span>}
                 </div>
-                {locked === "approved" && <span className="f-code text-[10px] px-2.5 py-1 rounded-full shrink-0 flex items-center gap-1" style={{ background: "#E4F3E9", color: "#2F7D4F" }}><Check size={11} /> APPROVED · {sub.linkGrades[i].score}%</span>}
-                {locked === "resubmit" && <span className="f-code text-[10px] px-2.5 py-1 rounded-full shrink-0" style={{ background: "#FBEAE0", color: "#B2572B" }}>WAITING ON STUDENT</span>}
+                {everNotified && <span className="f-code text-[10px] px-2.5 py-1 rounded-full shrink-0" style={{ background: "#F0E7D6", color: "#71675A" }}>{draft.decision === "approved" ? "✓ already notified" : "waiting on student"}</span>}
               </div>
-              {locked && !draft && (() => {
-                const saved = sub.linkGrades[i].feedback || "";
-                const draftText = lockedFeedbackDrafts[i] ?? saved;
-                const changed = draftText !== saved;
-                return (
-                  <div className="mt-2">
-                    <textarea className="input-field rounded-lg px-3 py-2 text-[13px] w-full" rows={2} placeholder="Add feedback for this one (optional)" value={draftText} onChange={(e) => setLockedFeedbackDrafts((p) => ({ ...p, [i]: e.target.value }))} />
-                    {changed && <button onClick={() => { onUpdateFeedback(sid, i, draftText); setLockedFeedbackDrafts((p) => { const n = { ...p }; delete n[i]; return n; }); }} className="text-[12px] accent-text mt-1" style={{ fontWeight: 700 }}>Save note</button>}
-                  </div>
-                );
-              })()}
-              {draft && (
-                <div className="mt-3">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <button onClick={() => setDraft(i, { decision: "approved" })} className="f-label text-[11px] px-3 py-1.5 rounded-full flex items-center gap-1" style={{ background: draft.decision === "approved" ? "#2F7D4F" : "#FFFFFF", color: draft.decision === "approved" ? "#fff" : "#4A4237", border: "1px solid #E7DEC9" }}><Check size={12} /> Approve</button>
-                    <button onClick={() => setDraft(i, { decision: "resubmit" })} className="f-label text-[11px] px-3 py-1.5 rounded-full flex items-center gap-1" style={{ background: draft.decision === "resubmit" ? "#B2572B" : "#FFFFFF", color: draft.decision === "resubmit" ? "#fff" : "#4A4237", border: "1px solid #E7DEC9" }}><RotateCcw size={12} /> Resubmit</button>
-                    {draft.decision === "approved" && <div className="flex items-center gap-1.5 ml-auto"><input type="number" min={0} max={maxShare} className="input-field rounded-lg px-2.5 py-1.5 text-[13px]" style={{ width: 70 }} value={draft.score} onChange={(e) => setDraft(i, { score: Math.min(maxShare, Math.max(0, Number(e.target.value) || 0)) })} /><span className="text-[12px]" style={{ color: "#71675A" }}>/ {maxShare}% max</span></div>}
-                  </div>
-                  {draft.decision && <textarea className="input-field rounded-lg px-3 py-2 text-[13px] w-full mt-2" rows={draft.decision === "resubmit" ? 3 : 2} placeholder={draft.decision === "resubmit" ? "Why is this going back to them?" : "Feedback on this one (optional)"} value={draft.feedback} onChange={(e) => setDraft(i, { feedback: e.target.value })} />}
+              <div className="mt-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button onClick={() => setDraft(i, { decision: "approved" })} className="f-label text-[11px] px-3 py-1.5 rounded-full flex items-center gap-1" style={{ background: draft.decision === "approved" ? "#2F7D4F" : "#FFFFFF", color: draft.decision === "approved" ? "#fff" : "#4A4237", border: "1px solid #E7DEC9" }}><Check size={12} /> Approve</button>
+                  <button onClick={() => setDraft(i, { decision: "resubmit" })} className="f-label text-[11px] px-3 py-1.5 rounded-full flex items-center gap-1" style={{ background: draft.decision === "resubmit" ? "#B2572B" : "#FFFFFF", color: draft.decision === "resubmit" ? "#fff" : "#4A4237", border: "1px solid #E7DEC9" }}><RotateCcw size={12} /> Resubmit</button>
+                  {draft.decision === "approved" && <div className="flex items-center gap-1.5 ml-auto"><input type="number" min={0} max={maxShare} className="input-field rounded-lg px-2.5 py-1.5 text-[13px]" style={{ width: 70 }} value={draft.score} onChange={(e) => setDraft(i, { score: Math.min(maxShare, Math.max(0, Number(e.target.value) || 0)) })} /><span className="text-[12px]" style={{ color: "#71675A" }}>/ {maxShare}% max</span></div>}
                 </div>
-              )}
+                {draft.decision && <textarea className="input-field rounded-lg px-3 py-2 text-[13px] w-full mt-2" rows={draft.decision === "resubmit" ? 3 : 2} placeholder={draft.decision === "resubmit" ? "Why is this going back to them?" : "Feedback on this one (optional)"} value={draft.feedback} onChange={(e) => setDraft(i, { feedback: e.target.value })} />}
+              </div>
             </div>
           );
         })}
         <label className="block mt-1"><div className="f-label text-[11px] mb-1.5" style={{ color: "#71675A" }}>Overall comment (optional — shown to {student?.name?.split(" ")[0]} with their result)</div><textarea className="input-field rounded-lg px-3 py-2 text-[13px] w-full" rows={2} placeholder="e.g. Great work overall — keep this pace up for the next one." value={comment} onChange={(e) => setComment(e.target.value)} /></label>
-        <button disabled={!allDecided} onClick={saveLinks} className="btn-primary rounded-lg px-5 py-2.5 text-[13px] mt-1 self-start disabled:opacity-40">Save &amp; notify {student?.name?.split(" ")[0]}</button>
-        {!allDecided && <div className="text-[12px]" style={{ color: "#A79B84" }}>Decide on every link still waiting on a decision before saving.</div>}
+        <div className="flex items-center gap-3 mt-1">
+          <button disabled={!allDecided} onClick={() => saveLinks(false)} className="btn-soft rounded-lg px-5 py-2.5 text-[13px] disabled:opacity-40">Save</button>
+          <button disabled={!allDecided} onClick={() => saveLinks(true)} className="btn-primary rounded-lg px-5 py-2.5 text-[13px] disabled:opacity-40">Save &amp; notify {student?.name?.split(" ")[0]}</button>
+        </div>
+        <div className="text-[12px]" style={{ color: "#A79B84" }}>{!allDecided ? "Decide on every link before saving." : "Save keeps this between you and the gradebook — nothing goes to them until you notify."}</div>
       </div>
     ) : (
       <>
@@ -900,37 +884,28 @@ export function TaskDetail({ task, setTasks, students, courses, cohorts, onClose
   const [editing, setEditing] = useState(false); const [viewingSub, setViewingSub] = useState(null);
   const [filter, setFilter] = useState("all");
   function grade(sid, status, score) { setTasks((prev) => prev.map((t) => t.id !== task.id ? t : { ...t, submissions: { ...t.submissions, [sid]: { ...t.submissions[sid], status, score, lastActivityAt: Date.now() } } })); setViewingSub(null); }
-  // Per-link review: merge in this round's decisions, then let the status
-  // and total score fall out of them rather than setting either by hand --
-  // that's the one place deriveSubmissionStatus/sumLinkScores are trusted
-  // to agree with what the admin just clicked.
-  function gradeLinks(sid, linkGrades, comment) {
+  // Every link stays editable forever, approved or not -- decision, score
+  // and feedback can all be revised at any time, any number of times.
+  // Status and score always fall out of whatever's currently saved (that's
+  // the one place deriveSubmissionStatus/sumLinkScores are trusted to
+  // agree with what the admin just clicked), so her own view of where
+  // things stand is always accurate even on a plain save. The round still
+  // bumps on every save, same as before, so ids stay fresh -- but the
+  // student-facing notification is gated separately, on notifiedRound:
+  // only "Save & notify" moves it up to match the round that was just
+  // saved. A plain "Save" updates everything the same way, it just leaves
+  // notifiedRound where it was, so nothing fires until she's ready.
+  function gradeLinks(sid, linkGrades, comment, notify) {
     setTasks((prev) => prev.map((t) => {
       if (t.id !== task.id) return t;
       const prevSub = t.submissions[sid];
-      // Bumped on every save (and matched by a bump on every student
-      // resubmission, in student.jsx) so a notification id from one round
-      // can never be mistaken for one already marked seen from an earlier
-      // round -- otherwise a second resubmission on the same task would
-      // reuse the exact id the student or admin already dismissed.
       const nextSub = { ...prevSub, linkGrades, comment, round: (prevSub.round || 0) + 1, lastActivityAt: Date.now() };
       nextSub.status = deriveSubmissionStatus(t, nextSub);
       nextSub.score = sumLinkScores(t, nextSub);
+      if (notify) nextSub.notifiedRound = nextSub.round;
       return { ...t, submissions: { ...t.submissions, [sid]: nextSub } };
     }));
     setViewingSub(null);
-  }
-  // A locked link's decision and score never reopen, but the feedback on
-  // it does -- she asked to be able to go back and add a note to work she
-  // already graded, without having to undo the approval itself to get
-  // there. No round bump: this isn't a new review, so it doesn't need its
-  // own notification.
-  function updateLinkFeedback(sid, i, feedback) {
-    setTasks((prev) => prev.map((t) => {
-      if (t.id !== task.id) return t;
-      const sub = t.submissions[sid];
-      return { ...t, submissions: { ...t.submissions, [sid]: { ...sub, linkGrades: { ...sub.linkGrades, [i]: { ...sub.linkGrades[i], feedback } } } } };
-    }));
   }
   function save(data) { setTasks((prev) => applyCapstoneExclusivity(prev, task.id, data.courseId, data.isCapstone).map((t) => t.id !== task.id ? t : { ...t, ...data })); setEditing(false); }
   if (editing) return <TaskForm students={students} courses={courses} cohorts={cohorts} initial={task} onSave={save} onClose={() => setEditing(false)} />;
@@ -956,7 +931,7 @@ export function TaskDetail({ task, setTasks, students, courses, cohorts, onClose
       <div className="flex flex-col gap-3">{visibleRows.map(({ sid, s, sub, status }) => (
         <div key={sid}>
           <div className="rounded-xl p-4 flex items-center justify-between" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}><div><span className="text-[14px]" style={{ fontWeight: 700 }}>{s?.name}</span>{sub && <span className="f-code text-[10px] tint-badge px-2 py-1 rounded-full ml-2">{status.toUpperCase()}{sub.score != null ? ` · ${sub.score}%` : ""}</span>}{sub?.lastActivityAt && <span className="text-[11.5px] ml-2" style={{ color: "#A79B84" }}>{formatDateTime(sub.lastActivityAt)}</span>}</div>{sub ? <button onClick={() => setViewingSub(viewingSub === sid ? null : sid)} className="f-label text-[11px] accent-text flex items-center gap-1"><Eye size={12} /> View</button> : <span className="f-code text-[10px]" style={{ color: "#C9BFAE" }}>NOT SUBMITTED</span>}</div>
-          {viewingSub === sid && <SubmissionDetail sid={sid} student={s} sub={sub} task={task} onGrade={grade} onGradeLinks={gradeLinks} onUpdateFeedback={updateLinkFeedback} onClose={() => setViewingSub(null)} />}
+          {viewingSub === sid && <SubmissionDetail sid={sid} student={s} sub={sub} task={task} onGrade={grade} onGradeLinks={gradeLinks} onClose={() => setViewingSub(null)} />}
         </div>
       ))}</div>
     </div>

@@ -515,8 +515,12 @@ export default function App() {
     // the admin's "new submission" notif above -- a task can be approved
     // or sent back more than once across its lifetime (a different link
     // each time), and a stable id would only ever notify the first time.
-    ...tasks.filter((t) => t.assigned.includes(liveStudent.id)).flatMap((t) => { const sub = t.submissions[liveStudent.id]; return sub && sub.status === "approved" ? [{ id: `grade-${t.id}-${sub.round || 0}`, t: `Your task "${t.title}" was reviewed — ${sub.score}%`, at: sub.lastActivityAt }] : []; }),
-    ...tasks.filter((t) => t.assigned.includes(liveStudent.id)).flatMap((t) => { const sub = t.submissions[liveStudent.id]; return sub && sub.status === "waiting on student" ? [{ id: `resubmit-${t.id}-${sub.round || 0}`, t: `Your task "${t.title}" has feedback — one or more links need a resubmission`, at: sub.lastActivityAt }] : []; }),
+    // Gated on notifiedRound matching the current round -- a plain "Save"
+    // (no notify) still updates status and score right away, it just
+    // never moves notifiedRound up, so no notification goes out until she
+    // explicitly asks for one with "Save & notify".
+    ...tasks.filter((t) => t.assigned.includes(liveStudent.id)).flatMap((t) => { const sub = t.submissions[liveStudent.id]; return sub && sub.status === "approved" && sub.notifiedRound === sub.round ? [{ id: `grade-${t.id}-${sub.round || 0}`, t: `Your task "${t.title}" was reviewed — ${sub.score}%`, at: sub.lastActivityAt }] : []; }),
+    ...tasks.filter((t) => t.assigned.includes(liveStudent.id)).flatMap((t) => { const sub = t.submissions[liveStudent.id]; return sub && sub.status === "waiting on student" && sub.notifiedRound === sub.round ? [{ id: `resubmit-${t.id}-${sub.round || 0}`, t: `Your task "${t.title}" has feedback — one or more links need a resubmission`, at: sub.lastActivityAt }] : []; }),
     // A written/file-upload/milestone submission reviewed by an admin never
     // gave the student any feedback at all -- unlike an auto-graded quick
     // check, which shows "well done" the instant it passes, this happened in
