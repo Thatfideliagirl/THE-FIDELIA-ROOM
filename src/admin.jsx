@@ -607,7 +607,7 @@ export function CoursesTab({ courses, setCourses, testimonials }) {
   );
 }
 
-export function StudentDetail({ student, applicant, setStudents, courses, cohorts, onClose, onDelete }) {
+export function StudentDetail({ student, applicant, setStudents, courses, cohorts, tasks, onClose, onDelete }) {
   const [status, setStatus] = useState(student.accountStatus); const [cohortId, setCohortId] = useState(student.cohortId);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [manageAccessId, setManageAccessId] = useState(null);
@@ -641,7 +641,9 @@ export function StudentDetail({ student, applicant, setStudents, courses, cohort
   }
   const pendingReviews = student.enrollments.filter((e) => e.pendingReview);
   return (
-    <div className="card rounded-2xl p-7 mb-6">
+    <div>
+      <button onClick={onClose} className="flex items-center gap-1.5 text-[13px] mb-6" style={{ color: "#71675A" }}><ArrowLeft size={14} /> Back to roster</button>
+      <div className="card rounded-2xl p-7 mb-6">
       <div className="flex items-center justify-between mb-5">
         <div><div className="f-display text-[21px]" style={{ fontWeight: 800 }}>{student.name}</div><div className="text-[14px]" style={{ color: "#71675A" }}>{student.email}</div></div>
         <div className="flex items-center gap-4">
@@ -650,7 +652,6 @@ export function StudentDetail({ student, applicant, setStudents, courses, cohort
           ) : (
             <button onClick={() => setConfirmingDelete(true)} className="flex items-center gap-1.5 text-[12px]" style={{ color: "#B04A3A" }}><Trash2 size={14} /> Delete student</button>
           )}
-          <button onClick={onClose}><X size={18} color="#A79B84" /></button>
         </div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
@@ -680,12 +681,19 @@ export function StudentDetail({ student, applicant, setStudents, courses, cohort
         const studentCohort = cohorts.find((c) => c.id === student.cohortId);
         const endedDaysAgo = studentCohort?.endDate ? Math.floor((Date.now() - new Date(studentCohort.endDate).getTime()) / 86400000) : null;
         const restricted = new Set(e.restrictedTabs || []);
+        const course = courses.find((c) => c.id === e.courseId);
+        const elig = course ? courseEligibility(tasks, course, e, student.id) : null;
         return (
           <div key={e.id} className="rounded-lg px-4 py-3" style={{ background: "#FAF6EC" }}>
             <div className="flex items-center justify-between flex-wrap gap-2">
               <div>
-                <div className="text-[14px]" style={{ fontWeight: 700 }}>{courses.find((c) => c.id === e.courseId)?.title}</div>
-                <div className="f-code text-[10px]" style={{ color: "#71675A" }}>{e.status.toUpperCase()} · {e.completedModuleIds.length}/{courses.find((c) => c.id === e.courseId)?.modules.length || 8} modules{restricted.size > 0 ? ` · ${restricted.size} area${restricted.size === 1 ? "" : "s"} restricted` : ""}</div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="text-[14px]" style={{ fontWeight: 700 }}>{course?.title}</div>
+                  {elig && (elig.eligible
+                    ? <span className="f-code text-[9px] px-2 py-0.5 rounded-full" style={{ background: "#E4F3E9", color: "#2F7D4F", fontWeight: 700 }}>GRADUATED</span>
+                    : <span className="f-code text-[9px] px-2 py-0.5 rounded-full" style={{ background: "#FBEAE7", color: "#B04A3A", fontWeight: 700 }}>STILL IN TRAINING</span>)}
+                </div>
+                <div className="f-code text-[10px]" style={{ color: "#71675A" }}>{e.status.toUpperCase()} · {e.completedModuleIds.length}/{course?.modules.length || 8} modules{restricted.size > 0 ? ` · ${restricted.size} area${restricted.size === 1 ? "" : "s"} restricted` : ""}</div>
               </div>
               <div className="flex items-center gap-3">
                 <span className="f-code text-[13px]">{e.code}</span>
@@ -717,6 +725,7 @@ export function StudentDetail({ student, applicant, setStudents, courses, cohort
         );
       })}</div>
       {applicant && <div className="pt-5" style={{ borderTop: "1px solid #F0E7D6" }}><div className="f-label text-[11px] mb-3" style={{ color: "#71675A" }}>LATEST APPLICATION ANSWERS</div>{applicant.answers.map((ans, i) => <div key={i} className="mb-2 text-[13px]">{ans}</div>)}</div>}
+      </div>
     </div>
   );
 }
@@ -735,10 +744,12 @@ export function StudentsTab({ students, setStudents, onRemove, applicants, cours
     .filter((s) => !graduatedOnly || isGraduated(s));
   const selectedStudent = students.find((s) => s.id === selected);
   const selectedApplicant = selectedStudent ? applicants.filter((a) => a.email === selectedStudent.email).slice(-1)[0] : null;
+  // A clean page swap -- not an inline panel the roster table stays
+  // sitting under -- same pattern CourseManager/ModuleEditor already use.
+  if (selectedStudent) return <StudentDetail student={selectedStudent} applicant={selectedApplicant} setStudents={setStudents} courses={courses} cohorts={cohorts} tasks={tasks} onClose={() => setSelected(null)} onDelete={() => { onRemove(selectedStudent.id); setSelected(null); }} />;
   return (
     <>
       <SectionHeader eyebrow="ROSTER" title="Students" action={<button onClick={exportCsv} className="btn-soft rounded-full px-5 py-2.5 text-[14px] flex items-center gap-1.5" style={{ fontWeight: 700 }}><Download size={14} /> Export CSV</button>} />
-      {selectedStudent && <StudentDetail student={selectedStudent} applicant={selectedApplicant} setStudents={setStudents} courses={courses} cohorts={cohorts} onClose={() => setSelected(null)} onDelete={() => { onRemove(selectedStudent.id); setSelected(null); }} />}
       <div className="flex items-center gap-2 mb-6 flex-wrap">
         <button onClick={() => setCohortFilter("all")} className="f-label text-[11px] px-3.5 py-1.5 rounded-full" style={{ background: cohortFilter === "all" ? "var(--accent)" : "#F0E7D6", color: cohortFilter === "all" ? "#FAF6EC" : "#71675A" }}>All cohorts</button>
         {cohorts.map((co) => <button key={co.id} onClick={() => setCohortFilter(co.id)} className="f-label text-[11px] px-3.5 py-1.5 rounded-full" style={{ background: cohortFilter === co.id ? "var(--accent)" : "#F0E7D6", color: cohortFilter === co.id ? "#FAF6EC" : "#71675A" }}>{co.name}</button>)}
@@ -747,8 +758,8 @@ export function StudentsTab({ students, setStudents, onRemove, applicants, cours
       <div className="card rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
           <div className="min-w-[680px]">
-            <div className="grid grid-cols-6 px-6 py-3 f-label text-[11px]" style={{ background: "#F0E7D6", color: "#71675A" }}><div>STUDENT ID</div><div>NAME</div><div>COHORT</div><div>STATUS</div><div>COURSES</div><div>PROGRESS</div></div>
-            {scopedStudents.map((s) => { const graduated = isGraduated(s); return <button key={s.id} onClick={() => setSelected(s.id)} className="w-full grid grid-cols-6 px-6 py-4 items-center text-[14px] text-left" style={{ borderTop: "1px solid #F0E7D6" }}><div className="f-code text-[11px]" style={{ color: "#71675A" }}>{s.studentId}</div><div style={{ fontWeight: 700 }}>{s.name}</div><div style={{ color: "#4A4237" }}>{cohorts.find((c) => c.id === s.cohortId)?.name || "—"}</div><span className="f-code text-[10px] px-2.5 py-1 rounded-full self-start tint-badge">{s.accountStatus.toUpperCase()}</span><div style={{ color: "#4A4237" }}>{s.enrollments.length}</div>{graduated ? <span className="f-code text-[10px] px-2.5 py-1 rounded-full self-start" style={{ background: "#E4F3E9", color: "#2F7D4F", fontWeight: 700 }}>GRADUATED</span> : <span className="f-code text-[10px] px-2.5 py-1 rounded-full self-start" style={{ background: "#F0E7D6", color: "#71675A", fontWeight: 700 }}>STILL IN TRAINING</span>}</button>; })}
+            <div className="grid grid-cols-6 gap-x-5 px-6 py-3 f-label text-[11px]" style={{ background: "#F0E7D6", color: "#71675A" }}><div>STUDENT ID</div><div>NAME</div><div>COHORT</div><div>STATUS</div><div>COURSES</div><div>PROGRESS</div></div>
+            {scopedStudents.map((s) => { const graduated = isGraduated(s); return <button key={s.id} onClick={() => setSelected(s.id)} className="w-full grid grid-cols-6 gap-x-5 px-6 py-4 items-center text-[14px] text-left" style={{ borderTop: "1px solid #F0E7D6" }}><div className="f-code text-[11px]" style={{ color: "#71675A" }}>{s.studentId}</div><div style={{ fontWeight: 700 }}>{s.name}</div><div style={{ color: "#4A4237" }}>{cohorts.find((c) => c.id === s.cohortId)?.name || "—"}</div><span className="f-code text-[10px] px-2.5 py-1 rounded-full self-start tint-badge">{s.accountStatus.toUpperCase()}</span><div style={{ color: "#4A4237" }}>{s.enrollments.length}</div>{graduated ? <span className="f-code text-[10px] px-2.5 py-1 rounded-full self-start" style={{ background: "#E4F3E9", color: "#2F7D4F", fontWeight: 700 }}>GRADUATED</span> : <span className="f-code text-[10px] px-2.5 py-1 rounded-full self-start" style={{ background: "#FBEAE7", color: "#B04A3A", fontWeight: 700 }}>STILL IN TRAINING</span>}</button>; })}
             {scopedStudents.length === 0 && <div className="px-6 py-8 text-[13px]" style={{ color: "#A79B84" }}>No students match this filter yet.</div>}
           </div>
         </div>
