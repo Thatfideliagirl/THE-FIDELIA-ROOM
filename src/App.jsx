@@ -537,6 +537,11 @@ export default function App() {
       });
     }),
     ...liveStudent.enrollments.filter((e) => e.certificateReady).map((e) => ({ id: `cert-${e.id}`, t: "Your certificate is ready to download" })),
+    ...liveStudent.enrollments.flatMap((e) => {
+      const course = courses.find((c) => c.id === e.courseId);
+      if (!course) return [];
+      return (course.generalMeetings || []).filter((mt) => (mt.assignedStudentIds || []).includes(liveStudent.id)).map((mt) => ({ id: `meeting-${mt.id}`, t: `You've been added to a meeting: "${mt.label}"`, at: mt.createdAt }));
+    }),
   ] : [];
 
   return (

@@ -246,6 +246,7 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
     // an auto-approve on an unrelated keyword overlap with the URL itself.
     if (isLinkProof) { updateEnrollment({ pendingReview: { moduleId: module.id, proof, submittedAt: Date.now() } }); return; }
     const { pct } = scoreSubmission(proof, module.markingGuide);
+    if (module.autoGradeOnly) { setResult(pct); if (pct >= (module.passPct || 70)) completeModule(); return; }
     if (pct >= AUTO_APPROVE_THRESHOLD) completeModule();
     else updateEnrollment({ pendingReview: { moduleId: module.id, proof, submittedAt: Date.now(), autoScore: pct } });
   }
@@ -420,7 +421,8 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
               ) : (
                 <TextArea label="Link to your file" value={proof} onChange={(e) => setProof(e.target.value)} />
               )}
-              <button onClick={submitForReview} disabled={isLinkProof && !linkValid} className="btn-primary rounded-lg px-6 py-3 text-[14px] mt-4">Submit for review</button>
+              {module.autoGradeOnly && result != null && result < (module.passPct || 70) && <div className="text-[14px] mt-3" style={{ color: "#B04A3A", fontWeight: 700 }}>Scored {result}% — revise your answer and try again to unlock the next module.</div>}
+              <button onClick={submitForReview} disabled={isLinkProof && !linkValid} className="btn-primary rounded-lg px-6 py-3 text-[14px] mt-4">{module.autoGradeOnly ? "Submit answer" : "Submit for review"}</button>
             </>
           )}
         </div>
@@ -514,11 +516,35 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
 
         {tab === "meetings" && (() => {
           const now = Date.now();
+          const inWindow = (mt) => meetingsFilter === "past" ? (mt.date && new Date(mt.date).getTime() < now) : !mt.date || new Date(mt.date).getTime() >= now;
+          const generalMeetings = (course.generalMeetings || []).filter((mt) => (mt.assignedStudentIds || []).includes(student.id) && inWindow(mt));
           const grouped = course.modules.map((m, i) => ({
             module: m,
             index: i,
-            meetings: (m.meetings || []).filter((mt) => meetingsFilter === "past" ? (mt.date && new Date(mt.date).getTime() < now) : !mt.date || new Date(mt.date).getTime() >= now),
+            meetings: (m.meetings || []).filter(inWindow),
           })).filter((g) => g.meetings.length > 0);
+          function renderMeetingCard(mt) {
+            const expanded = expandedMeetingId === mt.id;
+            const hasRecording = mt.recordingLink || mt.recordingFile;
+            return (
+              <div key={mt.id} className="card rounded-xl overflow-hidden">
+                <button onClick={() => setExpandedMeetingId(expanded ? null : mt.id)} className="w-full flex items-center justify-between px-5 py-4 text-left">
+                  <div><div className="text-[14px]" style={{ fontWeight: 700 }}>{mt.label}</div><div className="text-[12px] flex items-center gap-1.5 mt-0.5" style={{ color: "#71675A" }}><Clock size={12} /> {mt.date ? new Date(mt.date).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "Date to be confirmed"}</div></div>
+                  <div className="flex items-center gap-3">
+                    {mt.link && <a href={mt.link} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="btn-primary rounded-full px-4 py-2 text-[13px]">Join class</a>}
+                    {hasRecording && <ChevronDown size={16} color="#A79B84" style={{ transform: expanded ? "rotate(180deg)" : "none" }} />}
+                  </div>
+                </button>
+                {expanded && hasRecording && (
+                  <div className="px-5 py-4 flex items-center gap-2" style={{ background: "#FAF6EC", borderTop: "1px solid #E7DEC9" }}>
+                    <span className="f-label text-[10px]" style={{ color: "#A79B84" }}>RECORDING:</span>
+                    {mt.recordingLink && <a href={mt.recordingLink} target="_blank" rel="noreferrer" className="text-[12px] accent-text" style={{ fontWeight: 700 }}>View recording</a>}
+                    {mt.recordingFile && <a href={mt.recordingFile.dataUrl} download={mt.recordingFile.name} className="text-[12px] accent-text flex items-center gap-1" style={{ fontWeight: 700 }}><Download size={11} /> {mt.recordingFile.name}</a>}
+                  </div>
+                )}
+              </div>
+            );
+          }
           return (
             <>
               <SectionHeader eyebrow="ALL CLASSES" title="Virtual Meetings" />
@@ -526,32 +552,17 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
                 <button onClick={() => setMeetingsFilter("upcoming")} className="f-label text-[11px] px-4 py-2 rounded-full" style={{ background: meetingsFilter === "upcoming" ? "var(--accent)" : "#F0E7D6", color: meetingsFilter === "upcoming" ? "#FAF6EC" : "#71675A" }}>Upcoming</button>
                 <button onClick={() => setMeetingsFilter("past")} className="f-label text-[11px] px-4 py-2 rounded-full" style={{ background: meetingsFilter === "past" ? "var(--accent)" : "#F0E7D6", color: meetingsFilter === "past" ? "#FAF6EC" : "#71675A" }}>Past</button>
               </div>
-              {grouped.length === 0 && <div className="text-[14px]" style={{ color: "#A79B84" }}>No {meetingsFilter} classes right now.</div>}
+              {grouped.length === 0 && generalMeetings.length === 0 && <div className="text-[14px]" style={{ color: "#A79B84" }}>No {meetingsFilter} classes right now.</div>}
+              {generalMeetings.length > 0 && (
+                <div className="mb-8">
+                  <div className="f-label text-[12px] mb-3" style={{ color: "#71675A" }}>JUST FOR YOU</div>
+                  <div className="flex flex-col gap-2">{generalMeetings.map(renderMeetingCard)}</div>
+                </div>
+              )}
               {grouped.map((g) => (
                 <div key={g.module.id} className="mb-8">
                   <div className="f-label text-[12px] mb-3" style={{ color: "#71675A" }}>MODULE {String(g.index + 1).padStart(2, "0")} — {g.module.title.toUpperCase()}</div>
-                  <div className="flex flex-col gap-2">{g.meetings.map((mt) => {
-                    const expanded = expandedMeetingId === mt.id;
-                    const hasRecording = mt.recordingLink || mt.recordingFile;
-                    return (
-                      <div key={mt.id} className="card rounded-xl overflow-hidden">
-                        <button onClick={() => setExpandedMeetingId(expanded ? null : mt.id)} className="w-full flex items-center justify-between px-5 py-4 text-left">
-                          <div><div className="text-[14px]" style={{ fontWeight: 700 }}>{mt.label}</div><div className="text-[12px] flex items-center gap-1.5 mt-0.5" style={{ color: "#71675A" }}><Clock size={12} /> {mt.date ? new Date(mt.date).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "Date to be confirmed"}</div></div>
-                          <div className="flex items-center gap-3">
-                            {mt.link && <a href={mt.link} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="btn-primary rounded-full px-4 py-2 text-[13px]">Join class</a>}
-                            {hasRecording && <ChevronDown size={16} color="#A79B84" style={{ transform: expanded ? "rotate(180deg)" : "none" }} />}
-                          </div>
-                        </button>
-                        {expanded && hasRecording && (
-                          <div className="px-5 py-4 flex items-center gap-2" style={{ background: "#FAF6EC", borderTop: "1px solid #E7DEC9" }}>
-                            <span className="f-label text-[10px]" style={{ color: "#A79B84" }}>RECORDING:</span>
-                            {mt.recordingLink && <a href={mt.recordingLink} target="_blank" rel="noreferrer" className="text-[12px] accent-text" style={{ fontWeight: 700 }}>View recording</a>}
-                            {mt.recordingFile && <a href={mt.recordingFile.dataUrl} download={mt.recordingFile.name} className="text-[12px] accent-text flex items-center gap-1" style={{ fontWeight: 700 }}><Download size={11} /> {mt.recordingFile.name}</a>}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}</div>
+                  <div className="flex flex-col gap-2">{g.meetings.map(renderMeetingCard)}</div>
                 </div>
               ))}
             </>

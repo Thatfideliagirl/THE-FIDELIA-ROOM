@@ -8,7 +8,7 @@ import {
   Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Home, UserCog, Repeat, RotateCcw
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from "recharts";
-import { genCode, pairKey, ADMIN_EMAIL, TEAM_PERMISSION_TABS, LINK_TYPES, STUDENT_ACCESS_TABS, linkShare, deriveSubmissionStatus, sumLinkScores, capstoneStatus, courseEligibility, formatDateTime, formatRelativeTime } from "./lib/data.js";
+import { genCode, pairKey, ADMIN_EMAIL, TEAM_PERMISSION_TABS, LINK_TYPES, STUDENT_ACCESS_TABS, linkShare, deriveSubmissionStatus, sumLinkScores, capstoneStatus, courseEligibility, formatDateTime, formatRelativeTime, AUTO_APPROVE_THRESHOLD } from "./lib/data.js";
 import { renderCertificate, formatIssueDate } from "./lib/certificate.js";
 import { Field, SectionHeader, NotifBell, SidebarLink, LogoMark, TextArea, SelectF, ImgField, FileField, TaskFileList, ChangePasswordCard, RichTextEditor, RichText, DashboardShell, WelcomeTour, TEAM_TOUR_STEPS } from "./components.jsx";
 import { CommunityPanel } from "./student.jsx";
@@ -173,6 +173,7 @@ export function ModuleEditor({ course, module, setCourses, onBack }) {
   const [summary, setSummary] = useState(module.summary || "");
   const [testType, setTestType] = useState(module.testType); const [passPct, setPassPct] = useState(module.passPct || 70);
   const [proofType, setProofType] = useState(module.proofType || "text"); const [markingGuide, setMarkingGuide] = useState(module.markingGuide || "");
+  const [autoGradeOnly, setAutoGradeOnly] = useState(module.autoGradeOnly || false);
   const [linkType, setLinkType] = useState(module.linkType || "other");
   const [questionPrompt, setQuestionPrompt] = useState(module.questionPrompt || "");
   const [quiz, setQuiz] = useState(module.quiz || []);
@@ -198,7 +199,7 @@ export function ModuleEditor({ course, module, setCourses, onBack }) {
   function addVideo() { setVideos((v) => [...v, { id: "v" + Date.now(), label: "", url: "", file: null }]); }
   function updateVideo(i, patch) { setVideos((v) => v.map((item, idx) => idx === i ? { ...item, ...patch } : item)); }
   function removeVideo(i) { setVideos((v) => v.filter((_, idx) => idx !== i)); }
-  function save() { setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, modules: c.modules.map((m) => m.id !== module.id ? m : { ...m, title, brief, notes, summary, videoUrl, slideUrl, slideFile, slideDescription, testType, passPct: Number(passPct), proofType, linkType, markingGuide, questionPrompt, quiz, meetings, videoIntro, videos, resourceFiles: resourceFiles.filter((r) => r.file) }) })); onBack(); }
+  function save() { setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, modules: c.modules.map((m) => m.id !== module.id ? m : { ...m, title, brief, notes, summary, videoUrl, slideUrl, slideFile, slideDescription, testType, passPct: Number(passPct), proofType, linkType, markingGuide, questionPrompt, quiz, meetings, videoIntro, videos, resourceFiles: resourceFiles.filter((r) => r.file), autoGradeOnly }) })); onBack(); }
   const [confirmDelete, setConfirmDelete] = useState(false);
   function deleteModuleNow() { setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, modules: c.modules.filter((m) => m.id !== module.id) })); onBack(); }
   return (
@@ -271,6 +272,22 @@ export function ModuleEditor({ course, module, setCourses, onBack }) {
             {(testType === "file-upload" || testType === "milestone") && proofType === "link" && <SelectF label="What kind of link is this?" value={linkType} onChange={(e) => setLinkType(e.target.value)} options={LINK_TYPES.map((t) => ({ value: t.key, label: t.label }))} />}
             <div><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>{testType === "written" ? "The question students will answer" : testType === "milestone" ? "Milestone project brief (what they need to build and submit)" : "What students need to submit"}</div><RichTextEditor value={questionPrompt} onChange={setQuestionPrompt} minRows={5} /></div>
             {proofType !== "link" && <TextArea label="Marking guide — list the key points a good submission should cover, one per idea (used both for your review and for auto-checking matches)" value={markingGuide} onChange={(e) => setMarkingGuide(e.target.value)} rows={6} />}
+            {proofType !== "link" && (
+              <div className="rounded-lg px-4 py-3 flex flex-col gap-3" style={{ background: "#FAF6EC" }}>
+                <label className="flex items-center gap-2 text-[13px] cursor-pointer" style={{ fontWeight: 600 }}>
+                  <input type="checkbox" checked={autoGradeOnly} onChange={(e) => setAutoGradeOnly(e.target.checked)} />
+                  Auto-grade using the marking guide — never needs my review
+                </label>
+                {autoGradeOnly ? (
+                  <>
+                    <div className="text-[12px]" style={{ color: "#71675A" }}>The system scores each answer against your marking guide above (0–100%) and unlocks the next module on its own once a student clears the pass score below. Below that score, they just see what they scored and can revise their answer and try again — it never comes to you.</div>
+                    <Field label="Pass score to unlock next (%)" type="number" value={passPct} onChange={(e) => setPassPct(e.target.value)} />
+                  </>
+                ) : (
+                  <div className="text-[12px]" style={{ color: "#71675A" }}>A strong match ({AUTO_APPROVE_THRESHOLD}%+) still unlocks the next module right away — anything under that comes to you for review, same as now.</div>
+                )}
+              </div>
+            )}
             {proofType === "link" && (testType === "file-upload" || testType === "milestone") && <div className="text-[13px] rounded-lg px-4 py-3" style={{ background: "#FAF6EC", color: "#71675A" }}>No marking guide for a link — the system already checks it's the right kind of link ({LINK_TYPES.find((t) => t.key === linkType)?.label}). Every submission goes to you for review.</div>}
           </>
         )}
@@ -397,7 +414,20 @@ export function AddCourseForm({ onAdd, onClose }) {
     </div>
   );
 }
-export function AdminMeetingsTab({ courses, setCourses, cohorts }) {
+// "Other" is a sentinel moduleId (never a real one -- module ids are
+// Date.now() numbers) meaning "not tied to any module": the meeting lives
+// on the course itself (course.generalMeetings), not inside a module, and
+// carries its own assignedStudentIds instead of being visible to everyone
+// enrolled in the course.
+function flattenMeetings(courses) {
+  const list = [];
+  for (const c of courses) {
+    for (const m of c.modules) for (const mt of (m.meetings || [])) list.push({ ...mt, courseId: c.id, moduleId: m.id });
+    for (const mt of (c.generalMeetings || [])) list.push({ ...mt, courseId: c.id, moduleId: "other" });
+  }
+  return list;
+}
+export function AdminMeetingsTab({ courses, setCourses, cohorts, students }) {
   const coursesWithModules = courses.filter((c) => c.modules.length > 0);
   const [cohortId, setCohortId] = useState("all");
   const [courseFilterId, setCourseFilterId] = useState("all");
@@ -406,11 +436,7 @@ export function AdminMeetingsTab({ courses, setCourses, cohorts }) {
 
   // One flat, editable list of every meeting across every course/module — no cohort/course/module
   // selection required just to see or add one. The filters below only narrow the view.
-  const [draft, setDraft] = useState(() => {
-    const list = [];
-    for (const c of courses) for (const m of c.modules) for (const mt of (m.meetings || [])) list.push({ ...mt, courseId: c.id, moduleId: m.id });
-    return list;
-  });
+  const [draft, setDraft] = useState(() => flattenMeetings(courses));
   // Courses load asynchronously -- if this tab is opened before that fetch
   // resolves, the useState initializer above locks draft to empty forever
   // (it only ever runs once), and every meeting that arrives afterward
@@ -419,8 +445,7 @@ export function AdminMeetingsTab({ courses, setCourses, cohorts }) {
   // actually holding something (never overwrites an in-progress edit).
   useEffect(() => {
     if (draft.length > 0) return;
-    const list = [];
-    for (const c of courses) for (const m of c.modules) for (const mt of (m.meetings || [])) list.push({ ...mt, courseId: c.id, moduleId: m.id });
+    const list = flattenMeetings(courses);
     if (list.length > 0) setDraft(list);
   }, [courses]);
   const [savedIds, setSavedIds] = useState(() => new Set());
@@ -442,7 +467,7 @@ export function AdminMeetingsTab({ courses, setCourses, cohorts }) {
   function addMeeting() {
     const defaultCourse = (courseFilterId !== "all" ? courses.find((c) => c.id === courseFilterId) : filterCourses[0]) || coursesWithModules[0];
     if (!defaultCourse) return;
-    setDraft((d) => [...d, { id: "mt" + Date.now(), label: `Class ${d.length + 1}`, date: "", link: "", recordingLink: "", recordingFile: null, courseId: defaultCourse.id, moduleId: defaultCourse.modules[0]?.id }]);
+    setDraft((d) => [...d, { id: "mt" + Date.now(), label: `Class ${d.length + 1}`, date: "", link: "", recordingLink: "", recordingFile: null, assignedStudentIds: [], createdAt: Date.now(), courseId: defaultCourse.id, moduleId: defaultCourse.modules[0]?.id }]);
   }
   // Delete is immediate — it drops the meeting from wherever it currently lives, no separate save needed.
   // Only the course that actually contains this meeting gets a new object
@@ -458,29 +483,39 @@ export function AdminMeetingsTab({ courses, setCourses, cohorts }) {
   function removeMeeting(id) {
     setDraft((d) => d.filter((mt) => mt.id !== id));
     setCourses((prev) => prev.map((c) => {
-      const hasIt = c.modules.some((m) => (m.meetings || []).some((x) => x.id === id));
-      if (!hasIt) return c;
-      return { ...c, modules: c.modules.map((m) => (m.meetings || []).some((x) => x.id === id) ? { ...m, meetings: m.meetings.filter((x) => x.id !== id) } : m) };
+      const hasItModule = c.modules.some((m) => (m.meetings || []).some((x) => x.id === id));
+      const hasItGeneral = (c.generalMeetings || []).some((x) => x.id === id);
+      if (!hasItModule && !hasItGeneral) return c;
+      return {
+        ...c,
+        modules: c.modules.map((m) => (m.meetings || []).some((x) => x.id === id) ? { ...m, meetings: m.meetings.filter((x) => x.id !== id) } : m),
+        generalMeetings: (c.generalMeetings || []).filter((x) => x.id !== id),
+      };
     }));
   }
   // Saving one row removes it from wherever it's currently stored and (re)inserts it at its
   // chosen course/module — this is what lets a row's own module picker move it on save.
+  // "other" is the sentinel for "not tied to a module" -- that destination
+  // is course.generalMeetings instead of any module's own meetings array.
   // Same "only touch what actually changed" fix as removeMeeting above.
   function saveMeeting(id) {
     const mt = draft.find((x) => x.id === id);
     if (!mt) return;
     const { courseId, moduleId, ...meetingFields } = mt;
+    const isGeneral = moduleId === "other";
     setCourses((prev) => prev.map((c) => {
-      const hadIt = c.modules.some((m) => (m.meetings || []).some((x) => x.id === id));
+      const hadItModule = c.modules.some((m) => (m.meetings || []).some((x) => x.id === id));
+      const hadItGeneral = (c.generalMeetings || []).some((x) => x.id === id);
       const isDestination = c.id === courseId;
-      if (!hadIt && !isDestination) return c;
+      if (!hadItModule && !hadItGeneral && !isDestination) return c;
       return {
         ...c,
         modules: c.modules.map((m) => {
           const withoutThis = (m.meetings || []).filter((x) => x.id !== id);
-          if (c.id === courseId && m.id === moduleId) return { ...m, meetings: [...withoutThis, meetingFields] };
+          if (isDestination && !isGeneral && m.id === moduleId) return { ...m, meetings: [...withoutThis, meetingFields] };
           return withoutThis.length === (m.meetings || []).length ? m : { ...m, meetings: withoutThis };
         }),
+        generalMeetings: isDestination && isGeneral ? [...(c.generalMeetings || []).filter((x) => x.id !== id), meetingFields] : (c.generalMeetings || []).filter((x) => x.id !== id),
       };
     }));
     setSavedIds((s) => new Set(s).add(id));
@@ -510,7 +545,7 @@ export function AdminMeetingsTab({ courses, setCourses, cohorts }) {
             <div key={mt.id} className="card rounded-2xl p-5 flex flex-col gap-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <SelectF label="Course" value={mt.courseId} onChange={(e) => updateMeetingCourse(mt.id, e.target.value)} options={coursesWithModules.map((c) => ({ value: c.id, label: c.title }))} />
-                <SelectF label="Which module is this?" value={mt.moduleId} onChange={(e) => updateMeeting(mt.id, "moduleId", Number(e.target.value))} options={(course?.modules || []).map((m, i) => ({ value: m.id, label: `Module ${i + 1} — ${m.title}` }))} />
+                <SelectF label="Which module is this?" value={mt.moduleId} onChange={(e) => updateMeeting(mt.id, "moduleId", e.target.value === "other" ? "other" : Number(e.target.value))} options={[...(course?.modules || []).map((m, i) => ({ value: m.id, label: `Module ${i + 1} — ${m.title}` })), { value: "other", label: "Other — not part of a module" }]} />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-[1fr_0.85fr_0.75fr_1.5fr_auto] gap-3 items-end">
                 <Field label="Label" value={mt.label} onChange={(e) => updateMeeting(mt.id, "label", e.target.value)} placeholder="e.g. Tuesday class" />
@@ -523,6 +558,18 @@ export function AdminMeetingsTab({ courses, setCourses, cohorts }) {
                   <button onClick={() => setConfirmDeleteId(mt.id)} title="Delete this meeting" className="mb-2.5 flex items-center gap-1.5 text-[12px]" style={{ color: "#B04A3A" }}><Trash2 size={16} /> Delete</button>
                 )}
               </div>
+              {mt.moduleId === "other" && (
+                <div className="pt-3" style={{ borderTop: "1px dashed #E7DEC9" }}>
+                  <div className="f-label text-[10px] mb-2" style={{ color: "#A79B84" }}>TAG PEOPLE (they'll be notified and see this under their own Virtual Meetings)</div>
+                  <div className="flex flex-wrap gap-2">
+                    {students.filter((s) => s.enrollments.some((e) => e.courseId === mt.courseId)).map((s) => {
+                      const tagged = (mt.assignedStudentIds || []).includes(s.id);
+                      return <button key={s.id} type="button" onClick={() => updateMeeting(mt.id, "assignedStudentIds", tagged ? (mt.assignedStudentIds || []).filter((x) => x !== s.id) : [...(mt.assignedStudentIds || []), s.id])} className="f-code text-[11px] px-3 py-1.5 rounded-full" style={{ background: tagged ? "var(--accent)" : "#F0E7D6", color: tagged ? "#FAF6EC" : "#71675A", fontWeight: 700 }}>{s.name}</button>;
+                    })}
+                    {students.filter((s) => s.enrollments.some((e) => e.courseId === mt.courseId)).length === 0 && <span className="text-[13px]" style={{ color: "#A79B84" }}>No students enrolled in this course yet.</span>}
+                  </div>
+                </div>
+              )}
               <div className="pt-3" style={{ borderTop: "1px dashed #E7DEC9" }}>
                 <div className="f-label text-[10px] mb-2" style={{ color: "#A79B84" }}>VIRTUAL RECORDING (after class, if there is one)</div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
@@ -971,7 +1018,7 @@ export function ResourceForm({ courses, initial, onSave, onClose }) {
       return;
     }
     setSaving(true); setError("");
-    const err = await onSave({ courseId, folder, title, description, type, url, file, kind, visibility: category === "free" ? "all" : visibility, isPublic });
+    const err = await onSave({ courseId: category === "free" ? null : courseId, folder, title, description, type, url, file, kind, visibility: category === "free" ? "all" : visibility, isPublic });
     setSaving(false);
     if (err) setError(err); else onClose();
   }
@@ -979,7 +1026,7 @@ export function ResourceForm({ courses, initial, onSave, onClose }) {
     <div className="card rounded-xl p-6 mb-6 flex flex-col gap-3">
       <SelectF label="Category" value={category} onChange={(e) => setCategory(e.target.value)} options={[{ value: "module", label: "Module resource (for enrolled students)" }, { value: "free", label: "Free download (public)" }]} />
       {category === "module" && <SelectF label="Visible to" value={visibility} onChange={(e) => setVisibility(e.target.value)} options={[{ value: "course", label: "Just this course" }, { value: "all", label: "All courses" }]} />}
-      <SelectF label="Course" value={courseId} onChange={(e) => setCourseId(e.target.value)} options={courses.map((c) => ({ value: c.id, label: c.title }))} />
+      {category === "module" && <SelectF label="Course" value={courseId} onChange={(e) => setCourseId(e.target.value)} options={courses.map((c) => ({ value: c.id, label: c.title }))} />}
       <Field label="Folder name" value={folder} onChange={(e) => setFolder(e.target.value)} placeholder="e.g. Module 1 resources" />
       <Field label="Resource title" value={title} onChange={(e) => setTitle(e.target.value)} />
       <TextArea label="Full description (what it's for, who it's for, how it helps) — shown when someone clicks View" value={description} onChange={(e) => setDescription(e.target.value)} rows={4} />
@@ -1545,7 +1592,7 @@ export function AdminDashboard({ courses, setCourses, students, setStudents, onR
         {tab === "applicants" && <ApplicantsTab applicants={applicants} setApplicants={setApplicants} onRemove={onRemoveApplicant} students={students} setStudents={setStudents} courses={courses} cohorts={cohorts} onAccept={onAcceptApplicant} />}
         {tab === "cohorts" && <CohortsTab cohorts={cohorts} setCohorts={setCohorts} courses={courses} students={students} />}
         {tab === "courses" && <CoursesTab courses={courses} setCourses={setCourses} testimonials={testimonials} />}
-        {tab === "meetings" && <AdminMeetingsTab courses={courses} setCourses={setCourses} cohorts={cohorts} />}
+        {tab === "meetings" && <AdminMeetingsTab courses={courses} setCourses={setCourses} cohorts={cohorts} students={students} />}
         {tab === "students" && <StudentsTab students={students} setStudents={setStudents} onRemove={onRemoveStudent} applicants={applicants} courses={courses} cohorts={cohorts} />}
         {tab === "gradebook" && <GradebookTab students={students} courses={courses} cohorts={cohorts} tasks={tasks} />}
         {tab === "tasks" && <TasksTab tasks={tasks} setTasks={setTasks} students={students} courses={courses} cohorts={cohorts} />}
