@@ -720,11 +720,19 @@ export function StudentDetail({ student, applicant, setStudents, courses, cohort
     </div>
   );
 }
-export function StudentsTab({ students, setStudents, onRemove, applicants, courses, cohorts }) {
+export function StudentsTab({ students, setStudents, onRemove, applicants, courses, cohorts, tasks }) {
   const [selected, setSelected] = useState(null);
   const [cohortFilter, setCohortFilter] = useState("all");
+  const [graduatedOnly, setGraduatedOnly] = useState(false);
   function exportCsv() { const rows = [["Student ID", "Name", "Email", "Cohort", "Status", "Enrollments"], ...students.map((s) => [s.studentId, s.name, s.email, cohorts.find((c) => c.id === s.cohortId)?.name || "", s.accountStatus, s.enrollments.map((e) => courses.find((c) => c.id === e.courseId)?.title).join("; ")])]; const csv = rows.map((r) => r.join(",")).join("\n"); const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = "fj-room-students.csv"; a.click(); URL.revokeObjectURL(url); }
-  const scopedStudents = cohortFilter === "all" ? students : students.filter((s) => s.cohortId === cohortFilter);
+  // Graduated means at least one of their enrollments has cleared the
+  // same courseEligibility check the Gradebook and Certificates tab use
+  // (100% course progress, a passing capstone, and not held back) -- one
+  // shared definition of "graduated" everywhere it shows up.
+  function isGraduated(s) { return s.enrollments.some((e) => { const c = courses.find((x) => x.id === e.courseId); return c && courseEligibility(tasks, c, e, s.id).eligible; }); }
+  const scopedStudents = students
+    .filter((s) => cohortFilter === "all" || s.cohortId === cohortFilter)
+    .filter((s) => !graduatedOnly || isGraduated(s));
   const selectedStudent = students.find((s) => s.id === selected);
   const selectedApplicant = selectedStudent ? applicants.filter((a) => a.email === selectedStudent.email).slice(-1)[0] : null;
   return (
@@ -734,13 +742,14 @@ export function StudentsTab({ students, setStudents, onRemove, applicants, cours
       <div className="flex items-center gap-2 mb-6 flex-wrap">
         <button onClick={() => setCohortFilter("all")} className="f-label text-[11px] px-3.5 py-1.5 rounded-full" style={{ background: cohortFilter === "all" ? "var(--accent)" : "#F0E7D6", color: cohortFilter === "all" ? "#FAF6EC" : "#71675A" }}>All cohorts</button>
         {cohorts.map((co) => <button key={co.id} onClick={() => setCohortFilter(co.id)} className="f-label text-[11px] px-3.5 py-1.5 rounded-full" style={{ background: cohortFilter === co.id ? "var(--accent)" : "#F0E7D6", color: cohortFilter === co.id ? "#FAF6EC" : "#71675A" }}>{co.name}</button>)}
+        <button onClick={() => setGraduatedOnly((g) => !g)} className="f-label text-[11px] px-3.5 py-1.5 rounded-full" style={{ background: graduatedOnly ? "var(--accent)" : "#F0E7D6", color: graduatedOnly ? "#FAF6EC" : "#71675A" }}>Graduated students</button>
       </div>
       <div className="card rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
-          <div className="min-w-[600px]">
-            <div className="grid grid-cols-5 px-6 py-3 f-label text-[11px]" style={{ background: "#F0E7D6", color: "#71675A" }}><div>STUDENT ID</div><div>NAME</div><div>COHORT</div><div>STATUS</div><div>COURSES</div></div>
-            {scopedStudents.map((s) => <button key={s.id} onClick={() => setSelected(s.id)} className="w-full grid grid-cols-5 px-6 py-4 items-center text-[14px] text-left" style={{ borderTop: "1px solid #F0E7D6" }}><div className="f-code text-[11px]" style={{ color: "#71675A" }}>{s.studentId}</div><div style={{ fontWeight: 700 }}>{s.name}</div><div style={{ color: "#4A4237" }}>{cohorts.find((c) => c.id === s.cohortId)?.name || "—"}</div><span className="f-code text-[10px] px-2.5 py-1 rounded-full self-start tint-badge">{s.accountStatus.toUpperCase()}</span><div style={{ color: "#4A4237" }}>{s.enrollments.length}</div></button>)}
-            {scopedStudents.length === 0 && <div className="px-6 py-8 text-[13px]" style={{ color: "#A79B84" }}>No students in this cohort yet.</div>}
+          <div className="min-w-[680px]">
+            <div className="grid grid-cols-6 px-6 py-3 f-label text-[11px]" style={{ background: "#F0E7D6", color: "#71675A" }}><div>STUDENT ID</div><div>NAME</div><div>COHORT</div><div>STATUS</div><div>COURSES</div><div>PROGRESS</div></div>
+            {scopedStudents.map((s) => { const graduated = isGraduated(s); return <button key={s.id} onClick={() => setSelected(s.id)} className="w-full grid grid-cols-6 px-6 py-4 items-center text-[14px] text-left" style={{ borderTop: "1px solid #F0E7D6" }}><div className="f-code text-[11px]" style={{ color: "#71675A" }}>{s.studentId}</div><div style={{ fontWeight: 700 }}>{s.name}</div><div style={{ color: "#4A4237" }}>{cohorts.find((c) => c.id === s.cohortId)?.name || "—"}</div><span className="f-code text-[10px] px-2.5 py-1 rounded-full self-start tint-badge">{s.accountStatus.toUpperCase()}</span><div style={{ color: "#4A4237" }}>{s.enrollments.length}</div>{graduated ? <span className="f-code text-[10px] px-2.5 py-1 rounded-full self-start" style={{ background: "#E4F3E9", color: "#2F7D4F", fontWeight: 700 }}>GRADUATED</span> : <span className="f-code text-[10px] px-2.5 py-1 rounded-full self-start" style={{ background: "#F0E7D6", color: "#71675A", fontWeight: 700 }}>STILL IN TRAINING</span>}</button>; })}
+            {scopedStudents.length === 0 && <div className="px-6 py-8 text-[13px]" style={{ color: "#A79B84" }}>No students match this filter yet.</div>}
           </div>
         </div>
       </div>
@@ -1322,32 +1331,30 @@ export function AdminProfileTab({ adminProfile, setAdminProfile }) {
 }
 export function GradebookTab({ students, courses, cohorts, tasks }) {
   const [cohortFilter, setCohortFilter] = useState("all");
-  const [graduatedOnly, setGraduatedOnly] = useState(false);
   const scopedStudents = cohortFilter === "all" ? students : students.filter((s) => s.cohortId === cohortFilter);
   // Same courseEligibility the Certificates tab uses -- so a student held
-  // back there (certificateHeld) never shows as graduated here either;
-  // the two screens always agree on who's actually finished.
+  // back there (certificateHeld) never shows as eligible here either; the
+  // two screens always agree on who's actually cleared to get a certificate.
   const rows = scopedStudents.flatMap((s) => s.enrollments.map((e) => {
     const c = courses.find((x) => x.id === e.courseId);
     const elig = c ? courseEligibility(tasks, c, e, s.id) : { eligible: false, coursePct: 0, capstone: capstoneStatus(tasks, e.courseId, s.id) };
     return { student: s.name, course: c?.title, coursePct: elig.coursePct, capstone: elig.capstone, eligible: elig.eligible };
-  })).filter((r) => !graduatedOnly || r.eligible);
+  }));
   return (
     <>
       <SectionHeader eyebrow="ACCUMULATED SCORES" title="Gradebook" />
       <div className="flex items-center gap-2 mb-6 flex-wrap">
         <button onClick={() => setCohortFilter("all")} className="f-label text-[11px] px-3.5 py-1.5 rounded-full" style={{ background: cohortFilter === "all" ? "var(--accent)" : "#F0E7D6", color: cohortFilter === "all" ? "#FAF6EC" : "#71675A" }}>All cohorts</button>
         {cohorts.map((co) => <button key={co.id} onClick={() => setCohortFilter(co.id)} className="f-label text-[11px] px-3.5 py-1.5 rounded-full" style={{ background: cohortFilter === co.id ? "var(--accent)" : "#F0E7D6", color: cohortFilter === co.id ? "#FAF6EC" : "#71675A" }}>{co.name}</button>)}
-        <button onClick={() => setGraduatedOnly((g) => !g)} className="f-label text-[11px] px-3.5 py-1.5 rounded-full" style={{ background: graduatedOnly ? "var(--accent)" : "#F0E7D6", color: graduatedOnly ? "#FAF6EC" : "#71675A" }}>Graduated only</button>
       </div>
       <div className="card rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
           <div className="min-w-[760px]">
-            <div className="grid grid-cols-5 px-6 py-3 f-label text-[11px]" style={{ background: "#F0E7D6", color: "#71675A" }}><div>STUDENT</div><div>COURSE</div><div>COURSE PROGRESS</div><div>CAPSTONE</div><div>STATUS</div></div>
-            {rows.map((r, i) => <div key={i} className="grid grid-cols-5 px-6 py-4 items-center text-[14px]" style={{ borderTop: "1px solid #F0E7D6" }}><div style={{ fontWeight: 700 }}>{r.student}</div><div>{r.course}</div><div>{r.coursePct}%</div><div>{r.capstone.label}</div><div>{r.eligible ? <span className="f-code text-[10px] tint-badge px-2 py-1 rounded-full">GRADUATED</span> : <span className="f-code text-[10px]" style={{ color: "#A79B84" }}>STILL IN TRAINING</span>}</div></div>)}
+            <div className="grid grid-cols-5 px-6 py-3 f-label text-[11px]" style={{ background: "#F0E7D6", color: "#71675A" }}><div>STUDENT</div><div>COURSE</div><div>COURSE PROGRESS</div><div>CAPSTONE</div><div>ELIGIBILITY</div></div>
+            {rows.map((r, i) => <div key={i} className="grid grid-cols-5 px-6 py-4 items-center text-[14px]" style={{ borderTop: "1px solid #F0E7D6" }}><div style={{ fontWeight: 700 }}>{r.student}</div><div>{r.course}</div><div>{r.coursePct}%</div><div>{r.capstone.label}</div><div>{r.eligible ? <span className="f-code text-[10px] px-2.5 py-1 rounded-full" style={{ background: "#E4F3E9", color: "#2F7D4F", fontWeight: 700 }}>ELIGIBLE</span> : <span className="f-code text-[10px] px-2.5 py-1 rounded-full" style={{ background: "#FBEAE7", color: "#B04A3A", fontWeight: 700 }}>INELIGIBLE</span>}</div></div>)}
           </div>
         </div>
-        {rows.length === 0 && <div className="px-6 py-8 text-[13px]" style={{ color: "#A79B84" }}>No enrollments match this filter yet.</div>}
+        {rows.length === 0 && <div className="px-6 py-8 text-[13px]" style={{ color: "#A79B84" }}>No enrollments in this cohort yet.</div>}
       </div>
     </>
   );
@@ -1605,7 +1612,7 @@ export function AdminDashboard({ courses, setCourses, students, setStudents, onR
         {tab === "cohorts" && <CohortsTab cohorts={cohorts} setCohorts={setCohorts} courses={courses} students={students} />}
         {tab === "courses" && <CoursesTab courses={courses} setCourses={setCourses} testimonials={testimonials} />}
         {tab === "meetings" && <AdminMeetingsTab courses={courses} setCourses={setCourses} cohorts={cohorts} students={students} />}
-        {tab === "students" && <StudentsTab students={students} setStudents={setStudents} onRemove={onRemoveStudent} applicants={applicants} courses={courses} cohorts={cohorts} />}
+        {tab === "students" && <StudentsTab students={students} setStudents={setStudents} onRemove={onRemoveStudent} applicants={applicants} courses={courses} cohorts={cohorts} tasks={tasks} />}
         {tab === "gradebook" && <GradebookTab students={students} courses={courses} cohorts={cohorts} tasks={tasks} />}
         {tab === "tasks" && <TasksTab tasks={tasks} setTasks={setTasks} students={students} courses={courses} cohorts={cohorts} />}
         {tab === "library" && <LibraryTab resources={resources} onAdd={onAddResource} onEdit={onEditResource} onRemove={onRemoveResource} courses={courses} />}
