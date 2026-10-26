@@ -923,7 +923,13 @@ export function SignInScreen({ students, applicants, onBack, onEnterStudent, onE
     if (!email.trim() || !email.includes("@")) { setError("Enter your email above first, then tap \"Forgot password?\" again."); return; }
     setError(""); setForgotSent(false);
     const err = await onForgotPassword(email.trim());
-    if (err) setError("Couldn't send the reset email — please try again.");
+    // The real reason was being thrown away in favor of one generic
+    // message -- which made "it just doesn't work" impossible to diagnose.
+    // Supabase's own built-in mailer (the default, before a real SMTP
+    // provider is connected) caps out at only a handful of emails per
+    // hour, so a rate-limit message here is the single most likely cause
+    // in practice, not a bug in this flow.
+    if (err) setError(/rate limit|too many/i.test(err) ? "Too many reset emails have been sent recently — please wait about an hour and try again." : err === "network" ? "Couldn't reach the server — check your connection and try again." : `Couldn't send the reset email: ${err}`);
     else setForgotSent(true);
   }
   return (
