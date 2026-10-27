@@ -46,12 +46,27 @@ export async function renderIdCard(templateDataUrl, photoDataUrl, { name, studen
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
   ctx.fillStyle = color;
-  const size = Math.max(6, Math.round(canvas.width * ((fontSizePct ?? 3) / 100)));
-  ctx.font = `600 ${size}px Georgia, 'Times New Roman', serif`;
+  const fontFamily = "Georgia, 'Times New Roman', serif";
+  const baseSize = Math.max(6, Math.round(canvas.width * ((fontSizePct ?? 3) / 100)));
+  const minSize = Math.max(5, Math.round(baseSize * 0.55));
   const fields = [[name, namePos], [studentId, idPos], [programme, programmePos], [cohort, cohortPos]];
-  for (const [text, pos] of fields) {
-    if (!text || !pos) continue;
-    ctx.fillText(text, canvas.width * (pos.xPct / 100), canvas.height * (pos.yPct / 100));
+  for (const [rawText, pos] of fields) {
+    if (!rawText || !pos) continue;
+    const startX = canvas.width * (pos.xPct / 100);
+    // A long name or programme has nowhere further right to go than the
+    // card's own edge -- shrinking the font to fit is what keeps it inside
+    // its field instead of running off the card, same as every other field
+    // on the card regardless of how long the text turns out to be.
+    const maxWidth = canvas.width - startX - canvas.width * 0.03;
+    let size = baseSize;
+    ctx.font = `600 ${size}px ${fontFamily}`;
+    while (ctx.measureText(rawText).width > maxWidth && size > minSize) { size -= 1; ctx.font = `600 ${size}px ${fontFamily}`; }
+    let text = rawText;
+    if (ctx.measureText(text).width > maxWidth) {
+      while (text.length > 1 && ctx.measureText(text + "…").width > maxWidth) text = text.slice(0, -1);
+      if (text.length < rawText.length) text += "…";
+    }
+    ctx.fillText(text, startX, canvas.height * (pos.yPct / 100));
   }
 
   return new Promise((resolve, reject) => {
