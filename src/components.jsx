@@ -688,11 +688,29 @@ function TestimonialCard({ t, template, expanded, onToggle, theme = "dark", maxW
   }, [template, t.photo?.dataUrl, t.name, t.studentId, t.quote, t.photoZoom, t.photoPanXPct, t.photoPanYPct]);
   const details = [t.programme, t.cohort].filter(Boolean).join(" · ");
   if (template) {
+    // The card image baks in the photo, name and ID fine -- those are
+    // always short. The quote is the one field with real variance in
+    // length, and a picture can't reflow text the way a page can: shrink
+    // it to fit a long story and it's unreadable, size it to read
+    // comfortably and a long one gets cut off. So the card image stays a
+    // compact teaser (it still does its best to show as much as fits),
+    // and "View details" always reveals the complete quote as plain,
+    // normal text underneath -- wrapping to as many lines as it needs,
+    // at one comfortable size, regardless of how long the story is.
     return (
       <div className="card-pop rounded-2xl overflow-hidden h-full flex flex-col mx-auto" style={{ border: light ? "1px solid #E7DEC9" : "1px solid rgba(250,246,236,.2)", maxWidth: maxWidth ? `min(100%, ${maxWidth}px)` : "100%" }}>
         {url ? <img src={url} alt="" style={{ width: "100%", display: "block" }} /> : <div style={{ aspectRatio: "4/3", background: light ? "#F0E7D6" : "rgba(250,246,236,.09)" }} />}
-        {details && (
-          <button onClick={onToggle} className="w-full text-left px-5 py-3 text-[12px] mt-auto" style={light ? { color: "#71675A", background: "#FAF6EC" } : { color: "#CDE8F5", background: "rgba(250,246,236,.09)" }}>{expanded ? details : "View details"}</button>
+        {(details || t.quote) && (
+          <button onClick={onToggle} className="w-full text-left px-5 py-3 text-[12px] mt-auto flex items-center justify-between gap-2" style={light ? { color: "#71675A", background: "#FAF6EC" } : { color: "#CDE8F5", background: "rgba(250,246,236,.09)" }}>
+            <span style={{ fontWeight: 700 }}>{expanded ? "Hide full story" : "Read full story"}</span>
+            <ChevronDown size={14} style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform .2s" }} />
+          </button>
+        )}
+        {expanded && (
+          <div className="px-5 pb-5 pt-3" style={light ? { background: "#FAF6EC" } : { background: "rgba(250,246,236,.09)" }}>
+            {details && <div className="text-[11px] mb-2" style={{ fontWeight: 700, color: light ? "var(--accent)" : "#CDE8F5" }}>{details}</div>}
+            {t.quote && <div className="text-[13.5px] leading-relaxed" style={{ fontStyle: "italic", color: light ? "#4A4237" : "#EDF1F3" }}>"{t.quote}"</div>}
+          </div>
         )}
       </div>
     );
