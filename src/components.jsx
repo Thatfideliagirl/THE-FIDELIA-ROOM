@@ -673,7 +673,7 @@ export function GuideButton({ onViewCourses, onSignUp, onViewResources, brand })
 // to a plain quote-in-a-box (the original look) until a template's been
 // uploaded, so the landing page never ends up with an empty-looking
 // section just because the template step hasn't happened yet.
-function TestimonialCard({ t, template, expanded, onToggle, theme = "dark", maxWidth }) {
+function TestimonialCard({ t, template, theme = "dark", maxWidth, onViewFull }) {
   const [url, setUrl] = useState(null);
   const light = theme === "light";
   useEffect(() => {
@@ -686,31 +686,23 @@ function TestimonialCard({ t, template, expanded, onToggle, theme = "dark", maxW
     }).then((u) => { if (cancelled) { URL.revokeObjectURL(u); return; } objectUrl = u; setUrl(u); }).catch((e) => console.error("renderTestimonialCard failed", e));
     return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [template, t.photo?.dataUrl, t.name, t.studentId, t.quote, t.photoZoom, t.photoPanXPct, t.photoPanYPct]);
-  const details = [t.programme, t.cohort].filter(Boolean).join(" · ");
   if (template) {
-    // The card image baks in the photo, name and ID fine -- those are
-    // always short. The quote is the one field with real variance in
-    // length, and a picture can't reflow text the way a page can: shrink
-    // it to fit a long story and it's unreadable, size it to read
-    // comfortably and a long one gets cut off. So the card image stays a
-    // compact teaser (it still does its best to show as much as fits),
-    // and "View details" always reveals the complete quote as plain,
-    // normal text underneath -- wrapping to as many lines as it needs,
-    // at one comfortable size, regardless of how long the story is.
+    // The card image is a compact teaser -- it bakes in the photo, name
+    // and ID fine (always short), and does its best with the quote, but
+    // a picture can't reflow text the way a page can, so a long story
+    // either shrinks to the point of being unreadable or gets cut off.
+    // Rather than fight that inside the card itself (an in-place
+    // dropdown made for a long, awkward reveal), "Read full story" is a
+    // plain link to the dedicated testimonials page, where the complete
+    // quote sits next to the card as normal text -- see TestimonialsPage.
     return (
       <div className="card-pop rounded-2xl overflow-hidden h-full flex flex-col mx-auto" style={{ border: light ? "1px solid #E7DEC9" : "1px solid rgba(250,246,236,.2)", maxWidth: maxWidth ? `min(100%, ${maxWidth}px)` : "100%" }}>
         {url ? <img src={url} alt="" style={{ width: "100%", display: "block" }} /> : <div style={{ aspectRatio: "4/3", background: light ? "#F0E7D6" : "rgba(250,246,236,.09)" }} />}
-        {(details || t.quote) && (
-          <button onClick={onToggle} className="w-full text-left px-5 py-3 text-[12px] mt-auto flex items-center justify-between gap-2" style={light ? { color: "#71675A", background: "#FAF6EC" } : { color: "#CDE8F5", background: "rgba(250,246,236,.09)" }}>
-            <span style={{ fontWeight: 700 }}>{expanded ? "Hide full story" : "Read full story"}</span>
-            <ChevronDown size={14} style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform .2s" }} />
+        {onViewFull && (
+          <button onClick={onViewFull} className="w-full text-left px-5 py-3 text-[12px] mt-auto flex items-center justify-between gap-2" style={light ? { color: "#71675A", background: "#FAF6EC" } : { color: "#CDE8F5", background: "rgba(250,246,236,.09)" }}>
+            <span style={{ fontWeight: 700 }}>Read full story</span>
+            <ArrowRight size={14} />
           </button>
-        )}
-        {expanded && (
-          <div className="px-5 pb-5 pt-3" style={light ? { background: "#FAF6EC" } : { background: "rgba(250,246,236,.09)" }}>
-            {details && <div className="text-[11px] mb-2" style={{ fontWeight: 700, color: light ? "var(--accent)" : "#CDE8F5" }}>{details}</div>}
-            {t.quote && <div className="text-[13.5px] leading-relaxed" style={{ fontStyle: "italic", color: light ? "#4A4237" : "#EDF1F3" }}>"{t.quote}"</div>}
-          </div>
         )}
       </div>
     );
@@ -723,11 +715,9 @@ function TestimonialCard({ t, template, expanded, onToggle, theme = "dark", maxW
     </div>
   );
 }
-export function Landing({ courses, resources, testimonials, faqs, brand, onSignIn, onSignUp, onViewCourses, onViewResources, onViewCourseDetail }) {
-  const [showAllTestimonials, setShowAllTestimonials] = useState(false);
-  const [expandedTestimonialId, setExpandedTestimonialId] = useState(null);
+export function Landing({ courses, resources, testimonials, faqs, brand, onSignIn, onSignUp, onViewCourses, onViewResources, onViewCourseDetail, onViewTestimonials }) {
   const publishedTestimonials = testimonials.filter((t) => t.published !== false);
-  const visibleTestimonials = showAllTestimonials ? publishedTestimonials : publishedTestimonials.slice(0, 3);
+  const visibleTestimonials = publishedTestimonials.slice(0, 3);
   const publicResources = resources.filter((r) => r.isPublic);
   const liveCourses = courses.filter((c) => c.status === "live").slice(0, 2);
   const [faqOpen, setFaqOpen] = useState(null);
@@ -797,8 +787,8 @@ export function Landing({ courses, resources, testimonials, faqs, brand, onSignI
 
       <section className="px-8 md:px-16 py-28" style={{ background: "var(--accent)" }}>
         <div className="max-w-[1500px] mx-auto"><Reveal><div className="f-label text-[13px] mb-4" style={{ color: "#CDE8F5" }}>FROM THE ROOM</div><h2 className="f-display text-[36px] mb-16 max-w-[640px]" style={{ fontWeight: 800, color: "#FAF6EC" }}>Real words from real students.</h2></Reveal>
-          <div className="grid md:grid-cols-3 gap-6">{visibleTestimonials.map((t, i) => <Reveal key={t.id} delay={i * 90}><TestimonialCard t={t} template={brand.testimonialTemplate} maxWidth={290} expanded={expandedTestimonialId === t.id} onToggle={() => setExpandedTestimonialId(expandedTestimonialId === t.id ? null : t.id)} /></Reveal>)}</div>
-          {!showAllTestimonials && publishedTestimonials.length > 3 && <div className="text-center mt-10"><button onClick={() => setShowAllTestimonials(true)} className="rounded-full px-6 py-3 text-[14px]" style={{ background: "rgba(250,246,236,.14)", color: "#FAF6EC", fontWeight: 700 }}>View more testimonials</button></div>}
+          <div className="grid md:grid-cols-3 gap-6">{visibleTestimonials.map((t, i) => <Reveal key={t.id} delay={i * 90}><TestimonialCard t={t} template={brand.testimonialTemplate} maxWidth={290} onViewFull={onViewTestimonials} /></Reveal>)}</div>
+          {publishedTestimonials.length > 3 && <div className="text-center mt-10"><button onClick={onViewTestimonials} className="rounded-full px-6 py-3 text-[14px]" style={{ background: "rgba(250,246,236,.14)", color: "#FAF6EC", fontWeight: 700 }}>View all testimonials</button></div>}
         </div>
       </section>
 
@@ -847,9 +837,8 @@ export function CoursesIndex({ courses, onBack, onOpen }) {
     </div>
   );
 }
-export function CourseDetail({ course, testimonials, brand, onBack, onApply }) {
+export function CourseDetail({ course, testimonials, brand, onBack, onApply, onViewTestimonials }) {
   const related = testimonials.filter((t) => course.testimonialIds?.includes(t.id) && t.published !== false);
-  const [expandedTestimonialId, setExpandedTestimonialId] = useState(null);
   return (
     <div className="min-h-screen">
       <BackBar onBack={onBack} />
@@ -857,8 +846,47 @@ export function CourseDetail({ course, testimonials, brand, onBack, onApply }) {
         <Reveal><div className="mb-10"><CourseImage src={course.image} ratio="21/9" iconSize={60} /></div></Reveal>
         <Reveal delay={80}><div className="f-code text-[13px] mb-3 accent-text">{course.level?.toUpperCase()} · {course.durationWeeks} WEEKS · {course.modules.length} MODULES</div><h1 className="f-display text-[42px] mb-3" style={{ fontWeight: 800 }}>{course.title}</h1><p className="f-display text-[20px] mb-6" style={{ fontStyle: "italic", color: "var(--accent)" }}>{course.tagline}</p><p className="text-[16px] leading-relaxed mb-10 whitespace-pre-wrap" style={{ color: "#4A4237", maxWidth: 640 }}>{course.description}</p></Reveal>
         {course.outcomes?.length > 0 && <Reveal delay={140}><div className="card rounded-2xl p-8 mb-8"><div className="f-display text-[20px] mb-5" style={{ fontWeight: 700 }}>What you'll learn</div><div className="grid md:grid-cols-2 gap-3">{course.outcomes.map((o, i) => <div key={i} className="flex items-start gap-2.5 text-[15px]" style={{ color: "#4A4237" }}><CheckCircle2 size={16} color="var(--accent)" className="mt-0.5 shrink-0" /> {o}</div>)}</div></div></Reveal>}
-        {related.length > 0 && <Reveal delay={180}><div className="mb-10"><div className="f-label text-[12px] mb-4" style={{ color: "#71675A" }}>WHAT STUDENTS SAY</div><div className="grid md:grid-cols-2 gap-4">{related.map((t) => <TestimonialCard key={t.id} t={t} template={brand?.testimonialTemplate} theme="light" expanded={expandedTestimonialId === t.id} onToggle={() => setExpandedTestimonialId(expandedTestimonialId === t.id ? null : t.id)} />)}</div></div></Reveal>}
+        {related.length > 0 && <Reveal delay={180}><div className="mb-10"><div className="f-label text-[12px] mb-4" style={{ color: "#71675A" }}>WHAT STUDENTS SAY</div><div className="grid md:grid-cols-2 gap-4">{related.map((t) => <TestimonialCard key={t.id} t={t} template={brand?.testimonialTemplate} theme="light" onViewFull={onViewTestimonials} />)}</div></div></Reveal>}
         <Reveal delay={220}><button onClick={() => onApply(course.id)} className="btn-primary rounded-full px-8 py-4 text-[16px]" style={{ fontWeight: 700 }}>Apply for Course</button></Reveal>
+      </div>
+    </div>
+  );
+}
+// A dedicated page for every published testimonial -- the compact card
+// (photo, name, ID, a teaser of the quote) sits beside the complete quote
+// as plain, normal text, one row per student, stacked down the page. The
+// card image still can't grow to fit a long story without either
+// shrinking the text unreadably or cutting it off, so this is where the
+// whole thing is always readable regardless of length, with no click or
+// drop-down needed to get there.
+export function TestimonialsPage({ testimonials, brand, onBack }) {
+  const published = testimonials.filter((t) => t.published !== false);
+  return (
+    <div className="min-h-screen">
+      <BackBar onBack={onBack} />
+      <header className="max-w-[800px] mx-auto px-8 text-center pt-8 pb-16">
+        <div className="f-label text-[13px] mb-4 accent-text">FROM THE ROOM</div>
+        <h1 className="f-display text-[42px] mb-4" style={{ fontWeight: 800 }}>Real words from real students.</h1>
+      </header>
+      <div className="max-w-[980px] mx-auto px-8 pb-28 flex flex-col">
+        {published.map((t, i) => {
+          const details = [t.programme, t.cohort].filter(Boolean).join(" · ");
+          return (
+            <Reveal key={t.id} delay={Math.min(i, 6) * 70}>
+              <div className="flex flex-col sm:flex-row gap-7 sm:gap-10 items-start py-10" style={{ borderTop: i > 0 ? "1px solid #E7DEC9" : "none" }}>
+                <div className="shrink-0 w-full sm:w-[240px]">
+                  <TestimonialCard t={t} template={brand?.testimonialTemplate} theme="light" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  {details && <div className="f-label text-[11px] mb-3 accent-text">{details.toUpperCase()}</div>}
+                  <div className="f-display text-[21px] leading-relaxed" style={{ fontStyle: "italic", color: "#262019" }}>"{t.quote}"</div>
+                  <div className="text-[14px] mt-4" style={{ fontWeight: 700, color: "var(--accent)" }}>{t.name}</div>
+                </div>
+              </div>
+            </Reveal>
+          );
+        })}
+        {published.length === 0 && <div className="text-center py-20 text-[15px]" style={{ color: "#A79B84" }}>No testimonials yet.</div>}
       </div>
     </div>
   );

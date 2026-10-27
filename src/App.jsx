@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { FONT_STYLE, genCode, nextStudentId } from "./lib/data.js";
 import {
-  Landing, CoursesIndex, CourseDetail, ResourcesPage, ApplicationForm,
+  Landing, CoursesIndex, CourseDetail, ResourcesPage, TestimonialsPage, ApplicationForm,
   SignInScreen, InReviewScreen, CodeRedeemScreen, LogoMark, Field, ResourceDetail,
 } from "./components.jsx";
 import { MyCourses } from "./student.jsx";
@@ -562,10 +562,11 @@ export default function App() {
           onBrowseMore={() => { setSharedResourceId(null); window.history.replaceState({}, "", window.location.pathname); setPage("resources"); }}
         />
       )}
-      {page === "landing" && <Landing courses={courses} resources={resources} testimonials={testimonials} faqs={faqs} brand={brand} onSignIn={() => setPage("login")} onSignUp={(courseId) => { setPresetCourseId(typeof courseId === "string" ? courseId : null); setApplyingAsExisting(null); setPage("signup"); }} onViewCourses={() => setPage("courses")} onViewResources={() => setPage("resources")} onViewCourseDetail={(id) => { setViewCourseId(id); setPage("courseDetail"); }} />}
+      {page === "landing" && <Landing courses={courses} resources={resources} testimonials={testimonials} faqs={faqs} brand={brand} onSignIn={() => setPage("login")} onSignUp={(courseId) => { setPresetCourseId(typeof courseId === "string" ? courseId : null); setApplyingAsExisting(null); setPage("signup"); }} onViewCourses={() => setPage("courses")} onViewResources={() => setPage("resources")} onViewCourseDetail={(id) => { setViewCourseId(id); setPage("courseDetail"); }} onViewTestimonials={() => setPage("testimonials")} />}
       {page === "courses" && <CoursesIndex courses={courses} onBack={() => setPage("landing")} onOpen={(id) => { setViewCourseId(id); setPage("courseDetail"); }} />}
-      {page === "courseDetail" && viewCourse && <CourseDetail course={viewCourse} testimonials={testimonials} brand={brand} onBack={() => setPage("courses")} onApply={(id) => { setPresetCourseId(id); setApplyingAsExisting(null); setPage("signup"); }} />}
+      {page === "courseDetail" && viewCourse && <CourseDetail course={viewCourse} testimonials={testimonials} brand={brand} onBack={() => setPage("courses")} onApply={(id) => { setPresetCourseId(id); setApplyingAsExisting(null); setPage("signup"); }} onViewTestimonials={() => setPage("testimonials")} />}
       {page === "resources" && <ResourcesPage resources={resources} onBack={() => setPage("landing")} />}
+      {page === "testimonials" && <TestimonialsPage testimonials={testimonials} brand={brand} onBack={() => setPage("landing")} />}
       {page === "signup" && <ApplicationForm courses={courses} cohorts={cohorts} presetCourseId={presetCourseId} existingUser={applyingAsExisting} onSubmit={submitApplication} onCancel={() => setPage(applyingAsExisting ? (applyingAsExisting.isTeamMember ? "adminDash" : "studentDash") : "landing")} />}
       {page === "login" && <SignInScreen students={students} applicants={applicants} onBack={() => setPage("landing")} onSignIn={handleSignIn} onForgotPassword={handleForgotPassword} onEnterStudent={(s) => { setActiveStudent(s); setPage("studentDash"); }} onEnterApplicant={(a) => { setActiveApplicant(a); setPage("inReview"); }} onEnterAdmin={() => setPage("adminDash")} />}
       {page === "inReview" && liveApplicant && <InReviewScreen applicant={liveApplicant} onExit={teamAccess ? () => setPage("adminDash") : handleSignOut} exitLabel={teamAccess ? "BACK TO DASHBOARD" : "SIGN OUT"} />}
