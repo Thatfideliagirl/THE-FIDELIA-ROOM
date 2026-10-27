@@ -12,6 +12,7 @@ import { LOGO_SRC, HERO_SRC, CREATOR_SRC, HOWITWORKS_SRC } from "./assets/brandI
 import { moduleStatus, formatRelativeTime } from "./lib/data.js";
 import { changePassword } from "./lib/auth.js";
 import { uploadFile } from "./lib/storage.js";
+import { renderTestimonialCard } from "./lib/testimonial.js";
 import { useEditor, EditorContent, NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
 import { Node as TiptapNode, Extension as TiptapExtension } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
@@ -667,7 +668,47 @@ export function GuideButton({ onViewCourses, onSignUp, onViewResources, brand })
 // =========================================================
 // LANDING
 // =========================================================
+// Renders a testimonial exactly the way the admin's own template preview
+// does, so what's shown here is never a separate approximation. Falls back
+// to a plain quote-in-a-box (the original look) until a template's been
+// uploaded, so the landing page never ends up with an empty-looking
+// section just because the template step hasn't happened yet.
+function TestimonialCard({ t, template, expanded, onToggle, theme = "dark" }) {
+  const [url, setUrl] = useState(null);
+  const light = theme === "light";
+  useEffect(() => {
+    if (!template) return;
+    let cancelled = false; let objectUrl = null;
+    renderTestimonialCard(template.file.dataUrl, t.photo?.dataUrl || null, {
+      name: t.name, studentId: t.studentId, quote: t.quote,
+      photoBox: template.photoBox, namePos: template.namePos, idPos: template.idPos, quoteBox: template.quoteBox,
+      fontSizePct: template.fontSizePct, quoteFontSizePct: template.quoteFontSizePct,
+    }).then((u) => { if (cancelled) { URL.revokeObjectURL(u); return; } objectUrl = u; setUrl(u); }).catch((e) => console.error("renderTestimonialCard failed", e));
+    return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [template, t.photo?.dataUrl, t.name, t.studentId, t.quote]);
+  const details = [t.programme, t.cohort].filter(Boolean).join(" · ");
+  if (template) {
+    return (
+      <div className="rounded-2xl overflow-hidden h-full flex flex-col" style={{ border: light ? "1px solid #E7DEC9" : "1px solid rgba(250,246,236,.2)" }}>
+        {url ? <img src={url} alt="" style={{ width: "100%", display: "block" }} /> : <div style={{ aspectRatio: "4/3", background: light ? "#F0E7D6" : "rgba(250,246,236,.09)" }} />}
+        {details && (
+          <button onClick={onToggle} className="w-full text-left px-5 py-3 text-[12px] mt-auto" style={light ? { color: "#71675A", background: "#FAF6EC" } : { color: "#CDE8F5", background: "rgba(250,246,236,.09)" }}>{expanded ? details : "View details"}</button>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-2xl p-8 h-full" style={light ? { background: "#fff", border: "1px solid #E7DEC9" } : { background: "rgba(250,246,236,.09)", border: "1px solid rgba(250,246,236,.2)" }}>
+      <div className="flex gap-1 mb-4">{[...Array(5)].map((_, si) => <Star key={si} size={13} fill="#B8912E" color="#B8912E" />)}</div>
+      <div className="text-[17px] leading-relaxed mb-6" style={{ color: light ? "#4A4237" : "#FAF6EC", fontStyle: "italic" }}>"{t.quote}"</div>
+      <div className="text-[14px]" style={{ color: light ? "var(--accent)" : "#CDE8F5", fontWeight: 700 }}>{t.name}</div>
+    </div>
+  );
+}
 export function Landing({ courses, resources, testimonials, faqs, brand, onSignIn, onSignUp, onViewCourses, onViewResources, onViewCourseDetail }) {
+  const [showAllTestimonials, setShowAllTestimonials] = useState(false);
+  const [expandedTestimonialId, setExpandedTestimonialId] = useState(null);
+  const visibleTestimonials = showAllTestimonials ? testimonials : testimonials.slice(0, 3);
   const publicResources = resources.filter((r) => r.isPublic);
   const liveCourses = courses.filter((c) => c.status === "live").slice(0, 2);
   const [faqOpen, setFaqOpen] = useState(null);
@@ -736,7 +777,10 @@ export function Landing({ courses, resources, testimonials, faqs, brand, onSignI
       </section>
 
       <section className="px-8 md:px-16 py-28" style={{ background: "var(--accent)" }}>
-        <div className="max-w-[1500px] mx-auto"><Reveal><div className="f-label text-[13px] mb-4" style={{ color: "#CDE8F5" }}>FROM THE ROOM</div><h2 className="f-display text-[36px] mb-16 max-w-[640px]" style={{ fontWeight: 800, color: "#FAF6EC" }}>Real words from real students.</h2></Reveal><div className="grid md:grid-cols-3 gap-6">{testimonials.map((t, i) => <Reveal key={t.id} delay={i * 90}><div className="rounded-2xl p-8 h-full" style={{ background: "rgba(250,246,236,.09)", border: "1px solid rgba(250,246,236,.2)" }}><div className="flex gap-1 mb-4">{[...Array(5)].map((_, si) => <Star key={si} size={13} fill="#B8912E" color="#B8912E" />)}</div><div className="text-[17px] leading-relaxed mb-6" style={{ color: "#FAF6EC", fontStyle: "italic" }}>"{t.quote}"</div><div className="text-[14px]" style={{ color: "#CDE8F5", fontWeight: 700 }}>{t.name}</div></div></Reveal>)}</div></div>
+        <div className="max-w-[1500px] mx-auto"><Reveal><div className="f-label text-[13px] mb-4" style={{ color: "#CDE8F5" }}>FROM THE ROOM</div><h2 className="f-display text-[36px] mb-16 max-w-[640px]" style={{ fontWeight: 800, color: "#FAF6EC" }}>Real words from real students.</h2></Reveal>
+          <div className="grid md:grid-cols-3 gap-6">{visibleTestimonials.map((t, i) => <Reveal key={t.id} delay={i * 90}><TestimonialCard t={t} template={brand.testimonialTemplate} expanded={expandedTestimonialId === t.id} onToggle={() => setExpandedTestimonialId(expandedTestimonialId === t.id ? null : t.id)} /></Reveal>)}</div>
+          {!showAllTestimonials && testimonials.length > 3 && <div className="text-center mt-10"><button onClick={() => setShowAllTestimonials(true)} className="rounded-full px-6 py-3 text-[14px]" style={{ background: "rgba(250,246,236,.14)", color: "#FAF6EC", fontWeight: 700 }}>View more testimonials</button></div>}
+        </div>
       </section>
 
       <section id="faq" className="max-w-[1000px] mx-auto px-8 md:px-16 py-28">
@@ -784,8 +828,9 @@ export function CoursesIndex({ courses, onBack, onOpen }) {
     </div>
   );
 }
-export function CourseDetail({ course, testimonials, onBack, onApply }) {
+export function CourseDetail({ course, testimonials, brand, onBack, onApply }) {
   const related = testimonials.filter((t) => course.testimonialIds?.includes(t.id));
+  const [expandedTestimonialId, setExpandedTestimonialId] = useState(null);
   return (
     <div className="min-h-screen">
       <BackBar onBack={onBack} />
@@ -793,7 +838,7 @@ export function CourseDetail({ course, testimonials, onBack, onApply }) {
         <Reveal><div className="mb-10"><CourseImage src={course.image} ratio="21/9" iconSize={60} /></div></Reveal>
         <Reveal delay={80}><div className="f-code text-[13px] mb-3 accent-text">{course.level?.toUpperCase()} · {course.durationWeeks} WEEKS · {course.modules.length} MODULES</div><h1 className="f-display text-[42px] mb-3" style={{ fontWeight: 800 }}>{course.title}</h1><p className="f-display text-[20px] mb-6" style={{ fontStyle: "italic", color: "var(--accent)" }}>{course.tagline}</p><p className="text-[16px] leading-relaxed mb-10 whitespace-pre-wrap" style={{ color: "#4A4237", maxWidth: 640 }}>{course.description}</p></Reveal>
         {course.outcomes?.length > 0 && <Reveal delay={140}><div className="card rounded-2xl p-8 mb-8"><div className="f-display text-[20px] mb-5" style={{ fontWeight: 700 }}>What you'll learn</div><div className="grid md:grid-cols-2 gap-3">{course.outcomes.map((o, i) => <div key={i} className="flex items-start gap-2.5 text-[15px]" style={{ color: "#4A4237" }}><CheckCircle2 size={16} color="var(--accent)" className="mt-0.5 shrink-0" /> {o}</div>)}</div></div></Reveal>}
-        {related.length > 0 && <Reveal delay={180}><div className="mb-10"><div className="f-label text-[12px] mb-4" style={{ color: "#71675A" }}>WHAT STUDENTS SAY</div><div className="grid md:grid-cols-2 gap-4">{related.map((t) => <div key={t.id} className="card rounded-xl p-5"><div className="text-[14px] mb-2" style={{ fontStyle: "italic", color: "#4A4237" }}>"{t.quote}"</div><div className="text-[13px] accent-text" style={{ fontWeight: 700 }}>{t.name}</div></div>)}</div></div></Reveal>}
+        {related.length > 0 && <Reveal delay={180}><div className="mb-10"><div className="f-label text-[12px] mb-4" style={{ color: "#71675A" }}>WHAT STUDENTS SAY</div><div className="grid md:grid-cols-2 gap-4">{related.map((t) => <TestimonialCard key={t.id} t={t} template={brand?.testimonialTemplate} theme="light" expanded={expandedTestimonialId === t.id} onToggle={() => setExpandedTestimonialId(expandedTestimonialId === t.id ? null : t.id)} />)}</div></div></Reveal>}
         <Reveal delay={220}><button onClick={() => onApply(course.id)} className="btn-primary rounded-full px-8 py-4 text-[16px]" style={{ fontWeight: 700 }}>Apply for Course</button></Reveal>
       </div>
     </div>

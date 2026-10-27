@@ -10,6 +10,7 @@ import {
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from "recharts";
 import { genCode, pairKey, ADMIN_EMAIL, TEAM_PERMISSION_TABS, LINK_TYPES, STUDENT_ACCESS_TABS, linkShare, deriveSubmissionStatus, sumLinkScores, capstoneStatus, courseEligibility, formatDateTime, formatRelativeTime, AUTO_APPROVE_THRESHOLD } from "./lib/data.js";
 import { renderCertificate, formatIssueDate } from "./lib/certificate.js";
+import { renderTestimonialCard } from "./lib/testimonial.js";
 import { Field, SectionHeader, NotifBell, SidebarLink, LogoMark, TextArea, SelectF, ImgField, FileField, TaskFileList, ChangePasswordCard, RichTextEditor, RichText, DashboardShell, WelcomeTour, TEAM_TOUR_STEPS } from "./components.jsx";
 import { CommunityPanel, SOCIAL_PLATFORMS } from "./student.jsx";
 import { fetchTeamMembers, addTeamMember, updateTeamMember, removeTeamMember, fetchTeamActivity, updateMyTeamProfile, markTourSeen } from "./lib/team.js";
@@ -1294,16 +1295,177 @@ export function CertificatesTab({ students, setStudents, courses, setCourses, ta
     </>
   );
 }
-export function TestimonialsTab({ testimonials, setTestimonials }) {
-  const [name, setName] = useState(""); const [quote, setQuote] = useState(""); const [editingId, setEditingId] = useState(null);
-  function add() { if (!name || !quote) return; setTestimonials((prev) => [...prev, { id: "te" + Date.now(), name, quote }]); setName(""); setQuote(""); }
-  function save(id, n, q) { setTestimonials((prev) => prev.map((t) => t.id === id ? { ...t, name: n, quote: q } : t)); setEditingId(null); }
+// Same drag-to-place pattern as the ID card template -- a photo frame
+// (position + size) plus two single-line fields (name, student ID) and
+// one multi-line field (the quote, which also needs a size since it has
+// to wrap and shrink to fit rather than sit at one fixed point).
+function TestimonialTemplateEditor({ template, onSave, onClose }) {
+  const [file, setFile] = useState(template?.file || null);
+  const [photoBox, setPhotoBox] = useState(template?.photoBox || { xPct: 27, yPct: 30, widthPct: 36, heightPct: 40 });
+  const [namePos, setNamePos] = useState(template?.namePos || { xPct: 10, yPct: 68 });
+  const [idPos, setIdPos] = useState(template?.idPos || { xPct: 10, yPct: 74 });
+  const [quoteBox, setQuoteBox] = useState(template?.quoteBox || { xPct: 55, yPct: 82, widthPct: 80, heightPct: 28 });
+  const [fontSizePct, setFontSizePct] = useState(template?.fontSizePct || 3);
+  const [quoteFontSizePct, setQuoteFontSizePct] = useState(template?.quoteFontSizePct || 2.2);
+  const boxRef = useRef(null);
+  const draggingRef = useRef(null);
+  const setters = { photo: setPhotoBox, name: setNamePos, id: setIdPos, quote: setQuoteBox };
+  function onFilePick(e) { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = () => setFile({ name: f.name, dataUrl: r.result }); r.readAsDataURL(f); }
+  function posFromEvent(e) {
+    const rect = boxRef.current.getBoundingClientRect();
+    return { xPct: Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100)), yPct: Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100)) };
+  }
+  function onDrag(e) {
+    const key = draggingRef.current;
+    if (!key) return;
+    setters[key]((prev) => ({ ...prev, ...posFromEvent(e) }));
+  }
+  const markers = [{ key: "name", label: "Name", pos: namePos, sample: "Jane Doe", weight: 700 }, { key: "id", label: "Student ID", pos: idPos, sample: "FJ/2026/001", weight: 500 }];
+  return (
+    <div className="card rounded-2xl p-6 mb-4">
+      <div className="flex items-center justify-between mb-4"><div className="text-[15px]" style={{ fontWeight: 700 }}>Testimonial card template</div><button onClick={onClose}><X size={16} color="#A79B84" /></button></div>
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <label className="btn-soft rounded-full px-4 py-2 text-[13px] cursor-pointer inline-flex items-center gap-1.5" style={{ fontWeight: 600 }}><UploadCloud size={14} /> {file ? "Replace template image" : "Upload template image"}<input type="file" accept="image/*" onChange={onFilePick} style={{ display: "none" }} /></label>
+        {file && <button onClick={() => setFile(null)} className="rounded-full px-4 py-2 text-[13px] flex items-center gap-1.5" style={{ fontWeight: 600, color: "#B04A3A", border: "1px solid #E7DEC9" }}><Trash2 size={14} /> Delete image</button>}
+      </div>
+      {file && (
+        <>
+          <div className="text-[12px] mb-2" style={{ color: "#71675A" }}>Drag the photo frame, the name, the Student ID, and the quote box to where each should sit.</div>
+          <div
+            ref={boxRef}
+            onPointerMove={onDrag}
+            onPointerUp={() => { draggingRef.current = null; }}
+            onPointerLeave={() => { draggingRef.current = null; }}
+            className="relative rounded-xl overflow-hidden mb-4"
+            style={{ border: "1px solid #E7DEC9", touchAction: "none", containerType: "inline-size" }}
+          >
+            <img src={file.dataUrl} alt="" style={{ display: "block", width: "100%" }} draggable={false} />
+            <div
+              onPointerDown={(e) => { e.preventDefault(); draggingRef.current = "photo"; setPhotoBox((b) => ({ ...b, ...posFromEvent(e) })); }}
+              style={{ position: "absolute", left: `${photoBox.xPct}%`, top: `${photoBox.yPct}%`, width: `${photoBox.widthPct}%`, height: `${photoBox.heightPct}%`, transform: "translate(-50%,-50%)", border: "2px dashed var(--accent)", background: "color-mix(in srgb, var(--accent) 12%, transparent)", cursor: "grab", display: "flex", alignItems: "center", justifyContent: "center" }}
+            ><span className="f-code text-[10px]" style={{ color: "var(--accent)", fontWeight: 700 }}>PHOTO</span></div>
+            <div
+              onPointerDown={(e) => { e.preventDefault(); draggingRef.current = "quote"; setQuoteBox((b) => ({ ...b, ...posFromEvent(e) })); }}
+              style={{ position: "absolute", left: `${quoteBox.xPct}%`, top: `${quoteBox.yPct}%`, width: `${quoteBox.widthPct}%`, height: `${quoteBox.heightPct}%`, transform: "translate(-50%,-50%)", border: "2px dashed #7A2E3B", background: "rgba(122,46,59,.08)", cursor: "grab", display: "flex", alignItems: "center", justifyContent: "center" }}
+            ><span className="f-code text-[10px]" style={{ color: "#7A2E3B", fontWeight: 700 }}>QUOTE</span></div>
+            {markers.map((m) => (
+              <div
+                key={m.key}
+                onPointerDown={(e) => { e.preventDefault(); draggingRef.current = m.key; setters[m.key]((prev) => ({ ...prev, ...posFromEvent(e) })); }}
+                style={{ position: "absolute", left: `${m.pos.xPct}%`, top: `${m.pos.yPct}%`, transform: "translate(0,-50%)", fontFamily: "Georgia, serif", fontWeight: m.weight, fontSize: `${fontSizePct}cqw`, color: "#1B2A4A", cursor: "grab", whiteSpace: "nowrap", padding: "2px 6px" }}
+              >{m.sample}</div>
+            ))}
+          </div>
+          <label className="block mb-4"><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Name / ID text size</div><input type="range" min={1.5} max={6} step={0.25} value={fontSizePct} onChange={(e) => setFontSizePct(Number(e.target.value))} style={{ width: "100%" }} /></label>
+          <label className="block mb-4"><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Quote text size</div><input type="range" min={1} max={4} step={0.1} value={quoteFontSizePct} onChange={(e) => setQuoteFontSizePct(Number(e.target.value))} style={{ width: "100%" }} /></label>
+          <label className="block mb-4"><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Photo frame width</div><input type="range" min={10} max={70} step={1} value={photoBox.widthPct} onChange={(e) => setPhotoBox((b) => ({ ...b, widthPct: Number(e.target.value) }))} style={{ width: "100%" }} /></label>
+          <label className="block mb-4"><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Photo frame height</div><input type="range" min={10} max={90} step={1} value={photoBox.heightPct} onChange={(e) => setPhotoBox((b) => ({ ...b, heightPct: Number(e.target.value) }))} style={{ width: "100%" }} /></label>
+          <label className="block mb-4"><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Quote box width</div><input type="range" min={20} max={95} step={1} value={quoteBox.widthPct} onChange={(e) => setQuoteBox((b) => ({ ...b, widthPct: Number(e.target.value) }))} style={{ width: "100%" }} /></label>
+          <label className="block mb-4"><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Quote box height</div><input type="range" min={10} max={80} step={1} value={quoteBox.heightPct} onChange={(e) => setQuoteBox((b) => ({ ...b, heightPct: Number(e.target.value) }))} style={{ width: "100%" }} /></label>
+        </>
+      )}
+      <div className="flex items-center gap-4">
+        <button disabled={!file} onClick={() => onSave({ file, photoBox, namePos, idPos, quoteBox, fontSizePct, quoteFontSizePct })} className="btn-primary rounded-lg px-5 py-2.5 text-[13px] disabled:opacity-40">Save template</button>
+        {template && <button onClick={() => onSave(null)} className="text-[13px]" style={{ color: "#B04A3A" }}>Remove template</button>}
+      </div>
+    </div>
+  );
+}
+// Renders the actual composited card for one testimonial row, so what's
+// shown in the admin list is exactly what the landing page will show --
+// never a separate approximation of it.
+function TestimonialThumb({ template, testimonial }) {
+  const [url, setUrl] = useState(null);
+  useEffect(() => {
+    if (!template) return;
+    let cancelled = false; let objectUrl = null;
+    renderTestimonialCard(template.file.dataUrl, testimonial.photo?.dataUrl || null, {
+      name: testimonial.name, studentId: testimonial.studentId, quote: testimonial.quote,
+      photoBox: template.photoBox, namePos: template.namePos, idPos: template.idPos, quoteBox: template.quoteBox,
+      fontSizePct: template.fontSizePct, quoteFontSizePct: template.quoteFontSizePct,
+    }).then((u) => { if (cancelled) { URL.revokeObjectURL(u); return; } objectUrl = u; setUrl(u); }).catch((e) => console.error("renderTestimonialCard failed", e));
+    return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [template, testimonial.photo?.dataUrl, testimonial.name, testimonial.studentId, testimonial.quote]);
+  if (!template) return null;
+  return url ? <img src={url} alt="" style={{ width: 90, borderRadius: 8, border: "1px solid #E7DEC9" }} /> : <div className="rounded-lg" style={{ width: 90, height: 60, background: "#F0E7D6" }} />;
+}
+function TestimonialForm({ students, cohorts, courses, initial, onSave, onClose }) {
+  const [linkedStudentId, setLinkedStudentId] = useState(initial?.linkedStudentId || "");
+  const [name, setName] = useState(initial?.name || "");
+  const [studentId, setStudentId] = useState(initial?.studentId || "");
+  const [cohort, setCohort] = useState(initial?.cohort || "");
+  const [programme, setProgramme] = useState(initial?.programme || "");
+  const [quote, setQuote] = useState(initial?.quote || "");
+  const [photo, setPhoto] = useState(initial?.photo || null);
+  function pickStudent(id) {
+    setLinkedStudentId(id);
+    if (!id) return;
+    const s = students.find((x) => x.id === id);
+    if (!s) return;
+    setName(s.name); setStudentId(s.studentId); setPhoto(s.photo || null);
+    setCohort(cohorts.find((c) => c.id === s.cohortId)?.name || "");
+    const course = courses.find((c) => s.enrollments.some((e) => e.courseId === c.id));
+    setProgramme(course?.title || "");
+  }
+  function onPhotoPick(e) { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = () => setPhoto({ name: f.name, dataUrl: r.result }); r.readAsDataURL(f); }
+  const canSave = name.trim() && quote.trim();
+  return (
+    <div className="card rounded-xl p-6 mb-6 flex flex-col gap-3">
+      <SelectF label="Link to an existing student (optional) — fills in their name, photo and ID for you" value={linkedStudentId} onChange={(e) => pickStudent(e.target.value)} options={[{ value: "", label: "— Not a current student / fill in manually —" }, ...students.map((s) => ({ value: s.id, label: s.name }))]} />
+      <div className="flex items-center gap-4">
+        <div className="rounded-full overflow-hidden flex items-center justify-center shrink-0" style={{ width: 56, height: 56, background: "color-mix(in srgb, var(--accent) 14%, white)" }}>{photo ? <img src={photo.dataUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <UserCircle size={26} color="var(--accent)" />}</div>
+        <label className="btn-soft rounded-full px-4 py-2 text-[13px] cursor-pointer" style={{ fontWeight: 600 }}>{photo ? "Replace photo" : "Upload photo"}<input type="file" accept="image/*" onChange={onPhotoPick} style={{ display: "none" }} /></label>
+      </div>
+      <Field label="Name" value={name} onChange={(e) => setName(e.target.value)} />
+      <Field label="Student ID (shown on the card)" value={studentId} onChange={(e) => setStudentId(e.target.value)} placeholder="FJ/2026/001" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Field label="Cohort" value={cohort} onChange={(e) => setCohort(e.target.value)} />
+        <Field label="Programme" value={programme} onChange={(e) => setProgramme(e.target.value)} />
+      </div>
+      <TextArea label="Quote" value={quote} onChange={(e) => setQuote(e.target.value)} rows={5} />
+      <div className="flex gap-3 mt-1">
+        <button disabled={!canSave} onClick={() => onSave({ linkedStudentId: linkedStudentId || null, name, studentId, cohort, programme, quote, photo })} className="btn-primary rounded-lg px-5 py-2.5 text-[14px] disabled:opacity-40">Save testimonial</button>
+        <button onClick={onClose} className="text-[14px]" style={{ color: "#A79B84" }}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+export function TestimonialsTab({ testimonials, setTestimonials, students, cohorts, courses, brand, setBrand }) {
+  const [editingTemplate, setEditingTemplate] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const template = brand.testimonialTemplate;
+  function saveTemplate(t) { setBrand((b) => ({ ...b, testimonialTemplate: t })); setEditingTemplate(false); }
+  function add(data) { setTestimonials((prev) => [...prev, { id: "te" + Date.now(), ...data }]); setShowAdd(false); }
+  function save(id, data) { setTestimonials((prev) => prev.map((t) => t.id === id ? { ...t, ...data } : t)); setEditingId(null); }
   function remove(id) { setTestimonials((prev) => prev.filter((t) => t.id !== id)); }
+  const editing = editingId ? testimonials.find((t) => t.id === editingId) : null;
   return (
     <>
       <SectionHeader eyebrow="LANDING PAGE" title="Testimonials" />
-      <div className="card rounded-xl p-6 mb-6 flex flex-col gap-3"><Field label="Student name" value={name} onChange={(e) => setName(e.target.value)} /><TextArea label="Quote" value={quote} onChange={(e) => setQuote(e.target.value)} /><button onClick={add} className="btn-primary rounded-lg px-5 py-2.5 text-[14px] self-start">Add testimonial</button></div>
-      <div className="flex flex-col gap-3">{testimonials.map((t) => editingId === t.id ? <EditTQ key={t.id} item={t} field1="name" field2="quote" onSave={(id, a, b) => save(id, a, b)} onCancel={() => setEditingId(null)} /> : <div key={t.id} className="card rounded-xl p-5 flex items-start justify-between gap-4"><div><div className="text-[15px] mb-1" style={{ fontWeight: 700 }}>{t.name}</div><div className="text-[14px]" style={{ color: "#4A4237", fontStyle: "italic" }}>"{t.quote}"</div></div><div className="flex gap-3 shrink-0"><button onClick={() => setEditingId(t.id)}><Pencil size={15} color="var(--accent)" /></button><button onClick={() => remove(t.id)}><Trash2 size={15} color="#B04A3A" /></button></div></div>)}</div>
+      <div className="card rounded-2xl p-8 max-w-[560px] mb-6">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div><div className="f-label text-[12px] mb-1" style={{ color: "#71675A" }}>TESTIMONIAL CARD</div><div className="text-[13px]" style={{ color: "#71675A" }}>{template ? "Template set — testimonials show as styled cards on the landing page." : "No template yet — testimonials show as plain text until one's uploaded."}</div></div>
+          <button onClick={() => setEditingTemplate((s) => !s)} className="btn-soft rounded-full px-4 py-2 text-[13px]" style={{ fontWeight: 600 }}>{template ? "Edit template" : "Set up template"}</button>
+        </div>
+        {editingTemplate && <div className="mt-5"><TestimonialTemplateEditor template={template} onSave={saveTemplate} onClose={() => setEditingTemplate(false)} /></div>}
+      </div>
+      {showAdd ? (
+        <TestimonialForm students={students} cohorts={cohorts} courses={courses} onSave={add} onClose={() => setShowAdd(false)} />
+      ) : (
+        <button onClick={() => setShowAdd(true)} className="btn-primary rounded-full px-5 py-2.5 text-[14px] flex items-center gap-1.5 mb-6"><Plus size={16} /> Add testimonial</button>
+      )}
+      <div className="flex flex-col gap-3">{testimonials.map((t) => editingId === t.id ? (
+        <TestimonialForm key={t.id} students={students} cohorts={cohorts} courses={courses} initial={editing} onSave={(data) => save(t.id, data)} onClose={() => setEditingId(null)} />
+      ) : (
+        <div key={t.id} className="card rounded-xl p-5 flex items-start justify-between gap-4">
+          <div className="flex items-start gap-4">
+            <TestimonialThumb template={template} testimonial={t} />
+            <div><div className="text-[15px] mb-1" style={{ fontWeight: 700 }}>{t.name}</div><div className="f-code text-[11px] mb-1.5" style={{ color: "#A79B84" }}>{[t.studentId, t.cohort, t.programme].filter(Boolean).join(" · ")}</div><div className="text-[14px]" style={{ color: "#4A4237", fontStyle: "italic" }}>"{t.quote}"</div></div>
+          </div>
+          <div className="flex gap-3 shrink-0"><button onClick={() => setEditingId(t.id)}><Pencil size={15} color="var(--accent)" /></button><button onClick={() => remove(t.id)}><Trash2 size={15} color="#B04A3A" /></button></div>
+        </div>
+      ))}</div>
     </>
   );
 }
@@ -1724,7 +1886,7 @@ export function AdminDashboard({ courses, setCourses, students, setStudents, onR
         {tab === "tasks" && <TasksTab tasks={tasks} setTasks={setTasks} students={students} courses={courses} cohorts={cohorts} />}
         {tab === "library" && <LibraryTab resources={resources} onAdd={onAddResource} onEdit={onEditResource} onRemove={onRemoveResource} courses={courses} />}
         {tab === "certificates" && <CertificatesTab students={students} setStudents={setStudents} courses={courses} setCourses={setCourses} tasks={tasks} />}
-        {tab === "testimonials" && <TestimonialsTab testimonials={testimonials} setTestimonials={setTestimonials} />}
+        {tab === "testimonials" && <TestimonialsTab testimonials={testimonials} setTestimonials={setTestimonials} students={students} cohorts={cohorts} courses={courses} brand={brand} setBrand={setBrand} />}
         {tab === "faq" && <FaqTab faqs={faqs} setFaqs={setFaqs} />}
         {tab === "chat" && <AdminChatTab students={students} directThreads={directThreads} setDirectThreads={setDirectThreads} />}
         {tab === "community" && <AdminCommunityTab community={community} setCommunity={setCommunity} students={students} cohorts={cohorts} />}

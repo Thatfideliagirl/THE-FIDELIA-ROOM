@@ -7,13 +7,51 @@
 // a simple cover-fit crop (scale to fill the box, centered, clipped to
 // its bounds) so a photo of any shape or size fills the frame cleanly
 // without stretching, the same way object-fit: cover would in CSS.
-function loadImage(src) {
+export function loadImage(src) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("Couldn't load an image for the ID card."));
+    img.onerror = () => reject(new Error("Couldn't load an image."));
     img.src = src;
   });
+}
+
+// Shared by the ID card and the testimonial card -- both composite a
+// student's photo into a center-anchored {xPct,yPct,widthPct,heightPct}
+// box with a cover-fit crop (scale to fill, centered, clipped to the
+// box), the same way object-fit: cover would in CSS.
+export function drawPhotoIntoBox(ctx, photo, canvas, box) {
+  const bw = canvas.width * (box.widthPct / 100);
+  const bh = canvas.height * (box.heightPct / 100);
+  const bx = canvas.width * (box.xPct / 100) - bw / 2;
+  const by = canvas.height * (box.yPct / 100) - bh / 2;
+  const scale = Math.max(bw / photo.naturalWidth, bh / photo.naturalHeight);
+  const dw = photo.naturalWidth * scale;
+  const dh = photo.naturalHeight * scale;
+  const dx = bx + (bw - dw) / 2;
+  const dy = by + (bh - dh) / 2;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(bx, by, bw, bh);
+  ctx.clip();
+  ctx.drawImage(photo, dx, dy, dw, dh);
+  ctx.restore();
+}
+
+// Shrinks one line of text to fit within maxWidth, truncating with an
+// ellipsis as a last resort if it still doesn't fit at the smallest
+// readable size -- used for any single-line field (a name, an ID, a
+// title) that has no guarantee of staying short.
+export function fitLine(ctx, text, maxWidth, baseSize, minSize, fontSpec) {
+  let size = baseSize;
+  ctx.font = fontSpec(size);
+  while (ctx.measureText(text).width > maxWidth && size > minSize) { size -= 1; ctx.font = fontSpec(size); }
+  let out = text;
+  if (ctx.measureText(out).width > maxWidth) {
+    while (out.length > 1 && ctx.measureText(out + "…").width > maxWidth) out = out.slice(0, -1);
+    if (out.length < text.length) out += "…";
+  }
+  return { size, text: out };
 }
 
 export async function renderIdCard(templateDataUrl, photoDataUrl, { name, studentId, programme, cohort, photoBox, namePos, idPos, programmePos, cohortPos, fontSizePct }, color = "#1B2A4A") {
