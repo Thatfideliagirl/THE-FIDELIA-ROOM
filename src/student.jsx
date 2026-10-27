@@ -699,8 +699,20 @@ export function CertificateTab({ course, enrollment, student, tasks, setStudents
 // Profile page), reused across every course's card rather than uploaded
 // again per course -- there's no reason a student would want a different
 // photo per enrollment.
+// Switching tabs unmounts this component (EnrollmentDashboard only
+// renders the active tab), so without this, re-opening "Student ID"
+// re-ran the whole canvas composite from scratch every single time --
+// the actual source of "it takes a moment before it shows", since the
+// card looked blank (the bare template) until that finished. Caching
+// the finished blob URL by everything that can change its pixels means
+// a revisit with nothing new to draw shows the already-built card
+// immediately, no re-render needed. Deliberately never revoked here --
+// the blob URL needs to outlive this component's own mounts, since
+// that's exactly the point; the browser reclaims it on reload.
+const idCardCache = new Map();
 function StudentIdTab({ course, cohort, student, setStudents, template }) {
-  const [finalUrl, setFinalUrl] = useState(null);
+  const cacheKey = template ? JSON.stringify([template.file.dataUrl, template.photoBox, template.namePos, template.idPos, template.programmePos, template.cohortPos, template.fontSizePct, student.photo?.dataUrl, student.name, student.studentId, course.title, cohort?.name]) : null;
+  const [finalUrl, setFinalUrl] = useState(() => (cacheKey && idCardCache.get(cacheKey)) || null);
   const [error, setError] = useState("");
   function onPhotoPick(e) {
     const f = e.target.files?.[0];
@@ -711,15 +723,20 @@ function StudentIdTab({ course, cohort, student, setStudents, template }) {
   }
   useEffect(() => {
     if (!template) { setFinalUrl(null); return; }
+    const cached = idCardCache.get(cacheKey);
+    if (cached) { setFinalUrl(cached); return; }
     let cancelled = false;
-    let objectUrl = null;
     setError("");
     renderIdCard(template.file.dataUrl, student.photo?.dataUrl || null, {
       name: student.name, studentId: student.studentId, programme: course.title, cohort: cohort?.name || "",
       photoBox: template.photoBox, namePos: template.namePos, idPos: template.idPos, programmePos: template.programmePos, cohortPos: template.cohortPos, fontSizePct: template.fontSizePct,
-    }).then((url) => { if (cancelled) { URL.revokeObjectURL(url); return; } objectUrl = url; setFinalUrl(url); }).catch((e) => { console.error("renderIdCard failed", e); setError("Couldn't build your ID card preview — try a different photo."); });
-    return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [template, student.photo?.dataUrl, student.name, student.studentId, course.title, cohort?.name]);
+    }).then((url) => {
+      if (cancelled) { URL.revokeObjectURL(url); return; }
+      idCardCache.set(cacheKey, url);
+      setFinalUrl(url);
+    }).catch((e) => { console.error("renderIdCard failed", e); setError("Couldn't build your ID card preview — try a different photo."); });
+    return () => { cancelled = true; };
+  }, [cacheKey]);
 
   if (!template) {
     return (
