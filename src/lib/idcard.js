@@ -16,6 +16,20 @@ export function loadImage(src) {
   });
 }
 
+// A template gets uploaded at whatever resolution it happens to be --
+// often far smaller than looks sharp once displayed at card size on a
+// phone. Every field (photo box, text position, font size) is already
+// positioned as a percentage of the canvas, so rendering onto a canvas
+// stretched up to a generous minimum width scales the template, the
+// photo and all the text up together for free, with zero change to how
+// any of those percentages are read. Never downscales an already-large
+// upload.
+const RENDER_TARGET_WIDTH = 1400;
+export function supersampledSize(template) {
+  const scale = Math.max(1, RENDER_TARGET_WIDTH / template.naturalWidth);
+  return { width: Math.round(template.naturalWidth * scale), height: Math.round(template.naturalHeight * scale) };
+}
+
 // Shared by the ID card and the testimonial card -- both composite a
 // student's photo into a center-anchored {xPct,yPct,widthPct,heightPct}
 // box with a cover-fit crop (scale to fill, centered, clipped to the
@@ -68,10 +82,11 @@ export function fitLine(ctx, text, maxWidth, baseSize, minSize, fontSpec) {
 export async function renderIdCard(templateDataUrl, photoDataUrl, { name, studentId, programme, cohort, photoBox, namePos, idPos, programmePos, cohortPos, fontSizePct }, color = "#1B2A4A") {
   const template = await loadImage(templateDataUrl);
   const canvas = document.createElement("canvas");
-  canvas.width = template.naturalWidth;
-  canvas.height = template.naturalHeight;
+  const { width, height } = supersampledSize(template);
+  canvas.width = width;
+  canvas.height = height;
   const ctx = canvas.getContext("2d");
-  ctx.drawImage(template, 0, 0);
+  ctx.drawImage(template, 0, 0, canvas.width, canvas.height);
 
   if (photoDataUrl && photoBox) {
     const photo = await loadImage(photoDataUrl);

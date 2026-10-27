@@ -1346,8 +1346,13 @@ function TestimonialTemplateEditor({ template, onSave, onClose }) {
             ><span className="f-code text-[10px]" style={{ color: "var(--accent)", fontWeight: 700 }}>PHOTO</span></div>
             <div
               onPointerDown={(e) => { e.preventDefault(); draggingRef.current = "quote"; setQuoteBox((b) => ({ ...b, ...posFromEvent(e) })); }}
-              style={{ position: "absolute", left: `${quoteBox.xPct}%`, top: `${quoteBox.yPct}%`, width: `${quoteBox.widthPct}%`, height: `${quoteBox.heightPct}%`, transform: "translate(-50%,-50%)", border: "2px dashed #7A2E3B", background: "rgba(122,46,59,.08)", cursor: "grab", display: "flex", alignItems: "center", justifyContent: "center" }}
-            ><span className="f-code text-[10px]" style={{ color: "#7A2E3B", fontWeight: 700 }}>QUOTE</span></div>
+              style={{ position: "absolute", left: `${quoteBox.xPct}%`, top: `${quoteBox.yPct}%`, width: `${quoteBox.widthPct}%`, height: `${quoteBox.heightPct}%`, transform: "translate(-50%,-50%)", border: "2px dashed #7A2E3B", background: "rgba(122,46,59,.08)", cursor: "grab", overflow: "hidden", padding: "2%" }}
+            >
+              <span className="f-code text-[9px]" style={{ color: "#7A2E3B", fontWeight: 700, position: "absolute", top: 2, left: 4 }}>QUOTE</span>
+              <div style={{ fontFamily: "Georgia, serif", fontStyle: "italic", fontSize: `${quoteFontSizePct}cqw`, lineHeight: 1.4, color: "#1B2A4A" }}>
+                This programme changed the way I think about my own work — I finally feel confident putting myself out there.
+              </div>
+            </div>
             {markers.map((m) => (
               <div
                 key={m.key}
@@ -1401,6 +1406,17 @@ function TestimonialForm({ students, cohorts, courses, template, initial, onSave
   const [photoPanXPct, setPhotoPanXPct] = useState(initial?.photoPanXPct ?? 50);
   const [photoPanYPct, setPhotoPanYPct] = useState(initial?.photoPanYPct ?? 50);
   const [previewUrl, setPreviewUrl] = useState(null);
+  // The zoom/pan sliders fire dozens of times a second while dragging --
+  // re-compositing the full card on every single one of those (now at a
+  // much higher render resolution) is what made dragging feel laggy.
+  // Debouncing just the heavy re-render, not the slider's own value,
+  // keeps the slider itself instant while the preview catches up a beat
+  // later instead of fighting the drag.
+  const [debouncedZoom, setDebouncedZoom] = useState({ photoZoom, photoPanXPct, photoPanYPct });
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedZoom({ photoZoom, photoPanXPct, photoPanYPct }), 100);
+    return () => clearTimeout(t);
+  }, [photoZoom, photoPanXPct, photoPanYPct]);
   function pickStudent(id) {
     setLinkedStudentId(id);
     if (!id) return;
@@ -1420,10 +1436,11 @@ function TestimonialForm({ students, cohorts, courses, template, initial, onSave
     let cancelled = false; let objectUrl = null;
     renderTestimonialCard(template.file.dataUrl, photo?.dataUrl || null, {
       name, studentId, quote, photoBox: template.photoBox, namePos: template.namePos, idPos: template.idPos, quoteBox: template.quoteBox,
-      fontSizePct: template.fontSizePct, quoteFontSizePct: template.quoteFontSizePct, photoZoom, photoPanXPct, photoPanYPct,
+      fontSizePct: template.fontSizePct, quoteFontSizePct: template.quoteFontSizePct,
+      photoZoom: debouncedZoom.photoZoom, photoPanXPct: debouncedZoom.photoPanXPct, photoPanYPct: debouncedZoom.photoPanYPct,
     }).then((u) => { if (cancelled) { URL.revokeObjectURL(u); return; } objectUrl = u; setPreviewUrl(u); }).catch((e) => console.error("renderTestimonialCard failed", e));
     return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [template, photo?.dataUrl, name, studentId, quote, photoZoom, photoPanXPct, photoPanYPct]);
+  }, [template, photo?.dataUrl, name, studentId, quote, debouncedZoom]);
   const canSave = name.trim() && quote.trim();
   return (
     <div className="card rounded-xl p-6 mb-6 flex flex-col gap-3">

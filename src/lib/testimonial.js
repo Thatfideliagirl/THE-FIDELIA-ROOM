@@ -1,4 +1,4 @@
-import { loadImage, drawPhotoIntoBox, fitLine } from "./idcard.js";
+import { loadImage, drawPhotoIntoBox, fitLine, supersampledSize } from "./idcard.js";
 
 // Wraps text onto lines no wider than maxWidth, breaking on spaces.
 function wrapLines(ctx, text, maxWidth) {
@@ -49,10 +49,11 @@ function fitQuote(ctx, text, maxWidth, maxHeight, baseSize, minSize, fontSpec) {
 export async function renderTestimonialCard(templateDataUrl, photoDataUrl, { name, studentId, cohort, quote, photoBox, namePos, idPos, quoteBox, fontSizePct, quoteFontSizePct, photoZoom, photoPanXPct, photoPanYPct }, color = "#1B2A4A") {
   const template = await loadImage(templateDataUrl);
   const canvas = document.createElement("canvas");
-  canvas.width = template.naturalWidth;
-  canvas.height = template.naturalHeight;
+  const { width, height } = supersampledSize(template);
+  canvas.width = width;
+  canvas.height = height;
   const ctx = canvas.getContext("2d");
-  ctx.drawImage(template, 0, 0);
+  ctx.drawImage(template, 0, 0, canvas.width, canvas.height);
 
   if (photoDataUrl && photoBox) {
     const photo = await loadImage(photoDataUrl);

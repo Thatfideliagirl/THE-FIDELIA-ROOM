@@ -779,7 +779,7 @@ export function Landing({ courses, resources, testimonials, faqs, brand, onSignI
 
       <section className="px-8 md:px-16 py-28" style={{ background: "var(--accent)" }}>
         <div className="max-w-[1500px] mx-auto"><Reveal><div className="f-label text-[13px] mb-4" style={{ color: "#CDE8F5" }}>FROM THE ROOM</div><h2 className="f-display text-[36px] mb-16 max-w-[640px]" style={{ fontWeight: 800, color: "#FAF6EC" }}>Real words from real students.</h2></Reveal>
-          <div className="grid md:grid-cols-3 gap-6">{visibleTestimonials.map((t, i) => <Reveal key={t.id} delay={i * 90}><TestimonialCard t={t} template={brand.testimonialTemplate} maxWidth={250} expanded={expandedTestimonialId === t.id} onToggle={() => setExpandedTestimonialId(expandedTestimonialId === t.id ? null : t.id)} /></Reveal>)}</div>
+          <div className="grid md:grid-cols-3 gap-6">{visibleTestimonials.map((t, i) => <Reveal key={t.id} delay={i * 90}><TestimonialCard t={t} template={brand.testimonialTemplate} maxWidth={290} expanded={expandedTestimonialId === t.id} onToggle={() => setExpandedTestimonialId(expandedTestimonialId === t.id ? null : t.id)} /></Reveal>)}</div>
           {!showAllTestimonials && publishedTestimonials.length > 3 && <div className="text-center mt-10"><button onClick={() => setShowAllTestimonials(true)} className="rounded-full px-6 py-3 text-[14px]" style={{ background: "rgba(250,246,236,.14)", color: "#FAF6EC", fontWeight: 700 }}>View more testimonials</button></div>}
         </div>
       </section>
