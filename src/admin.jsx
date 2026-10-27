@@ -690,6 +690,14 @@ export function StudentDetail({ student, applicant, setStudents, courses, cohort
   const [status, setStatus] = useState(student.accountStatus); const [cohortId, setCohortId] = useState(student.cohortId);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [manageAccessId, setManageAccessId] = useState(null);
+  // A student's name has no edit control anywhere else in the app --
+  // deliberately, since it should only ever be changed here, by the
+  // signed-in admin. The database's own rules enforce that too (a
+  // student's own session can't change it, no matter what's sent), so
+  // this is the one legitimate place a correction belongs.
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(student.name);
+  function saveName() { const v = nameDraft.trim(); if (!v) return; setStudents((prev) => prev.map((s) => s.id === student.id ? { ...s, name: v } : s)); setEditingName(false); }
   function saveStatus(v) { setStatus(v); setStudents((prev) => prev.map((s) => s.id === student.id ? { ...s, accountStatus: v } : s)); }
   function saveCohort(v) { setCohortId(v); setStudents((prev) => prev.map((s) => s.id === student.id ? { ...s, cohortId: v } : s)); }
   function reissue(enrollmentId) { const code = genCode(); setStudents((prev) => prev.map((s) => s.id !== student.id ? s : { ...s, enrollments: s.enrollments.map((e) => e.id === enrollmentId ? { ...e, code } : e) })); }
@@ -726,7 +734,18 @@ export function StudentDetail({ student, applicant, setStudents, courses, cohort
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div className="flex items-center gap-4">
           <div className="rounded-full overflow-hidden flex items-center justify-center shrink-0" style={{ width: 52, height: 52, background: "color-mix(in srgb, var(--accent) 14%, white)" }}>{student.photo ? <img src={student.photo.dataUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <UserCircle size={24} color="var(--accent)" />}</div>
-          <div><div className="f-display text-[21px]" style={{ fontWeight: 800 }}>{student.name}</div><div className="text-[14px]" style={{ color: "#71675A" }}>{student.email}</div></div>
+          <div>
+            {editingName ? (
+              <div className="flex items-center gap-2">
+                <input className="input-field rounded-lg px-3 py-1.5 text-[18px]" style={{ fontWeight: 800 }} value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} autoFocus />
+                <button onClick={saveName} className="btn-primary rounded-full px-3 py-1.5 text-[12px]">Save</button>
+                <button onClick={() => { setNameDraft(student.name); setEditingName(false); }} className="text-[12px]" style={{ color: "#A79B84" }}>Cancel</button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2"><div className="f-display text-[21px]" style={{ fontWeight: 800 }}>{student.name}</div><button onClick={() => setEditingName(true)}><Pencil size={13} color="#A79B84" /></button></div>
+            )}
+            <div className="text-[14px]" style={{ color: "#71675A" }}>{student.email}</div>
+          </div>
         </div>
         <div className="flex items-center gap-4">
           {confirmingDelete ? (

@@ -93,9 +93,14 @@ export async function insertStudent(student) {
 }
 // Writes back the student's whole current shape -- simpler than tracking
 // sparse patches, and fine for a single-admin app with no concurrent editors.
+// name/email/student_code ride along here too (not just admin-safe fields)
+// because the database's own protect_student_identity trigger is what
+// actually decides whether those take effect, based on who's signed in --
+// not this list. A student's own save (profile edits) just echoes their
+// existing name/email back unchanged either way.
 export async function updateStudent(id, student) {
-  const { cohortId, accountStatus, seenTour, photo, bio, enrollments } = student;
-  const dbPatch = { cohort_id: cohortId || null, account_status: accountStatus, seen_tour: !!seenTour, photo_url: photo?.dataUrl || null, bio: bio || "", enrollments: enrollments || [] };
+  const { name, email, studentId, cohortId, accountStatus, seenTour, photo, bio, enrollments } = student;
+  const dbPatch = { name, email, student_code: studentId, cohort_id: cohortId || null, account_status: accountStatus, seen_tour: !!seenTour, photo_url: photo?.dataUrl || null, bio: bio || "", enrollments: enrollments || [] };
   const { data, error } = await supabase.from("students").update(dbPatch).eq("id", id).select().single();
   if (error) throw error;
   return studentOut(data);
