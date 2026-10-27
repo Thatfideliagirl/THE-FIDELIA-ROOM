@@ -673,7 +673,7 @@ export function GuideButton({ onViewCourses, onSignUp, onViewResources, brand })
 // to a plain quote-in-a-box (the original look) until a template's been
 // uploaded, so the landing page never ends up with an empty-looking
 // section just because the template step hasn't happened yet.
-function TestimonialCard({ t, template, expanded, onToggle, theme = "dark" }) {
+function TestimonialCard({ t, template, expanded, onToggle, theme = "dark", maxWidth }) {
   const [url, setUrl] = useState(null);
   const light = theme === "light";
   useEffect(() => {
@@ -689,7 +689,7 @@ function TestimonialCard({ t, template, expanded, onToggle, theme = "dark" }) {
   const details = [t.programme, t.cohort].filter(Boolean).join(" · ");
   if (template) {
     return (
-      <div className="rounded-2xl overflow-hidden h-full flex flex-col" style={{ border: light ? "1px solid #E7DEC9" : "1px solid rgba(250,246,236,.2)" }}>
+      <div className="rounded-2xl overflow-hidden h-full flex flex-col mx-auto" style={{ border: light ? "1px solid #E7DEC9" : "1px solid rgba(250,246,236,.2)", maxWidth: maxWidth ? `min(100%, ${maxWidth}px)` : "100%" }}>
         {url ? <img src={url} alt="" style={{ width: "100%", display: "block" }} /> : <div style={{ aspectRatio: "4/3", background: light ? "#F0E7D6" : "rgba(250,246,236,.09)" }} />}
         {details && (
           <button onClick={onToggle} className="w-full text-left px-5 py-3 text-[12px] mt-auto" style={light ? { color: "#71675A", background: "#FAF6EC" } : { color: "#CDE8F5", background: "rgba(250,246,236,.09)" }}>{expanded ? details : "View details"}</button>
@@ -708,7 +708,8 @@ function TestimonialCard({ t, template, expanded, onToggle, theme = "dark" }) {
 export function Landing({ courses, resources, testimonials, faqs, brand, onSignIn, onSignUp, onViewCourses, onViewResources, onViewCourseDetail }) {
   const [showAllTestimonials, setShowAllTestimonials] = useState(false);
   const [expandedTestimonialId, setExpandedTestimonialId] = useState(null);
-  const visibleTestimonials = showAllTestimonials ? testimonials : testimonials.slice(0, 3);
+  const publishedTestimonials = testimonials.filter((t) => t.published !== false);
+  const visibleTestimonials = showAllTestimonials ? publishedTestimonials : publishedTestimonials.slice(0, 3);
   const publicResources = resources.filter((r) => r.isPublic);
   const liveCourses = courses.filter((c) => c.status === "live").slice(0, 2);
   const [faqOpen, setFaqOpen] = useState(null);
@@ -778,8 +779,8 @@ export function Landing({ courses, resources, testimonials, faqs, brand, onSignI
 
       <section className="px-8 md:px-16 py-28" style={{ background: "var(--accent)" }}>
         <div className="max-w-[1500px] mx-auto"><Reveal><div className="f-label text-[13px] mb-4" style={{ color: "#CDE8F5" }}>FROM THE ROOM</div><h2 className="f-display text-[36px] mb-16 max-w-[640px]" style={{ fontWeight: 800, color: "#FAF6EC" }}>Real words from real students.</h2></Reveal>
-          <div className="grid md:grid-cols-3 gap-6">{visibleTestimonials.map((t, i) => <Reveal key={t.id} delay={i * 90}><TestimonialCard t={t} template={brand.testimonialTemplate} expanded={expandedTestimonialId === t.id} onToggle={() => setExpandedTestimonialId(expandedTestimonialId === t.id ? null : t.id)} /></Reveal>)}</div>
-          {!showAllTestimonials && testimonials.length > 3 && <div className="text-center mt-10"><button onClick={() => setShowAllTestimonials(true)} className="rounded-full px-6 py-3 text-[14px]" style={{ background: "rgba(250,246,236,.14)", color: "#FAF6EC", fontWeight: 700 }}>View more testimonials</button></div>}
+          <div className="grid md:grid-cols-3 gap-6">{visibleTestimonials.map((t, i) => <Reveal key={t.id} delay={i * 90}><TestimonialCard t={t} template={brand.testimonialTemplate} maxWidth={300} expanded={expandedTestimonialId === t.id} onToggle={() => setExpandedTestimonialId(expandedTestimonialId === t.id ? null : t.id)} /></Reveal>)}</div>
+          {!showAllTestimonials && publishedTestimonials.length > 3 && <div className="text-center mt-10"><button onClick={() => setShowAllTestimonials(true)} className="rounded-full px-6 py-3 text-[14px]" style={{ background: "rgba(250,246,236,.14)", color: "#FAF6EC", fontWeight: 700 }}>View more testimonials</button></div>}
         </div>
       </section>
 
@@ -829,7 +830,7 @@ export function CoursesIndex({ courses, onBack, onOpen }) {
   );
 }
 export function CourseDetail({ course, testimonials, brand, onBack, onApply }) {
-  const related = testimonials.filter((t) => course.testimonialIds?.includes(t.id));
+  const related = testimonials.filter((t) => course.testimonialIds?.includes(t.id) && t.published !== false);
   const [expandedTestimonialId, setExpandedTestimonialId] = useState(null);
   return (
     <div className="min-h-screen">

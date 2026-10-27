@@ -1436,9 +1436,10 @@ export function TestimonialsTab({ testimonials, setTestimonials, students, cohor
   const [editingId, setEditingId] = useState(null);
   const template = brand.testimonialTemplate;
   function saveTemplate(t) { setBrand((b) => ({ ...b, testimonialTemplate: t })); setEditingTemplate(false); }
-  function add(data) { setTestimonials((prev) => [...prev, { id: "te" + Date.now(), ...data }]); setShowAdd(false); }
+  function add(data) { setTestimonials((prev) => [...prev, { id: "te" + Date.now(), published: true, ...data }]); setShowAdd(false); }
   function save(id, data) { setTestimonials((prev) => prev.map((t) => t.id === id ? { ...t, ...data } : t)); setEditingId(null); }
   function remove(id) { setTestimonials((prev) => prev.filter((t) => t.id !== id)); }
+  function togglePublished(id) { setTestimonials((prev) => prev.map((t) => t.id === id ? { ...t, published: !(t.published !== false) } : t)); }
   const editing = editingId ? testimonials.find((t) => t.id === editingId) : null;
   return (
     <>
@@ -1463,7 +1464,18 @@ export function TestimonialsTab({ testimonials, setTestimonials, students, cohor
             <TestimonialThumb template={template} testimonial={t} />
             <div><div className="text-[15px] mb-1" style={{ fontWeight: 700 }}>{t.name}</div><div className="f-code text-[11px] mb-1.5" style={{ color: "#A79B84" }}>{[t.studentId, t.cohort, t.programme].filter(Boolean).join(" · ")}</div><div className="text-[14px]" style={{ color: "#4A4237", fontStyle: "italic" }}>"{t.quote}"</div></div>
           </div>
-          <div className="flex gap-3 shrink-0"><button onClick={() => setEditingId(t.id)}><Pencil size={15} color="var(--accent)" /></button><button onClick={() => remove(t.id)}><Trash2 size={15} color="#B04A3A" /></button></div>
+          <div className="flex items-center gap-3 shrink-0">
+            {/* On = shows on the public landing page; off keeps it saved
+                here but hidden from visitors -- lets testimonials be
+                prepared ahead of time or pulled without deleting them. */}
+            <label className="flex items-center gap-2 cursor-pointer" title={t.published !== false ? "Showing on the landing page" : "Hidden from the landing page"}>
+              <span className="f-code text-[10px]" style={{ color: t.published !== false ? "#2F7D4F" : "#A79B84" }}>{t.published !== false ? "LIVE" : "HIDDEN"}</span>
+              <button onClick={() => togglePublished(t.id)} className="rounded-full shrink-0" style={{ width: 36, height: 21, background: t.published !== false ? "#4E7D5C" : "#E7DEC9", position: "relative", transition: "background .15s" }}>
+                <span style={{ position: "absolute", top: 2, left: t.published !== false ? 17 : 2, width: 17, height: 17, borderRadius: "50%", background: "#fff", transition: "left .15s" }} />
+              </button>
+            </label>
+            <button onClick={() => setEditingId(t.id)}><Pencil size={15} color="var(--accent)" /></button><button onClick={() => remove(t.id)}><Trash2 size={15} color="#B04A3A" /></button>
+          </div>
         </div>
       ))}</div>
     </>
