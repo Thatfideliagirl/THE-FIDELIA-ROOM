@@ -8,7 +8,7 @@ import {
   UserCircle, FolderPlus, Folder, UploadCloud, ClipboardCheck, HelpCircle as HelpIcon,
   Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Menu
 } from "lucide-react";
-import { LOGO_SRC, HERO_SRC, CREATOR_SRC, HOWITWORKS_SRC } from "./assets/brandImages.js";
+import { LOGO_SRC, HERO_SRC, CREATOR_SRC, HOWITWORKS_01ACCOUNT_SRC, HOWITWORKS_02COURSE_SRC, HOWITWORKS_03REVIEW_SRC, HOWITWORKS_04EMAIL_SRC, HOWITWORKS_05CODE_SRC, HOWITWORKS_PHONEFRAME_SRC } from "./assets/brandImages.js";
 import { moduleStatus, formatRelativeTime } from "./lib/data.js";
 import { changePassword } from "./lib/auth.js";
 import { uploadFile } from "./lib/storage.js";
@@ -715,6 +715,82 @@ function TestimonialCard({ t, template, theme = "dark", maxWidth, onViewFull }) 
     </div>
   );
 }
+const HOWITWORKS_STEPS = [
+  { n: "01", t: "Create Account", d: "Sign up with your basic information.", src: HOWITWORKS_01ACCOUNT_SRC },
+  { n: "02", t: "Choose Your Course", d: "Pick a course and answer its application questions.", src: HOWITWORKS_02COURSE_SRC },
+  { n: "03", t: "Application Review", d: "Reviewed by the Room. Status shows Pending Review.", src: HOWITWORKS_03REVIEW_SRC },
+  { n: "04", t: "Receive Your Code", d: "Once approved, keep an eye on your email for your code — check spam too, just in case.", src: HOWITWORKS_04EMAIL_SRC },
+  { n: "05", t: "Enter Code & Join", d: "Verify your code and step straight into your dashboard.", src: HOWITWORKS_05CODE_SRC },
+];
+// A phone mockup that tracks the real "How It Works" screenshots to
+// whichever step card is nearest the middle of the viewport, recomputed
+// on every scroll frame (not a fixed trigger line) so the phone never
+// feels like it's lagging a beat behind the actual scroll.
+function HowItWorksSection() {
+  const [active, setActive] = useState(0);
+  const stepRefs = useRef([]);
+  useEffect(() => {
+    let ticking = false;
+    function update() {
+      ticking = false;
+      const mid = window.innerHeight / 2;
+      let best = 0, bestDist = Infinity;
+      stepRefs.current.forEach((el, i) => {
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        const dist = Math.abs((r.top + r.bottom) / 2 - mid);
+        if (dist < bestDist) { bestDist = dist; best = i; }
+      });
+      setActive(best);
+    }
+    function onScroll() { if (!ticking) { ticking = true; requestAnimationFrame(update); } }
+    update();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => { window.removeEventListener("scroll", onScroll); window.removeEventListener("resize", onScroll); };
+  }, []);
+  return (
+    <section id="how" className="px-8 md:px-16 py-28" style={{ background: "#F0E7D6" }}>
+      <div className="max-w-[1500px] mx-auto grid md:grid-cols-2 gap-16">
+        <div className="md:order-1">
+          <Reveal><div className="f-label text-[13px] mb-4 accent-text">GET STARTED</div><h2 className="f-display text-[44px] mb-10" style={{ fontWeight: 800 }}>How you actually get into the Room.</h2></Reveal>
+          <div className="flex flex-col gap-4">
+            {HOWITWORKS_STEPS.map((s, i) => (
+              <div
+                key={i}
+                ref={(el) => { stepRefs.current[i] = el; }}
+                className="card rounded-2xl p-6 flex items-start gap-4"
+                style={{
+                  opacity: active === i ? 1 : 0.55,
+                  transform: active === i ? "scale(1)" : "scale(.98)",
+                  borderColor: active === i ? "color-mix(in srgb, var(--accent) 35%, #E7DEC9)" : "#E7DEC9",
+                  boxShadow: active === i ? "0 16px 32px -20px rgba(38,32,25,.22)" : "none",
+                  transition: "opacity .3s ease, transform .3s ease, border-color .3s ease, box-shadow .3s ease",
+                }}
+              >
+                <div className="f-code text-[15px] shrink-0" style={{ color: active === i ? "var(--accent)" : "#B8912E", fontWeight: 600, transition: "color .3s ease" }}>{s.n}</div>
+                <div><div className="f-display text-[19px] mb-1" style={{ fontWeight: 700 }}>{s.t}</div><div className="text-[14px]" style={{ color: "#71675A" }}>{s.d}</div></div>
+              </div>
+            ))}
+            <div style={{ height: "40vh" }} />
+          </div>
+        </div>
+        <div className="order-first md:order-2">
+          <div style={{ position: "sticky", top: 40 }}>
+          <div className="mx-auto" style={{ position: "relative", width: 220, aspectRatio: "360/726", filter: "drop-shadow(0 30px 50px rgba(38,32,25,.3))" }}>
+            <div style={{ position: "absolute", left: "7.5%", top: "4.4%", width: "85.3%", height: "91.9%", borderRadius: 17, overflow: "hidden", background: "#FAF6EC" }}>
+              {HOWITWORKS_STEPS.map((s, i) => (
+                <img key={i} src={s.src} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "top center", opacity: active === i ? 1 : 0, transition: "opacity .18s ease" }} />
+              ))}
+            </div>
+            <img src={HOWITWORKS_PHONEFRAME_SRC} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", zIndex: 2, pointerEvents: "none" }} />
+          </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
 export function Landing({ courses, resources, testimonials, faqs, brand, onSignIn, onSignUp, onViewCourses, onViewResources, onViewCourseDetail, onViewTestimonials }) {
   const publishedTestimonials = testimonials.filter((t) => t.published !== false);
   const visibleTestimonials = publishedTestimonials.slice(0, 3);
@@ -722,8 +798,15 @@ export function Landing({ courses, resources, testimonials, faqs, brand, onSignI
   const liveCourses = courses.filter((c) => c.status === "live").slice(0, 2);
   const [faqOpen, setFaqOpen] = useState(null);
   return (
-    <div className="min-h-screen overflow-hidden">
-      <header className="relative" style={{ minHeight: "92vh" }}>
+    <div className="min-h-screen">
+      {/* overflow-hidden scoped to just the hero (not the whole page) --
+          on the page root it was silently breaking position:sticky for
+          every descendant, including the How It Works phone, which
+          needs its sticky containing block to not have overflow set
+          anywhere above it. The hero's own full-bleed image/gradient
+          are already contained by its own position:relative, so moving
+          the clip here changes nothing about how the hero looks. */}
+      <header className="relative overflow-hidden" style={{ minHeight: "92vh" }}>
         <img src={HERO_SRC} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
         <div style={{ position: "absolute", inset: 0, background: "linear-gradient(100deg, rgba(30,42,56,.82) 0%, rgba(30,42,56,.58) 42%, rgba(30,42,56,.16) 70%, rgba(30,42,56,0) 100%)" }} />
         <nav className="relative flex items-center justify-between px-8 md:px-16 py-6 max-w-[1500px] mx-auto">
@@ -753,15 +836,7 @@ export function Landing({ courses, resources, testimonials, faqs, brand, onSignI
         </div>
       </section>
 
-      <section id="how" className="px-8 md:px-16 py-28" style={{ background: "#F0E7D6" }}>
-        <div className="max-w-[1500px] mx-auto grid md:grid-cols-2 gap-16 items-center">
-          <Reveal>
-            <div className="f-label text-[13px] mb-4 accent-text">GET STARTED</div><h2 className="f-display text-[44px] mb-12" style={{ fontWeight: 800 }}>How you actually get into the Room.</h2>
-            <div className="grid grid-cols-1 gap-8">{[{ n: "01", t: "Create Account", d: "Sign up with your basic information." }, { n: "02", t: "Choose Your Course", d: "Pick a course and answer its application questions." }, { n: "03", t: "Application Review", d: "Reviewed by the Room. Status shows Pending Review." }, { n: "04", t: "Receive Your Code", d: "Once approved, keep an eye on your email for your code — check spam too, just in case." }, { n: "05", t: "Enter Code & Join", d: "Verify your code and step straight into your dashboard." }].map((s, i) => <Reveal key={i} delay={i * 80}><div className="flex items-start gap-4"><div className="f-code text-[15px] shrink-0" style={{ color: "#B8912E", fontWeight: 600 }}>{s.n}</div><div><div className="f-display text-[19px] mb-1" style={{ fontWeight: 700 }}>{s.t}</div><div className="text-[14px]" style={{ color: "#71675A" }}>{s.d}</div></div></div></Reveal>)}</div>
-          </Reveal>
-          <Reveal delay={120}><img src={HOWITWORKS_SRC} alt="" style={{ width: "100%", maxWidth: 460, margin: "0 auto", display: "block", filter: "drop-shadow(0 30px 40px rgba(38,32,25,.18))" }} /></Reveal>
-        </div>
-      </section>
+      <HowItWorksSection />
 
       <section className="max-w-[1500px] mx-auto px-8 md:px-16 py-28">
         <div className="grid md:grid-cols-2 gap-16 items-center mb-16">

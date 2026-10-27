@@ -1,4 +1,9 @@
 export { LOGO_SRC } from "./logoData.js";
 export { HERO_SRC } from "./heroData.js";
 export { CREATOR_SRC } from "./creatorData.js";
-export { HOWITWORKS_SRC } from "./howitworksData.js";
+export { HOWITWORKS_01ACCOUNT_SRC } from "./howitworksStep1Data.js";
+export { HOWITWORKS_02COURSE_SRC } from "./howitworksStep2Data.js";
+export { HOWITWORKS_03REVIEW_SRC } from "./howitworksStep3Data.js";
+export { HOWITWORKS_04EMAIL_SRC } from "./howitworksStep4Data.js";
+export { HOWITWORKS_05CODE_SRC } from "./howitworksStep5Data.js";
+export { HOWITWORKS_PHONEFRAME_SRC } from "./howitworksPhoneFrameData.js";
