@@ -772,7 +772,6 @@ function HowItWorksSection() {
                 <div><div className="f-display text-[19px] mb-1" style={{ fontWeight: 700 }}>{s.t}</div><div className="text-[14px]" style={{ color: "#71675A" }}>{s.d}</div></div>
               </div>
             ))}
-            <div style={{ height: "40vh" }} />
           </div>
         </div>
         <div className="order-first md:order-2">
