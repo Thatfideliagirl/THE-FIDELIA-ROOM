@@ -46,7 +46,7 @@ function fitQuote(ctx, text, maxWidth, maxHeight, baseSize, minSize, fontSpec) {
   return { size, lineHeight, lines };
 }
 
-export async function renderTestimonialCard(templateDataUrl, photoDataUrl, { name, studentId, cohort, quote, photoBox, namePos, idPos, quoteBox, fontSizePct, quoteFontSizePct }, color = "#1B2A4A") {
+export async function renderTestimonialCard(templateDataUrl, photoDataUrl, { name, studentId, cohort, quote, photoBox, namePos, idPos, quoteBox, fontSizePct, quoteFontSizePct, photoZoom }, color = "#1B2A4A") {
   const template = await loadImage(templateDataUrl);
   const canvas = document.createElement("canvas");
   canvas.width = template.naturalWidth;
@@ -56,7 +56,7 @@ export async function renderTestimonialCard(templateDataUrl, photoDataUrl, { nam
 
   if (photoDataUrl && photoBox) {
     const photo = await loadImage(photoDataUrl);
-    drawPhotoIntoBox(ctx, photo, canvas, photoBox);
+    drawPhotoIntoBox(ctx, photo, canvas, photoBox, photoZoom);
   }
 
   const fontFamily = "Georgia, 'Times New Roman', serif";

@@ -1357,7 +1357,7 @@ function TestimonialTemplateEditor({ template, onSave, onClose }) {
             ))}
           </div>
           <label className="block mb-4"><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Name / ID text size</div><input type="range" min={1.5} max={6} step={0.25} value={fontSizePct} onChange={(e) => setFontSizePct(Number(e.target.value))} style={{ width: "100%" }} /></label>
-          <label className="block mb-4"><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Quote text size</div><input type="range" min={1} max={4} step={0.1} value={quoteFontSizePct} onChange={(e) => setQuoteFontSizePct(Number(e.target.value))} style={{ width: "100%" }} /></label>
+          <label className="block mb-4"><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Quote text size</div><input type="range" min={1} max={7} step={0.1} value={quoteFontSizePct} onChange={(e) => setQuoteFontSizePct(Number(e.target.value))} style={{ width: "100%" }} /><div className="text-[11px] mt-1" style={{ color: "#A79B84" }}>If a quote is long, it still shrinks to fit the quote box above -- so widening or heightening that box also helps the text sit larger.</div></label>
           <label className="block mb-4"><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Photo frame width</div><input type="range" min={10} max={70} step={1} value={photoBox.widthPct} onChange={(e) => setPhotoBox((b) => ({ ...b, widthPct: Number(e.target.value) }))} style={{ width: "100%" }} /></label>
           <label className="block mb-4"><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Photo frame height</div><input type="range" min={10} max={90} step={1} value={photoBox.heightPct} onChange={(e) => setPhotoBox((b) => ({ ...b, heightPct: Number(e.target.value) }))} style={{ width: "100%" }} /></label>
           <label className="block mb-4"><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Quote box width</div><input type="range" min={20} max={95} step={1} value={quoteBox.widthPct} onChange={(e) => setQuoteBox((b) => ({ ...b, widthPct: Number(e.target.value) }))} style={{ width: "100%" }} /></label>
@@ -1382,14 +1382,14 @@ function TestimonialThumb({ template, testimonial }) {
     renderTestimonialCard(template.file.dataUrl, testimonial.photo?.dataUrl || null, {
       name: testimonial.name, studentId: testimonial.studentId, quote: testimonial.quote,
       photoBox: template.photoBox, namePos: template.namePos, idPos: template.idPos, quoteBox: template.quoteBox,
-      fontSizePct: template.fontSizePct, quoteFontSizePct: template.quoteFontSizePct,
+      fontSizePct: template.fontSizePct, quoteFontSizePct: template.quoteFontSizePct, photoZoom: testimonial.photoZoom,
     }).then((u) => { if (cancelled) { URL.revokeObjectURL(u); return; } objectUrl = u; setUrl(u); }).catch((e) => console.error("renderTestimonialCard failed", e));
     return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [template, testimonial.photo?.dataUrl, testimonial.name, testimonial.studentId, testimonial.quote]);
+  }, [template, testimonial.photo?.dataUrl, testimonial.name, testimonial.studentId, testimonial.quote, testimonial.photoZoom]);
   if (!template) return null;
   return url ? <img src={url} alt="" style={{ width: 90, borderRadius: 8, border: "1px solid #E7DEC9" }} /> : <div className="rounded-lg" style={{ width: 90, height: 60, background: "#F0E7D6" }} />;
 }
-function TestimonialForm({ students, cohorts, courses, initial, onSave, onClose }) {
+function TestimonialForm({ students, cohorts, courses, template, initial, onSave, onClose }) {
   const [linkedStudentId, setLinkedStudentId] = useState(initial?.linkedStudentId || "");
   const [name, setName] = useState(initial?.name || "");
   const [studentId, setStudentId] = useState(initial?.studentId || "");
@@ -1397,17 +1397,31 @@ function TestimonialForm({ students, cohorts, courses, initial, onSave, onClose 
   const [programme, setProgramme] = useState(initial?.programme || "");
   const [quote, setQuote] = useState(initial?.quote || "");
   const [photo, setPhoto] = useState(initial?.photo || null);
+  const [photoZoom, setPhotoZoom] = useState(initial?.photoZoom || 1);
+  const [previewUrl, setPreviewUrl] = useState(null);
   function pickStudent(id) {
     setLinkedStudentId(id);
     if (!id) return;
     const s = students.find((x) => x.id === id);
     if (!s) return;
-    setName(s.name); setStudentId(s.studentId); setPhoto(s.photo || null);
+    setName(s.name); setStudentId(s.studentId); setPhoto(s.photo || null); setPhotoZoom(1);
     setCohort(cohorts.find((c) => c.id === s.cohortId)?.name || "");
     const course = courses.find((c) => s.enrollments.some((e) => e.courseId === c.id));
     setProgramme(course?.title || "");
   }
-  function onPhotoPick(e) { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = () => setPhoto({ name: f.name, dataUrl: r.result }); r.readAsDataURL(f); }
+  function onPhotoPick(e) { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = () => { setPhoto({ name: f.name, dataUrl: r.result }); setPhotoZoom(1); }; r.readAsDataURL(f); }
+  // A live preview of the real composited card, right here in the form --
+  // so dragging the zoom slider shows exactly what the saved card will
+  // look like instead of the admin having to save first to find out.
+  useEffect(() => {
+    if (!template) { setPreviewUrl(null); return; }
+    let cancelled = false; let objectUrl = null;
+    renderTestimonialCard(template.file.dataUrl, photo?.dataUrl || null, {
+      name, studentId, quote, photoBox: template.photoBox, namePos: template.namePos, idPos: template.idPos, quoteBox: template.quoteBox,
+      fontSizePct: template.fontSizePct, quoteFontSizePct: template.quoteFontSizePct, photoZoom,
+    }).then((u) => { if (cancelled) { URL.revokeObjectURL(u); return; } objectUrl = u; setPreviewUrl(u); }).catch((e) => console.error("renderTestimonialCard failed", e));
+    return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [template, photo?.dataUrl, name, studentId, quote, photoZoom]);
   const canSave = name.trim() && quote.trim();
   return (
     <div className="card rounded-xl p-6 mb-6 flex flex-col gap-3">
@@ -1416,6 +1430,13 @@ function TestimonialForm({ students, cohorts, courses, initial, onSave, onClose 
         <div className="rounded-full overflow-hidden flex items-center justify-center shrink-0" style={{ width: 56, height: 56, background: "color-mix(in srgb, var(--accent) 14%, white)" }}>{photo ? <img src={photo.dataUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <UserCircle size={26} color="var(--accent)" />}</div>
         <label className="btn-soft rounded-full px-4 py-2 text-[13px] cursor-pointer" style={{ fontWeight: 600 }}>{photo ? "Replace photo" : "Upload photo"}<input type="file" accept="image/*" onChange={onPhotoPick} style={{ display: "none" }} /></label>
       </div>
+      {photo && <label className="block"><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Photo zoom — leave as is, or zoom in a little</div><input type="range" min={1} max={2.5} step={0.05} value={photoZoom} onChange={(e) => setPhotoZoom(Number(e.target.value))} style={{ width: "100%" }} /></label>}
+      {template && (
+        <div className="self-start">
+          <div className="f-label text-[10px] mb-1.5" style={{ color: "#A79B84" }}>LIVE PREVIEW</div>
+          {previewUrl ? <img src={previewUrl} alt="" style={{ width: 160, borderRadius: 8, border: "1px solid #E7DEC9", display: "block" }} /> : <div className="rounded-lg" style={{ width: 160, height: 110, background: "#F0E7D6" }} />}
+        </div>
+      )}
       <Field label="Name" value={name} onChange={(e) => setName(e.target.value)} />
       <Field label="Student ID (shown on the card)" value={studentId} onChange={(e) => setStudentId(e.target.value)} placeholder="FJ/2026/001" />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1424,7 +1445,7 @@ function TestimonialForm({ students, cohorts, courses, initial, onSave, onClose 
       </div>
       <TextArea label="Quote" value={quote} onChange={(e) => setQuote(e.target.value)} rows={5} />
       <div className="flex gap-3 mt-1">
-        <button disabled={!canSave} onClick={() => onSave({ linkedStudentId: linkedStudentId || null, name, studentId, cohort, programme, quote, photo })} className="btn-primary rounded-lg px-5 py-2.5 text-[14px] disabled:opacity-40">Save testimonial</button>
+        <button disabled={!canSave} onClick={() => onSave({ linkedStudentId: linkedStudentId || null, name, studentId, cohort, programme, quote, photo, photoZoom })} className="btn-primary rounded-lg px-5 py-2.5 text-[14px] disabled:opacity-40">Save testimonial</button>
         <button onClick={onClose} className="text-[14px]" style={{ color: "#A79B84" }}>Cancel</button>
       </div>
     </div>
@@ -1452,12 +1473,12 @@ export function TestimonialsTab({ testimonials, setTestimonials, students, cohor
         {editingTemplate && <div className="mt-5"><TestimonialTemplateEditor template={template} onSave={saveTemplate} onClose={() => setEditingTemplate(false)} /></div>}
       </div>
       {showAdd ? (
-        <TestimonialForm students={students} cohorts={cohorts} courses={courses} onSave={add} onClose={() => setShowAdd(false)} />
+        <TestimonialForm students={students} cohorts={cohorts} courses={courses} template={template} onSave={add} onClose={() => setShowAdd(false)} />
       ) : (
         <button onClick={() => setShowAdd(true)} className="btn-primary rounded-full px-5 py-2.5 text-[14px] flex items-center gap-1.5 mb-6"><Plus size={16} /> Add testimonial</button>
       )}
       <div className="flex flex-col gap-3">{testimonials.map((t) => editingId === t.id ? (
-        <TestimonialForm key={t.id} students={students} cohorts={cohorts} courses={courses} initial={editing} onSave={(data) => save(t.id, data)} onClose={() => setEditingId(null)} />
+        <TestimonialForm key={t.id} students={students} cohorts={cohorts} courses={courses} template={template} initial={editing} onSave={(data) => save(t.id, data)} onClose={() => setEditingId(null)} />
       ) : (
         <div key={t.id} className="card rounded-xl p-5 flex items-start justify-between gap-4">
           <div className="flex items-start gap-4">

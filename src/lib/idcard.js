@@ -19,13 +19,15 @@ export function loadImage(src) {
 // Shared by the ID card and the testimonial card -- both composite a
 // student's photo into a center-anchored {xPct,yPct,widthPct,heightPct}
 // box with a cover-fit crop (scale to fill, centered, clipped to the
-// box), the same way object-fit: cover would in CSS.
-export function drawPhotoIntoBox(ctx, photo, canvas, box) {
+// box), the same way object-fit: cover would in CSS. zoom (default 1)
+// scales the crop in further around that same center point, for photos
+// that need a closer crop than a plain cover-fit gives on their own.
+export function drawPhotoIntoBox(ctx, photo, canvas, box, zoom = 1) {
   const bw = canvas.width * (box.widthPct / 100);
   const bh = canvas.height * (box.heightPct / 100);
   const bx = canvas.width * (box.xPct / 100) - bw / 2;
   const by = canvas.height * (box.yPct / 100) - bh / 2;
-  const scale = Math.max(bw / photo.naturalWidth, bh / photo.naturalHeight);
+  const scale = Math.max(bw / photo.naturalWidth, bh / photo.naturalHeight) * (zoom || 1);
   const dw = photo.naturalWidth * scale;
   const dh = photo.naturalHeight * scale;
   const dx = bx + (bw - dw) / 2;
