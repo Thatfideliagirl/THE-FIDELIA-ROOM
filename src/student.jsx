@@ -1044,11 +1044,17 @@ export function ProfilePage({ student, setStudents, cohort }) {
       <div className="mb-8"><div className="f-label text-[12px] mb-2 accent-text">YOUR PROFILE</div><h1 className="f-display text-[30px]" style={{ fontWeight: 800 }}>Profile details.</h1></div>
       <div className="card rounded-2xl p-8">
         <div className="flex items-center gap-5 mb-6"><div className="rounded-full overflow-hidden flex items-center justify-center shrink-0" style={{ width: 76, height: 76, background: "color-mix(in srgb, var(--accent) 14%, white)" }}>{photo ? <img src={photo.dataUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <UserCircle size={34} color="var(--accent)" />}</div><label className="btn-soft rounded-full px-4 py-2 text-[13px] cursor-pointer" style={{ fontWeight: 600 }}>Change photo<input type="file" accept="image/*" onChange={onPhotoPick} style={{ display: "none" }} /></label></div>
+        {/* A grid item's default min-width is "auto", so a long, spaceless
+            string like an email address doesn't wrap at the column edge --
+            it just keeps going and visually spills into the next column
+            instead. min-w-0 lets the column actually constrain it, and
+            break-all gives the email somewhere to break since it has no
+            spaces to wrap on at all. */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5 mb-6">
-          <div><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>NAME</div><div className="text-[14px]" style={{ fontWeight: 600 }}>{student.name}</div></div>
-          <div><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>STUDENT ID</div><div className="text-[14px] f-code">{student.studentId}</div></div>
-          <div><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>EMAIL</div><div className="text-[14px]" style={{ fontWeight: 600 }}>{student.email}</div></div>
-          <div><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>COHORT</div><div className="text-[14px]" style={{ fontWeight: 600 }}>{cohort?.name || "—"}</div></div>
+          <div className="min-w-0"><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>NAME</div><div className="text-[14px]" style={{ fontWeight: 600 }}>{student.name}</div></div>
+          <div className="min-w-0"><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>STUDENT ID</div><div className="text-[14px] f-code">{student.studentId}</div></div>
+          <div className="min-w-0"><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>EMAIL</div><div className="text-[14px] break-all" style={{ fontWeight: 600 }}>{student.email}</div></div>
+          <div className="min-w-0"><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>COHORT</div><div className="text-[14px]" style={{ fontWeight: 600 }}>{cohort?.name || "—"}</div></div>
         </div>
         <TextArea label="Bio" value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Tell the Room a bit about yourself…" />
         <div className="mt-5 pt-5" style={{ borderTop: "1px solid #F0E7D6" }}>
