@@ -1020,9 +1020,14 @@ export function MyCourses({ student, setStudents, courses, cohorts, applicants, 
   );
 }
 
+export const SOCIAL_PLATFORMS = [
+  { value: "instagram", label: "Instagram" }, { value: "twitter", label: "Twitter / X" }, { value: "linkedin", label: "LinkedIn" },
+  { value: "tiktok", label: "TikTok" }, { value: "facebook", label: "Facebook" }, { value: "website", label: "Website" }, { value: "other", label: "Other" },
+];
 export function ProfilePage({ student, setStudents, cohort }) {
   const [photo, setPhoto] = useState(student.photo);
   const [bio, setBio] = useState(student.bio || "");
+  const [socialLinks, setSocialLinks] = useState(student.socialLinks || []);
   const [saved, setSaved] = useState(false);
   // A blob: URL only ever existed for this tab's own lifetime -- saving it
   // wrote nothing a page reload (or the DB) could keep, since it doesn't
@@ -1030,20 +1035,36 @@ export function ProfilePage({ student, setStudents, cohort }) {
   // rest of the app (and the ID card) knows how to read. FileReader gives
   // back a real, storable dataUrl, same as every other photo upload here.
   function onPhotoPick(e) { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = () => setPhoto({ name: f.name, dataUrl: r.result }); r.readAsDataURL(f); }
-  function save() { setStudents((prev) => prev.map((s) => s.id === student.id ? { ...s, photo, bio } : s)); setSaved(true); setTimeout(() => setSaved(false), 2000); }
+  function addLink() { setSocialLinks((prev) => [...prev, { id: "sl" + Date.now(), platform: "instagram", url: "" }]); }
+  function updateLink(i, patch) { setSocialLinks((prev) => prev.map((l, idx) => idx === i ? { ...l, ...patch } : l)); }
+  function removeLink(i) { setSocialLinks((prev) => prev.filter((_, idx) => idx !== i)); }
+  function save() { setStudents((prev) => prev.map((s) => s.id === student.id ? { ...s, photo, bio, socialLinks } : s)); setSaved(true); setTimeout(() => setSaved(false), 2000); }
   return (
     <div className="max-w-[520px]">
       <div className="mb-8"><div className="f-label text-[12px] mb-2 accent-text">YOUR PROFILE</div><h1 className="f-display text-[30px]" style={{ fontWeight: 800 }}>Profile details.</h1></div>
       <div className="card rounded-2xl p-8">
         <div className="flex items-center gap-5 mb-6"><div className="rounded-full overflow-hidden flex items-center justify-center shrink-0" style={{ width: 76, height: 76, background: "color-mix(in srgb, var(--accent) 14%, white)" }}>{photo ? <img src={photo.dataUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <UserCircle size={34} color="var(--accent)" />}</div><label className="btn-soft rounded-full px-4 py-2 text-[13px] cursor-pointer" style={{ fontWeight: 600 }}>Change photo<input type="file" accept="image/*" onChange={onPhotoPick} style={{ display: "none" }} /></label></div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5 mb-6">
           <div><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>NAME</div><div className="text-[14px]" style={{ fontWeight: 600 }}>{student.name}</div></div>
           <div><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>STUDENT ID</div><div className="text-[14px] f-code">{student.studentId}</div></div>
           <div><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>EMAIL</div><div className="text-[14px]" style={{ fontWeight: 600 }}>{student.email}</div></div>
           <div><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>COHORT</div><div className="text-[14px]" style={{ fontWeight: 600 }}>{cohort?.name || "—"}</div></div>
         </div>
         <TextArea label="Bio" value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Tell the Room a bit about yourself…" />
-        <div className="flex items-center gap-3 mt-4"><button onClick={save} className="btn-primary rounded-lg px-6 py-2.5 text-[14px]">Save profile</button>{saved && <span className="text-[13px] accent-text" style={{ fontWeight: 700 }}>Saved.</span>}</div>
+        <div className="mt-5 pt-5" style={{ borderTop: "1px solid #F0E7D6" }}>
+          <div className="f-label text-[11px] mb-3" style={{ color: "#71675A" }}>SOCIAL MEDIA (OPTIONAL)</div>
+          <div className="flex flex-col gap-2 mb-2">
+            {socialLinks.map((l, i) => (
+              <div key={l.id} className="flex items-center gap-2">
+                <select className="input-field rounded-lg px-3 py-2.5 text-[13px]" value={l.platform} onChange={(e) => updateLink(i, { platform: e.target.value })}>{SOCIAL_PLATFORMS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}</select>
+                <input className="input-field rounded-lg px-3.5 py-2.5 text-[13px] flex-1 min-w-0" placeholder="https://…" value={l.url} onChange={(e) => updateLink(i, { url: e.target.value })} />
+                <button onClick={() => removeLink(i)} className="shrink-0"><X size={16} color="#A79B84" /></button>
+              </div>
+            ))}
+          </div>
+          <button onClick={addLink} className="text-[13px] accent-text flex items-center gap-1.5" style={{ fontWeight: 700 }}><Plus size={14} /> Add a link</button>
+        </div>
+        <div className="flex items-center gap-3 mt-5"><button onClick={save} className="btn-primary rounded-lg px-6 py-2.5 text-[14px]">Save profile</button>{saved && <span className="text-[13px] accent-text" style={{ fontWeight: 700 }}>Saved.</span>}</div>
       </div>
       <ChangePasswordCard email={student.email} />
     </div>

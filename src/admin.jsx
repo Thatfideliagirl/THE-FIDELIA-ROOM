@@ -11,7 +11,7 @@ import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from 
 import { genCode, pairKey, ADMIN_EMAIL, TEAM_PERMISSION_TABS, LINK_TYPES, STUDENT_ACCESS_TABS, linkShare, deriveSubmissionStatus, sumLinkScores, capstoneStatus, courseEligibility, formatDateTime, formatRelativeTime, AUTO_APPROVE_THRESHOLD } from "./lib/data.js";
 import { renderCertificate, formatIssueDate } from "./lib/certificate.js";
 import { Field, SectionHeader, NotifBell, SidebarLink, LogoMark, TextArea, SelectF, ImgField, FileField, TaskFileList, ChangePasswordCard, RichTextEditor, RichText, DashboardShell, WelcomeTour, TEAM_TOUR_STEPS } from "./components.jsx";
-import { CommunityPanel } from "./student.jsx";
+import { CommunityPanel, SOCIAL_PLATFORMS } from "./student.jsx";
 import { fetchTeamMembers, addTeamMember, updateTeamMember, removeTeamMember, fetchTeamActivity, updateMyTeamProfile, markTourSeen } from "./lib/team.js";
 
 export function ApplicantsTab({ applicants, setApplicants, onRemove, students, setStudents, courses, cohorts, onAccept }) {
@@ -722,8 +722,11 @@ export function StudentDetail({ student, applicant, setStudents, courses, cohort
     <div>
       <button onClick={onClose} className="flex items-center gap-1.5 text-[13px] mb-6" style={{ color: "#71675A" }}><ArrowLeft size={14} /> Back to roster</button>
       <div className="card rounded-2xl p-7 mb-6">
-      <div className="flex items-center justify-between mb-5">
-        <div><div className="f-display text-[21px]" style={{ fontWeight: 800 }}>{student.name}</div><div className="text-[14px]" style={{ color: "#71675A" }}>{student.email}</div></div>
+      <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+        <div className="flex items-center gap-4">
+          <div className="rounded-full overflow-hidden flex items-center justify-center shrink-0" style={{ width: 52, height: 52, background: "color-mix(in srgb, var(--accent) 14%, white)" }}>{student.photo ? <img src={student.photo.dataUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <UserCircle size={24} color="var(--accent)" />}</div>
+          <div><div className="f-display text-[21px]" style={{ fontWeight: 800 }}>{student.name}</div><div className="text-[14px]" style={{ color: "#71675A" }}>{student.email}</div></div>
+        </div>
         <div className="flex items-center gap-4">
           {confirmingDelete ? (
             <div className="flex items-center gap-2 text-[12px]"><span style={{ color: "#B04A3A" }}>Delete this student?</span><button onClick={onDelete} className="f-label" style={{ color: "#B04A3A", fontWeight: 700 }}>YES, DELETE</button><button onClick={() => setConfirmingDelete(false)} style={{ color: "#A79B84" }}>Cancel</button></div>
@@ -732,6 +735,12 @@ export function StudentDetail({ student, applicant, setStudents, courses, cohort
           )}
         </div>
       </div>
+      {(student.bio || student.socialLinks?.length > 0) && (
+        <div className="rounded-lg px-4 py-3 mb-5" style={{ background: "#FAF6EC" }}>
+          {student.bio && <div className="text-[13.5px] mb-2" style={{ color: "#4A4237" }}>{student.bio}</div>}
+          {student.socialLinks?.length > 0 && <div className="flex flex-wrap gap-2">{student.socialLinks.filter((l) => l.url).map((l) => <a key={l.id} href={l.url} target="_blank" rel="noreferrer" className="f-code text-[11px] px-2.5 py-1 rounded-full tint-badge">{SOCIAL_PLATFORMS.find((p) => p.value === l.platform)?.label || l.platform}</a>)}</div>}
+        </div>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
         <div><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>STUDENT ID</div><div className="text-[14px] f-code">{student.studentId}</div></div>
         <div className="flex-1"><SelectF label="Cohort" value={cohortId} onChange={(e) => saveCohort(e.target.value)} options={cohorts.map((c) => ({ value: c.id, label: c.name }))} /></div>
