@@ -46,7 +46,7 @@ function fitQuote(ctx, text, maxWidth, maxHeight, baseSize, minSize, fontSpec) {
   return { size, lineHeight, lines };
 }
 
-export async function renderTestimonialCard(templateDataUrl, photoDataUrl, { name, studentId, cohort, quote, photoBox, namePos, idPos, quoteBox, fontSizePct, quoteFontSizePct, photoZoom }, color = "#1B2A4A") {
+export async function renderTestimonialCard(templateDataUrl, photoDataUrl, { name, studentId, cohort, quote, photoBox, namePos, idPos, quoteBox, fontSizePct, quoteFontSizePct, photoZoom, photoPanXPct, photoPanYPct }, color = "#1B2A4A") {
   const template = await loadImage(templateDataUrl);
   const canvas = document.createElement("canvas");
   canvas.width = template.naturalWidth;
@@ -56,7 +56,7 @@ export async function renderTestimonialCard(templateDataUrl, photoDataUrl, { nam
 
   if (photoDataUrl && photoBox) {
     const photo = await loadImage(photoDataUrl);
-    drawPhotoIntoBox(ctx, photo, canvas, photoBox, photoZoom);
+    drawPhotoIntoBox(ctx, photo, canvas, photoBox, photoZoom, photoPanXPct, photoPanYPct);
   }
 
   const fontFamily = "Georgia, 'Times New Roman', serif";
@@ -92,7 +92,11 @@ export async function renderTestimonialCard(templateDataUrl, photoDataUrl, { nam
     const bx = canvas.width * (quoteBox.xPct / 100) - bw / 2;
     const by = canvas.height * (quoteBox.yPct / 100) - bh / 2;
     const baseSize = Math.max(6, Math.round(canvas.width * ((quoteFontSizePct ?? 2.2) / 100)));
-    const minSize = Math.max(5, Math.round(baseSize * 0.6));
+    // Letting this shrink too far in the name of fitting every word was
+    // exactly what made a long quote unreadable -- better to keep it
+    // closer to the size actually asked for and truncate the rest with
+    // an ellipsis than to shrink it down to illegible.
+    const minSize = Math.max(8, Math.round(baseSize * 0.8));
     const { size, lineHeight, lines } = fitQuote(ctx, quote, bw, bh, baseSize, minSize, (s) => `italic 400 ${s}px ${fontFamily}`);
     ctx.font = `italic 400 ${size}px ${fontFamily}`;
     lines.forEach((line, i) => ctx.fillText(line, bx, by + lineHeight * (i + 0.85)));

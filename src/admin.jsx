@@ -1357,7 +1357,7 @@ function TestimonialTemplateEditor({ template, onSave, onClose }) {
             ))}
           </div>
           <label className="block mb-4"><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Name / ID text size</div><input type="range" min={1.5} max={6} step={0.25} value={fontSizePct} onChange={(e) => setFontSizePct(Number(e.target.value))} style={{ width: "100%" }} /></label>
-          <label className="block mb-4"><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Quote text size</div><input type="range" min={1} max={7} step={0.1} value={quoteFontSizePct} onChange={(e) => setQuoteFontSizePct(Number(e.target.value))} style={{ width: "100%" }} /><div className="text-[11px] mt-1" style={{ color: "#A79B84" }}>If a quote is long, it still shrinks to fit the quote box above -- so widening or heightening that box also helps the text sit larger.</div></label>
+          <label className="block mb-4"><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Quote text size</div><input type="range" min={1} max={10} step={0.1} value={quoteFontSizePct} onChange={(e) => setQuoteFontSizePct(Number(e.target.value))} style={{ width: "100%" }} /><div className="text-[11px] mt-1" style={{ color: "#A79B84" }}>If a quote is long, it still shrinks to fit the quote box above -- so widening or heightening that box also helps the text sit larger.</div></label>
           <label className="block mb-4"><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Photo frame width</div><input type="range" min={10} max={70} step={1} value={photoBox.widthPct} onChange={(e) => setPhotoBox((b) => ({ ...b, widthPct: Number(e.target.value) }))} style={{ width: "100%" }} /></label>
           <label className="block mb-4"><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Photo frame height</div><input type="range" min={10} max={90} step={1} value={photoBox.heightPct} onChange={(e) => setPhotoBox((b) => ({ ...b, heightPct: Number(e.target.value) }))} style={{ width: "100%" }} /></label>
           <label className="block mb-4"><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Quote box width</div><input type="range" min={20} max={95} step={1} value={quoteBox.widthPct} onChange={(e) => setQuoteBox((b) => ({ ...b, widthPct: Number(e.target.value) }))} style={{ width: "100%" }} /></label>
@@ -1382,10 +1382,10 @@ function TestimonialThumb({ template, testimonial }) {
     renderTestimonialCard(template.file.dataUrl, testimonial.photo?.dataUrl || null, {
       name: testimonial.name, studentId: testimonial.studentId, quote: testimonial.quote,
       photoBox: template.photoBox, namePos: template.namePos, idPos: template.idPos, quoteBox: template.quoteBox,
-      fontSizePct: template.fontSizePct, quoteFontSizePct: template.quoteFontSizePct, photoZoom: testimonial.photoZoom,
+      fontSizePct: template.fontSizePct, quoteFontSizePct: template.quoteFontSizePct, photoZoom: testimonial.photoZoom, photoPanXPct: testimonial.photoPanXPct, photoPanYPct: testimonial.photoPanYPct,
     }).then((u) => { if (cancelled) { URL.revokeObjectURL(u); return; } objectUrl = u; setUrl(u); }).catch((e) => console.error("renderTestimonialCard failed", e));
     return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [template, testimonial.photo?.dataUrl, testimonial.name, testimonial.studentId, testimonial.quote, testimonial.photoZoom]);
+  }, [template, testimonial.photo?.dataUrl, testimonial.name, testimonial.studentId, testimonial.quote, testimonial.photoZoom, testimonial.photoPanXPct, testimonial.photoPanYPct]);
   if (!template) return null;
   return url ? <img src={url} alt="" style={{ width: 90, borderRadius: 8, border: "1px solid #E7DEC9" }} /> : <div className="rounded-lg" style={{ width: 90, height: 60, background: "#F0E7D6" }} />;
 }
@@ -1398,13 +1398,15 @@ function TestimonialForm({ students, cohorts, courses, template, initial, onSave
   const [quote, setQuote] = useState(initial?.quote || "");
   const [photo, setPhoto] = useState(initial?.photo || null);
   const [photoZoom, setPhotoZoom] = useState(initial?.photoZoom || 1);
+  const [photoPanXPct, setPhotoPanXPct] = useState(initial?.photoPanXPct ?? 50);
+  const [photoPanYPct, setPhotoPanYPct] = useState(initial?.photoPanYPct ?? 50);
   const [previewUrl, setPreviewUrl] = useState(null);
   function pickStudent(id) {
     setLinkedStudentId(id);
     if (!id) return;
     const s = students.find((x) => x.id === id);
     if (!s) return;
-    setName(s.name); setStudentId(s.studentId); setPhoto(s.photo || null); setPhotoZoom(1);
+    setName(s.name); setStudentId(s.studentId); setPhoto(s.photo || null); setPhotoZoom(1); setPhotoPanXPct(50); setPhotoPanYPct(50);
     setCohort(cohorts.find((c) => c.id === s.cohortId)?.name || "");
     const course = courses.find((c) => s.enrollments.some((e) => e.courseId === c.id));
     setProgramme(course?.title || "");
@@ -1418,10 +1420,10 @@ function TestimonialForm({ students, cohorts, courses, template, initial, onSave
     let cancelled = false; let objectUrl = null;
     renderTestimonialCard(template.file.dataUrl, photo?.dataUrl || null, {
       name, studentId, quote, photoBox: template.photoBox, namePos: template.namePos, idPos: template.idPos, quoteBox: template.quoteBox,
-      fontSizePct: template.fontSizePct, quoteFontSizePct: template.quoteFontSizePct, photoZoom,
+      fontSizePct: template.fontSizePct, quoteFontSizePct: template.quoteFontSizePct, photoZoom, photoPanXPct, photoPanYPct,
     }).then((u) => { if (cancelled) { URL.revokeObjectURL(u); return; } objectUrl = u; setPreviewUrl(u); }).catch((e) => console.error("renderTestimonialCard failed", e));
     return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [template, photo?.dataUrl, name, studentId, quote, photoZoom]);
+  }, [template, photo?.dataUrl, name, studentId, quote, photoZoom, photoPanXPct, photoPanYPct]);
   const canSave = name.trim() && quote.trim();
   return (
     <div className="card rounded-xl p-6 mb-6 flex flex-col gap-3">
@@ -1430,7 +1432,17 @@ function TestimonialForm({ students, cohorts, courses, template, initial, onSave
         <div className="rounded-full overflow-hidden flex items-center justify-center shrink-0" style={{ width: 56, height: 56, background: "color-mix(in srgb, var(--accent) 14%, white)" }}>{photo ? <img src={photo.dataUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <UserCircle size={26} color="var(--accent)" />}</div>
         <label className="btn-soft rounded-full px-4 py-2 text-[13px] cursor-pointer" style={{ fontWeight: 600 }}>{photo ? "Replace photo" : "Upload photo"}<input type="file" accept="image/*" onChange={onPhotoPick} style={{ display: "none" }} /></label>
       </div>
-      {photo && <label className="block"><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Photo zoom — leave as is, or zoom in a little</div><input type="range" min={1} max={2.5} step={0.05} value={photoZoom} onChange={(e) => setPhotoZoom(Number(e.target.value))} style={{ width: "100%" }} /></label>}
+      {photo && (
+        <>
+          <label className="block"><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Photo zoom — leave as is, or zoom in</div><input type="range" min={1} max={2.5} step={0.05} value={photoZoom} onChange={(e) => setPhotoZoom(Number(e.target.value))} style={{ width: "100%" }} /></label>
+          {photoZoom > 1 && (
+            <>
+              <label className="block"><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Shift photo left / right — center it on the face</div><input type="range" min={0} max={100} step={1} value={photoPanXPct} onChange={(e) => setPhotoPanXPct(Number(e.target.value))} style={{ width: "100%" }} /></label>
+              <label className="block"><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Shift photo up / down</div><input type="range" min={0} max={100} step={1} value={photoPanYPct} onChange={(e) => setPhotoPanYPct(Number(e.target.value))} style={{ width: "100%" }} /></label>
+            </>
+          )}
+        </>
+      )}
       {template && (
         <div className="self-start">
           <div className="f-label text-[10px] mb-1.5" style={{ color: "#A79B84" }}>LIVE PREVIEW</div>
@@ -1445,7 +1457,7 @@ function TestimonialForm({ students, cohorts, courses, template, initial, onSave
       </div>
       <TextArea label="Quote" value={quote} onChange={(e) => setQuote(e.target.value)} rows={5} />
       <div className="flex gap-3 mt-1">
-        <button disabled={!canSave} onClick={() => onSave({ linkedStudentId: linkedStudentId || null, name, studentId, cohort, programme, quote, photo, photoZoom })} className="btn-primary rounded-lg px-5 py-2.5 text-[14px] disabled:opacity-40">Save testimonial</button>
+        <button disabled={!canSave} onClick={() => onSave({ linkedStudentId: linkedStudentId || null, name, studentId, cohort, programme, quote, photo, photoZoom, photoPanXPct, photoPanYPct })} className="btn-primary rounded-lg px-5 py-2.5 text-[14px] disabled:opacity-40">Save testimonial</button>
         <button onClick={onClose} className="text-[14px]" style={{ color: "#A79B84" }}>Cancel</button>
       </div>
     </div>

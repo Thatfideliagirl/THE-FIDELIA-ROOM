@@ -20,9 +20,14 @@ export function loadImage(src) {
 // student's photo into a center-anchored {xPct,yPct,widthPct,heightPct}
 // box with a cover-fit crop (scale to fill, centered, clipped to the
 // box), the same way object-fit: cover would in CSS. zoom (default 1)
-// scales the crop in further around that same center point, for photos
-// that need a closer crop than a plain cover-fit gives on their own.
-export function drawPhotoIntoBox(ctx, photo, canvas, box, zoom = 1) {
+// scales the crop in further around that same center point. On its own
+// that's not enough for a photo whose subject isn't centered (a full-
+// body shot, say) -- zooming in just crops in on the photo's own middle,
+// which for that kind of photo lands on the torso, not the face. panXPct
+// and panYPct (0-100, 50 = centered, matching the old behavior exactly)
+// shift which part of the zoomed-in photo sits in the box: 0 shows the
+// photo's own left/top edge, 100 shows its right/bottom edge.
+export function drawPhotoIntoBox(ctx, photo, canvas, box, zoom = 1, panXPct = 50, panYPct = 50) {
   const bw = canvas.width * (box.widthPct / 100);
   const bh = canvas.height * (box.heightPct / 100);
   const bx = canvas.width * (box.xPct / 100) - bw / 2;
@@ -30,8 +35,12 @@ export function drawPhotoIntoBox(ctx, photo, canvas, box, zoom = 1) {
   const scale = Math.max(bw / photo.naturalWidth, bh / photo.naturalHeight) * (zoom || 1);
   const dw = photo.naturalWidth * scale;
   const dh = photo.naturalHeight * scale;
-  const dx = bx + (bw - dw) / 2;
-  const dy = by + (bh - dh) / 2;
+  // slack is how much bigger the drawn photo is than its box -- the only
+  // room there is to pan it around without opening a gap at an edge.
+  const slackX = Math.max(0, dw - bw);
+  const slackY = Math.max(0, dh - bh);
+  const dx = bx - slackX * (((panXPct ?? 50) / 100));
+  const dy = by - slackY * (((panYPct ?? 50) / 100));
   ctx.save();
   ctx.beginPath();
   ctx.rect(bx, by, bw, bh);

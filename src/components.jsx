@@ -682,10 +682,10 @@ function TestimonialCard({ t, template, expanded, onToggle, theme = "dark", maxW
     renderTestimonialCard(template.file.dataUrl, t.photo?.dataUrl || null, {
       name: t.name, studentId: t.studentId, quote: t.quote,
       photoBox: template.photoBox, namePos: template.namePos, idPos: template.idPos, quoteBox: template.quoteBox,
-      fontSizePct: template.fontSizePct, quoteFontSizePct: template.quoteFontSizePct, photoZoom: t.photoZoom,
+      fontSizePct: template.fontSizePct, quoteFontSizePct: template.quoteFontSizePct, photoZoom: t.photoZoom, photoPanXPct: t.photoPanXPct, photoPanYPct: t.photoPanYPct,
     }).then((u) => { if (cancelled) { URL.revokeObjectURL(u); return; } objectUrl = u; setUrl(u); }).catch((e) => console.error("renderTestimonialCard failed", e));
     return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [template, t.photo?.dataUrl, t.name, t.studentId, t.quote, t.photoZoom]);
+  }, [template, t.photo?.dataUrl, t.name, t.studentId, t.quote, t.photoZoom, t.photoPanXPct, t.photoPanYPct]);
   const details = [t.programme, t.cohort].filter(Boolean).join(" · ");
   if (template) {
     return (
