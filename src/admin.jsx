@@ -5,7 +5,7 @@ import {
   ChevronDown, Sparkles, Plus, Check, Send, X, Heart, MessageSquare,
   FileText, Download, GraduationCap, Mail, Phone, Award,
   UserCircle, FolderPlus, Folder, UploadCloud, ClipboardCheck, HelpCircle as HelpIcon,
-  Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Home, UserCog, Repeat, RotateCcw
+  Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Home, UserCog, Repeat, RotateCcw, IdCard
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from "recharts";
 import { genCode, pairKey, ADMIN_EMAIL, TEAM_PERMISSION_TABS, LINK_TYPES, STUDENT_ACCESS_TABS, linkShare, deriveSubmissionStatus, sumLinkScores, capstoneStatus, courseEligibility, formatDateTime, formatRelativeTime, AUTO_APPROVE_THRESHOLD } from "./lib/data.js";
@@ -591,6 +591,84 @@ export function AdminMeetingsTab({ courses, setCourses, cohorts, students }) {
         })}
       </div>
     </>
+  );
+}
+// Same drag-to-place idea as CertificateTemplateEditor, extended with a
+// fifth draggable element -- the photo frame -- which needs a size as well
+// as a position, so it gets two range sliders (width/height) alongside the
+// drag. One shared template for the whole Room, not one per course: Name,
+// Student ID and Cohort belong to the student either way, and Programme is
+// supplied by whichever course's own tab the student opens this from.
+function IdCardTemplateEditor({ template, onSave, onClose }) {
+  const [file, setFile] = useState(template?.file || null);
+  const [photoBox, setPhotoBox] = useState(template?.photoBox || { xPct: 27, yPct: 48, widthPct: 32, heightPct: 55 });
+  const [namePos, setNamePos] = useState(template?.namePos || { xPct: 62, yPct: 42 });
+  const [idPos, setIdPos] = useState(template?.idPos || { xPct: 62, yPct: 50 });
+  const [programmePos, setProgrammePos] = useState(template?.programmePos || { xPct: 62, yPct: 58 });
+  const [cohortPos, setCohortPos] = useState(template?.cohortPos || { xPct: 62, yPct: 66 });
+  const [fontSizePct, setFontSizePct] = useState(template?.fontSizePct || 3);
+  const boxRef = useRef(null);
+  const draggingRef = useRef(null);
+  const setters = { photo: setPhotoBox, name: setNamePos, id: setIdPos, programme: setProgrammePos, cohort: setCohortPos };
+  function onFilePick(e) { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = () => setFile({ name: f.name, dataUrl: r.result }); r.readAsDataURL(f); }
+  function posFromEvent(e) {
+    const rect = boxRef.current.getBoundingClientRect();
+    return { xPct: Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100)), yPct: Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100)) };
+  }
+  function onDrag(e) {
+    const key = draggingRef.current;
+    if (!key) return;
+    const p = posFromEvent(e);
+    if (key === "photo") setPhotoBox((b) => ({ ...b, ...p }));
+    else setters[key]((prev) => ({ ...prev, ...p }));
+  }
+  const markers = [
+    { key: "name", label: "Name", pos: namePos, sample: "Jane Doe" },
+    { key: "id", label: "Student ID", pos: idPos, sample: "FJ/2026/001" },
+    { key: "programme", label: "Programme", pos: programmePos, sample: "Virtual Assistant Mastery" },
+    { key: "cohort", label: "Cohort", pos: cohortPos, sample: "Blueprint Cohort" },
+  ];
+  return (
+    <div className="card rounded-2xl p-6 mb-4">
+      <div className="flex items-center justify-between mb-4"><div className="text-[15px]" style={{ fontWeight: 700 }}>Student ID card template</div><button onClick={onClose}><X size={16} color="#A79B84" /></button></div>
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <label className="btn-soft rounded-full px-4 py-2 text-[13px] cursor-pointer inline-flex items-center gap-1.5" style={{ fontWeight: 600 }}><UploadCloud size={14} /> {file ? "Replace template image" : "Upload template image"}<input type="file" accept="image/*" onChange={onFilePick} style={{ display: "none" }} /></label>
+        {file && <button onClick={() => setFile(null)} className="rounded-full px-4 py-2 text-[13px] flex items-center gap-1.5" style={{ fontWeight: 600, color: "#B04A3A", border: "1px solid #E7DEC9" }}><Trash2 size={14} /> Delete image</button>}
+      </div>
+      {file && (
+        <>
+          <div className="text-[12px] mb-2" style={{ color: "#71675A" }}>Drag the photo frame and each field to where it should sit. The dashed box is the photo frame — a student's photo gets cropped to fill it.</div>
+          <div
+            ref={boxRef}
+            onPointerMove={onDrag}
+            onPointerUp={() => { draggingRef.current = null; }}
+            onPointerLeave={() => { draggingRef.current = null; }}
+            className="relative rounded-xl overflow-hidden mb-4"
+            style={{ border: "1px solid #E7DEC9", touchAction: "none", containerType: "inline-size" }}
+          >
+            <img src={file.dataUrl} alt="" style={{ display: "block", width: "100%" }} draggable={false} />
+            <div
+              onPointerDown={(e) => { e.preventDefault(); draggingRef.current = "photo"; setPhotoBox((b) => ({ ...b, ...posFromEvent(e) })); }}
+              style={{ position: "absolute", left: `${photoBox.xPct}%`, top: `${photoBox.yPct}%`, width: `${photoBox.widthPct}%`, height: `${photoBox.heightPct}%`, transform: "translate(-50%,-50%)", border: "2px dashed var(--accent)", background: "color-mix(in srgb, var(--accent) 12%, transparent)", cursor: "grab", display: "flex", alignItems: "center", justifyContent: "center" }}
+            ><span className="f-code text-[10px]" style={{ color: "var(--accent)", fontWeight: 700 }}>PHOTO</span></div>
+            {markers.map((m) => (
+              <div
+                key={m.key}
+                onPointerDown={(e) => { e.preventDefault(); draggingRef.current = m.key; setters[m.key]((prev) => ({ ...prev, ...posFromEvent(e) })); }}
+                style={{ position: "absolute", left: `${m.pos.xPct}%`, top: `${m.pos.yPct}%`, transform: "translate(0,-50%)", fontFamily: "Georgia, serif", fontWeight: 600, fontSize: `${fontSizePct}cqw`, color: "#1B2A4A", cursor: "grab", whiteSpace: "nowrap", padding: "2px 6px" }}
+              >{m.sample}</div>
+            ))}
+          </div>
+          <label className="block mb-4"><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Text size</div><input type="range" min={1.5} max={6} step={0.25} value={fontSizePct} onChange={(e) => setFontSizePct(Number(e.target.value))} style={{ width: "100%" }} /></label>
+          <label className="block mb-4"><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Photo frame width</div><input type="range" min={10} max={70} step={1} value={photoBox.widthPct} onChange={(e) => setPhotoBox((b) => ({ ...b, widthPct: Number(e.target.value) }))} style={{ width: "100%" }} /></label>
+          <label className="block mb-4"><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Photo frame height</div><input type="range" min={10} max={90} step={1} value={photoBox.heightPct} onChange={(e) => setPhotoBox((b) => ({ ...b, heightPct: Number(e.target.value) }))} style={{ width: "100%" }} /></label>
+        </>
+      )}
+      <div className="flex items-center gap-4">
+        <button disabled={!file} onClick={() => onSave({ file, photoBox, namePos, idPos, programmePos, cohortPos, fontSizePct })} className="btn-primary rounded-lg px-5 py-2.5 text-[13px] disabled:opacity-40">Save template</button>
+        {template && <button onClick={() => onSave(null)} className="text-[13px]" style={{ color: "#B04A3A" }}>Remove template</button>}
+      </div>
+    </div>
   );
 }
 export function CoursesTab({ courses, setCourses, testimonials }) {
@@ -1293,7 +1371,9 @@ export function AdminNoticeTab({ notices, setNotices, cohorts, students }) {
   );
 }
 export function BrandingTab({ brand, setBrand }) {
+  const [editingIdCard, setEditingIdCard] = useState(false);
   const swatches = [{ n: "Deep sky", v: "#1C6FA0" }, { n: "Slate teal", v: "#2E7D6B" }, { n: "Plum", v: "#6E4C6B" }, { n: "Burgundy", v: "#7A2E3B" }, { n: "Forest", v: "#2F5233" }, { n: "Amber", v: "#B8752E" }, { n: "Charcoal blue", v: "#2C3E50" }, { n: "Rose", v: "#A65065" }, { n: "Ink violet", v: "#4B3F72" }, { n: "Clay", v: "#9C5A3C" }];
+  function saveIdCardTemplate(t) { setBrand((b) => ({ ...b, idCardTemplate: t })); setEditingIdCard(false); }
   return (
     <>
       <SectionHeader eyebrow="WHITE-LABEL" title="Branding" />
@@ -1306,6 +1386,13 @@ export function BrandingTab({ brand, setBrand }) {
           <Field label="Instagram handle (no @)" value={brand.instagram} onChange={(e) => setBrand((b) => ({ ...b, instagram: e.target.value.replace(/^@/, "") }))} placeholder="yourhandle" />
           <Field label="Twitter / X handle (no @)" value={brand.twitter} onChange={(e) => setBrand((b) => ({ ...b, twitter: e.target.value.replace(/^@/, "") }))} placeholder="yourhandle" />
         </div>
+      </div>
+      <div className="card rounded-2xl p-8 max-w-[560px] mt-6">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div><div className="f-label text-[12px] mb-1" style={{ color: "#71675A" }}>STUDENT ID CARD</div><div className="text-[13px]" style={{ color: "#71675A" }}>{brand.idCardTemplate ? "Template set — students generate their own card from inside each course." : "No template yet — upload one so students can generate their ID card."}</div></div>
+          <button onClick={() => setEditingIdCard((s) => !s)} className="btn-soft rounded-full px-4 py-2 text-[13px]" style={{ fontWeight: 600 }}>{brand.idCardTemplate ? "Edit template" : "Set up template"}</button>
+        </div>
+        {editingIdCard && <div className="mt-5"><IdCardTemplateEditor template={brand.idCardTemplate} onSave={saveIdCardTemplate} onClose={() => setEditingIdCard(false)} /></div>}
       </div>
     </>
   );

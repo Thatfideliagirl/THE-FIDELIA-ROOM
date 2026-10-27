@@ -72,6 +72,7 @@ export const STUDENT_ACCESS_TABS = [
   { group: "Community & support", items: [
     { id: "library", label: "Resource Library", sub: "Downloadable slide decks & files" },
     { id: "certificate", label: "Certificate" },
+    { id: "studentId", label: "Student ID" },
     { id: "chat", label: "Chat" },
     { id: "community", label: "Community" },
     { id: "notice", label: "Notice Board" },

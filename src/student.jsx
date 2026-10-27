@@ -5,10 +5,11 @@ import {
   ChevronDown, Sparkles, Plus, Check, Send, X, Heart, MessageSquare,
   FileText, Download, GraduationCap, Mail, Phone, Award,
   UserCircle, FolderPlus, Folder, UploadCloud, ClipboardCheck, HelpCircle as HelpIcon,
-  Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Compass, Home, Repeat, Pause
+  Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Compass, Home, Repeat, Pause, IdCard as IdCardIcon
 } from "lucide-react";
 import { pairKey, moduleStatus, scoreSubmission, AUTO_APPROVE_THRESHOLD, LINK_TYPES, deriveSubmissionStatus, courseEligibility, formatDateTime } from "./lib/data.js";
 import { renderCertificate, formatIssueDate } from "./lib/certificate.js";
+import { renderIdCard } from "./lib/idcard.js";
 import { SectionHeader, NotifBell, WelcomeTour, SidebarLink, LogoMark, Spine, TextArea, ProgressBar, ResourceDetail, Field, ChangePasswordCard, RichText, RichTextEditor, DashboardShell, TaskFileList } from "./components.jsx";
 
 // List markers (•, ‣, etc.) are sometimes present as literal characters
@@ -434,8 +435,8 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
 // =========================================================
 // STUDENT: My Courses + per-enrollment dashboard
 // =========================================================
-const ENROLLMENT_TAB_ORDER = ["path", "meetings", "library", "tasks", "certificate", "chat", "community", "notice"];
-export function EnrollmentDashboard({ student, setStudents, course, enrollment, tasks, setTasks, resources, community, setCommunity, notices, setNotices, directThreads, setDirectThreads, allStudents, onBack, notifItems, notifSeen, onMarkSeen }) {
+const ENROLLMENT_TAB_ORDER = ["path", "meetings", "library", "tasks", "certificate", "studentId", "chat", "community", "notice"];
+export function EnrollmentDashboard({ student, setStudents, course, enrollment, cohorts, tasks, setTasks, resources, community, setCommunity, notices, setNotices, directThreads, setDirectThreads, allStudents, brand, onBack, notifItems, notifSeen, onMarkSeen }) {
   const [tab, setTab] = useState("path");
   const restrictedTabs = new Set(enrollment.restrictedTabs || []);
   const allowedTabs = ENROLLMENT_TAB_ORDER.filter((id) => !restrictedTabs.has(id));
@@ -469,6 +470,7 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
         {!restrictedTabs.has("library") && <SidebarLink icon={Library} label="Resource library" active={tab === "library"} onClick={() => setTab("library")} />}
         {!restrictedTabs.has("tasks") && <SidebarLink icon={ListChecks} label="Tasks" active={tab === "tasks"} onClick={() => { setTab("tasks"); setOpenTaskId(null); }} />}
         {!restrictedTabs.has("certificate") && <SidebarLink icon={Award} label="Certificate" active={tab === "certificate"} onClick={() => setTab("certificate")} />}
+        {!restrictedTabs.has("studentId") && <SidebarLink icon={IdCardIcon} label="Student ID" active={tab === "studentId"} onClick={() => setTab("studentId")} />}
         {!restrictedTabs.has("chat") && <SidebarLink icon={MessageCircle} label="Chat" active={tab === "chat"} onClick={() => setTab("chat")} />}
         {!restrictedTabs.has("community") && <SidebarLink icon={Users} label="Community" active={tab === "community"} onClick={() => setTab("community")} />}
         {!restrictedTabs.has("notice") && <SidebarLink icon={Megaphone} label="Notice Board" active={tab === "notice"} onClick={() => setTab("notice")} />}
@@ -577,6 +579,8 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
 
         {tab === "certificate" && <><SectionHeader eyebrow="YOUR ACHIEVEMENT" title="Certificate" /><CertificateTab course={course} enrollment={enrollment} student={student} tasks={tasks} setStudents={setStudents} /></>}
 
+        {tab === "studentId" && <><SectionHeader eyebrow="PRINT & GO" title="Student ID" /><StudentIdTab course={course} cohort={cohorts?.find((c) => c.id === student.cohortId)} student={student} setStudents={setStudents} template={brand?.idCardTemplate} /></>}
+
         {tab === "chat" && (
           <>
             <SectionHeader eyebrow="TALK TO YOUR TUTOR" title="Chat" />
@@ -683,6 +687,59 @@ export function CertificateTab({ course, enrollment, student, tasks, setStudents
       ) : (
         <div className="f-code text-[11px] text-center" style={{ color: "#A79B84" }}>Needs 100% course progress{elig.capstone.hasCapstone ? " and an 80%+ capstone score" : ""} to unlock.</div>
       )}
+    </div>
+  );
+}
+
+// One shared template for the whole Room (brand.idCardTemplate), rendered
+// per-course since Programme is the only thing that differs between a
+// student's cards -- Name, Student ID and Cohort are the student's own and
+// stay identical no matter which course tab this is opened from. The photo
+// is the student's single profile photo (same one editable on their
+// Profile page), reused across every course's card rather than uploaded
+// again per course -- there's no reason a student would want a different
+// photo per enrollment.
+function StudentIdTab({ course, cohort, student, setStudents, template }) {
+  const [finalUrl, setFinalUrl] = useState(null);
+  const [error, setError] = useState("");
+  function onPhotoPick(e) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = () => setStudents((prev) => prev.map((s) => s.id === student.id ? { ...s, photo: { name: f.name, dataUrl: r.result } } : s));
+    r.readAsDataURL(f);
+  }
+  useEffect(() => {
+    if (!template) { setFinalUrl(null); return; }
+    let cancelled = false;
+    let objectUrl = null;
+    setError("");
+    renderIdCard(template.file.dataUrl, student.photo?.dataUrl || null, {
+      name: student.name, studentId: student.studentId, programme: course.title, cohort: cohort?.name || "",
+      photoBox: template.photoBox, namePos: template.namePos, idPos: template.idPos, programmePos: template.programmePos, cohortPos: template.cohortPos, fontSizePct: template.fontSizePct,
+    }).then((url) => { if (cancelled) { URL.revokeObjectURL(url); return; } objectUrl = url; setFinalUrl(url); }).catch((e) => { console.error("renderIdCard failed", e); setError("Couldn't build your ID card preview — try a different photo."); });
+    return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [template, student.photo?.dataUrl, student.name, student.studentId, course.title, cohort?.name]);
+
+  if (!template) {
+    return (
+      <div className="card rounded-2xl p-10 text-center">
+        <IdCardIcon size={32} color="#C9BFAE" className="mx-auto mb-3" />
+        <div className="text-[15px]" style={{ color: "#A79B84" }}>Not set up yet — check back once the Room has your ID card ready.</div>
+      </div>
+    );
+  }
+  return (
+    <div className="card rounded-2xl p-6 max-w-[460px] mx-auto">
+      <div className="relative rounded-xl overflow-hidden mb-5" style={{ border: "1px solid #E7DEC9" }}>
+        <img src={finalUrl || template.file.dataUrl} alt="" style={{ display: "block", width: "100%" }} />
+      </div>
+      {!student.photo && <div className="text-[13px] mb-4 text-center" style={{ color: "#A79B84" }}>Add a photo below to finish your card.</div>}
+      {error && <div className="text-[13px] mb-4 text-center" style={{ color: "#B04A3A" }}>{error}</div>}
+      <div className="flex items-center gap-3 flex-wrap justify-center">
+        <label className="btn-soft rounded-full px-5 py-2.5 text-[14px] cursor-pointer" style={{ fontWeight: 700 }}>{student.photo ? "Change photo" : "Upload your photo"}<input type="file" accept="image/*" onChange={onPhotoPick} style={{ display: "none" }} /></label>
+        <a href={finalUrl || "#"} download={`${student.name} - FJ Room ID.png`} className="btn-primary rounded-full px-6 py-2.5 text-[14px]" style={{ opacity: finalUrl && student.photo ? 1 : 0.5, pointerEvents: finalUrl && student.photo ? "auto" : "none" }}>{finalUrl ? "Download ID card" : "Preparing…"}</a>
+      </div>
     </div>
   );
 }
@@ -859,7 +916,7 @@ export function CommunityPost({ post, onLike, onComment }) {
 }
 
 const MAX_COURSES_PER_COHORT = 2;
-export function MyCourses({ student, setStudents, courses, cohorts, applicants, tasks, setTasks, resources, community, setCommunity, notices, setNotices, directThreads, setDirectThreads, allStudents, onExit, onViewSite, onApplyMore, notifItems, notifSeen, onMarkSeen, onSwitchToTeamAdmin }) {
+export function MyCourses({ student, setStudents, courses, cohorts, applicants, tasks, setTasks, resources, community, setCommunity, notices, setNotices, directThreads, setDirectThreads, allStudents, brand, onExit, onViewSite, onApplyMore, notifItems, notifSeen, onMarkSeen, onSwitchToTeamAdmin }) {
   const [tab, setTab] = useState("courses"); // "courses" | "explore" | "profile"
   const [openEnrollmentId, setOpenEnrollmentId] = useState(null);
   const [redeemEnrollmentId, setRedeemEnrollmentId] = useState(null);
@@ -881,7 +938,7 @@ export function MyCourses({ student, setStudents, courses, cohorts, applicants, 
     setRedeemEnrollmentId(null); setRedeemCodeInput(""); setRedeemError("");
   }
 
-  if (openEnrollment && openCourse) return <EnrollmentDashboard student={student} setStudents={setStudents} course={openCourse} enrollment={openEnrollment} tasks={tasks} setTasks={setTasks} resources={resources} community={community} setCommunity={setCommunity} notices={notices} setNotices={setNotices} directThreads={directThreads} setDirectThreads={setDirectThreads} allStudents={allStudents} onBack={() => setOpenEnrollmentId(null)} notifItems={notifItems} notifSeen={notifSeen} onMarkSeen={onMarkSeen} />;
+  if (openEnrollment && openCourse) return <EnrollmentDashboard student={student} setStudents={setStudents} course={openCourse} enrollment={openEnrollment} cohorts={cohorts} tasks={tasks} setTasks={setTasks} resources={resources} community={community} setCommunity={setCommunity} notices={notices} setNotices={setNotices} directThreads={directThreads} setDirectThreads={setDirectThreads} allStudents={allStudents} brand={brand} onBack={() => setOpenEnrollmentId(null)} notifItems={notifItems} notifSeen={notifSeen} onMarkSeen={onMarkSeen} />;
   if (redeemEnrollment && redeemCourse) return (
     <div className="min-h-screen flex items-center justify-center px-6 text-center">
       <div className="reveal in max-w-[400px] w-full">
@@ -963,17 +1020,22 @@ export function MyCourses({ student, setStudents, courses, cohorts, applicants, 
   );
 }
 
-function ProfilePage({ student, setStudents, cohort }) {
+export function ProfilePage({ student, setStudents, cohort }) {
   const [photo, setPhoto] = useState(student.photo);
   const [bio, setBio] = useState(student.bio || "");
   const [saved, setSaved] = useState(false);
-  function onPhotoPick(e) { const f = e.target.files?.[0]; if (f) setPhoto(URL.createObjectURL(f)); }
+  // A blob: URL only ever existed for this tab's own lifetime -- saving it
+  // wrote nothing a page reload (or the DB) could keep, since it doesn't
+  // survive a refresh and isn't a real {name, dataUrl} photo object the
+  // rest of the app (and the ID card) knows how to read. FileReader gives
+  // back a real, storable dataUrl, same as every other photo upload here.
+  function onPhotoPick(e) { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = () => setPhoto({ name: f.name, dataUrl: r.result }); r.readAsDataURL(f); }
   function save() { setStudents((prev) => prev.map((s) => s.id === student.id ? { ...s, photo, bio } : s)); setSaved(true); setTimeout(() => setSaved(false), 2000); }
   return (
     <div className="max-w-[520px]">
       <div className="mb-8"><div className="f-label text-[12px] mb-2 accent-text">YOUR PROFILE</div><h1 className="f-display text-[30px]" style={{ fontWeight: 800 }}>Profile details.</h1></div>
       <div className="card rounded-2xl p-8">
-        <div className="flex items-center gap-5 mb-6"><div className="rounded-full overflow-hidden flex items-center justify-center shrink-0" style={{ width: 76, height: 76, background: "color-mix(in srgb, var(--accent) 14%, white)" }}>{photo ? <img src={photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <UserCircle size={34} color="var(--accent)" />}</div><label className="btn-soft rounded-full px-4 py-2 text-[13px] cursor-pointer" style={{ fontWeight: 600 }}>Change photo<input type="file" accept="image/*" onChange={onPhotoPick} style={{ display: "none" }} /></label></div>
+        <div className="flex items-center gap-5 mb-6"><div className="rounded-full overflow-hidden flex items-center justify-center shrink-0" style={{ width: 76, height: 76, background: "color-mix(in srgb, var(--accent) 14%, white)" }}>{photo ? <img src={photo.dataUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <UserCircle size={34} color="var(--accent)" />}</div><label className="btn-soft rounded-full px-4 py-2 text-[13px] cursor-pointer" style={{ fontWeight: 600 }}>Change photo<input type="file" accept="image/*" onChange={onPhotoPick} style={{ display: "none" }} /></label></div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
           <div><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>NAME</div><div className="text-[14px]" style={{ fontWeight: 600 }}>{student.name}</div></div>
           <div><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>STUDENT ID</div><div className="text-[14px] f-code">{student.studentId}</div></div>
