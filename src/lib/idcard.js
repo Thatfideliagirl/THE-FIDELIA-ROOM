@@ -7,13 +7,24 @@
 // a simple cover-fit crop (scale to fill the box, centered, clipped to
 // its bounds) so a photo of any shape or size fills the frame cleanly
 // without stretching, the same way object-fit: cover would in CSS.
+// Every testimonial/ID card on a page shares the same template image, but
+// each card decodes it independently -- with several cards on one page
+// (the testimonials page, a course page with a few related ones) that's
+// the same, often sizeable, image decoded over and over, which is exactly
+// the kind of delay that shows up as "it takes time before it displays."
+// Caching the decoded Image by its src means only the first card pays
+// that cost; every other card reuses the same already-decoded image.
+const imageCache = new Map();
 export function loadImage(src) {
-  return new Promise((resolve, reject) => {
+  if (imageCache.has(src)) return imageCache.get(src);
+  const promise = new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("Couldn't load an image."));
+    img.onerror = () => { imageCache.delete(src); reject(new Error("Couldn't load an image.")); };
     img.src = src;
   });
+  imageCache.set(src, promise);
+  return promise;
 }
 
 // A template gets uploaded at whatever resolution it happens to be --
