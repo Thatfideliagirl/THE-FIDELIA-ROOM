@@ -813,7 +813,12 @@ export function Landing({ courses, resources, testimonials, faqs, brand, onSignI
           anywhere above it. The hero's own full-bleed image/gradient
           are already contained by its own position:relative, so moving
           the clip here changes nothing about how the hero looks. */}
-      <header className="relative overflow-hidden" style={{ minHeight: "92vh" }}>
+      {/* Dark fallback background so the hero reads as "dark photo, still
+          loading" instead of a flash of plain white -- now that the hero
+          image is its own file (for speed) rather than baked into the JS
+          bundle, there's a brief real network gap before it paints, and an
+          un-backgrounded header showed through to white during that gap. */}
+      <header className="relative overflow-hidden" style={{ minHeight: "92vh", background: "#1E2A38" }}>
         <img src={HERO_SRC} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
         <div style={{ position: "absolute", inset: 0, background: "linear-gradient(100deg, rgba(30,42,56,.82) 0%, rgba(30,42,56,.58) 42%, rgba(30,42,56,.16) 70%, rgba(30,42,56,0) 100%)" }} />
         <nav className="relative flex items-center justify-between px-8 md:px-16 py-6 max-w-[1500px] mx-auto">
