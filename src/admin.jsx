@@ -1225,13 +1225,6 @@ export function LibraryTab({ resources, onAdd, onEdit, onRemove, courses }) {
   function copyLibraryLink() {
     navigator.clipboard?.writeText(`${window.location.origin}/?library=1`).then(() => { setCopiedId("library"); setTimeout(() => setCopiedId(null), 2000); });
   }
-  // Quick reassignment straight from the card, without opening the full
-  // edit form -- the data shape editResource expects is the whole resource
-  // with just the one field changed, same as a normal edit-form save.
-  function moveToFolder(r, newFolder) {
-    if (newFolder === r.folder) return;
-    onEdit(r.id, { ...r, folder: newFolder });
-  }
   // A folder is just a label on each resource, not its own row anywhere --
   // "deleting" one means removing every resource still carrying that label.
   function deleteFolder(f) {
@@ -1265,28 +1258,21 @@ export function LibraryTab({ resources, onAdd, onEdit, onRemove, courses }) {
               <button onClick={() => setConfirmDeleteFolder(f)} title="Delete this folder" style={{ color: "#A79B84" }}><X size={15} /></button>
             )}
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="flex flex-col gap-2">
             {resources.filter((r) => r.folder === f).map((r) => (
-              <div key={r.id} className="card rounded-xl p-4 flex flex-col gap-3">
-                <div className="text-[14px]" style={{ fontWeight: 700 }}>{r.title}</div>
-                {(r.isPublic || (r.visibility === "all" && !r.isPublic)) && (
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {r.isPublic && <span className="f-code text-[9px] tint-badge px-2 py-0.5 rounded-full">PUBLIC</span>}
-                    {r.visibility === "all" && !r.isPublic && <span className="f-code text-[9px] tint-badge px-2 py-0.5 rounded-full">ALL COURSES</span>}
+              <div key={r.id}>
+                <div className="card rounded-lg px-5 py-3 flex items-center justify-between text-[14px]">
+                  <span className="flex items-center gap-2">{r.title} {r.isPublic && <span className="f-code text-[9px] tint-badge px-2 py-0.5 rounded-full">PUBLIC</span>}{r.visibility === "all" && !r.isPublic && <span className="f-code text-[9px] tint-badge px-2 py-0.5 rounded-full">ALL COURSES</span>}</span>
+                  <div className="flex items-center gap-3">
+                    {r.isPublic && <button onClick={() => copyLink(r.id)} className="f-label text-[10px] accent-text flex items-center gap-1"><Send size={11} /> {copiedId === r.id ? "COPIED!" : "COPY LINK"}</button>}
+                    <button onClick={() => setEditingId(editingId === r.id ? null : r.id)} className="f-label text-[10px] accent-text flex items-center gap-1"><Pencil size={11} /> EDIT</button>
+                    <button onClick={() => onRemove(r.id)}><Trash2 size={14} color="#B04A3A" /></button>
                   </div>
-                )}
-                <SelectF label="Folder" value={r.folder} onChange={(e) => moveToFolder(r, e.target.value)} options={folders.map((ff) => ({ value: ff, label: ff }))} />
-                <div className="flex items-center gap-3 text-[12px] pt-2 mt-auto" style={{ borderTop: "1px dashed #E7DEC9" }}>
-                  {r.isPublic && <button onClick={() => copyLink(r.id)} className="f-label text-[10px] accent-text flex items-center gap-1"><Send size={11} /> {copiedId === r.id ? "COPIED!" : "LINK"}</button>}
-                  <button onClick={() => setEditingId(editingId === r.id ? null : r.id)} className="f-label text-[10px] accent-text flex items-center gap-1"><Pencil size={11} /> EDIT</button>
-                  <button onClick={() => onRemove(r.id)}><Trash2 size={14} color="#B04A3A" /></button>
                 </div>
+                {editingId === r.id && <ResourceForm courses={courses} folders={folders} initial={r} onSave={(data) => onEdit(r.id, data)} onClose={() => setEditingId(null)} />}
               </div>
             ))}
           </div>
-          {editingId && resources.find((r) => r.id === editingId)?.folder === f && (
-            <ResourceForm courses={courses} folders={folders} initial={resources.find((r) => r.id === editingId)} onSave={(data) => onEdit(editingId, data)} onClose={() => setEditingId(null)} />
-          )}
         </div>
       ))}
     </>
