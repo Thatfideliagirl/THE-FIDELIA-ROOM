@@ -40,6 +40,10 @@ const isTeamSignupLink = typeof window !== "undefined" && new URLSearchParams(wi
 // whole library page instead).
 const isLibraryLink = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("library") === "1";
 
+function cacheBrand(brand) {
+  try { localStorage.setItem("fjroom_brand_cache", JSON.stringify(brand)); } catch { /* ignore -- just means the next load won't have a cached color to start from */ }
+}
+
 // Brief fallback shown only while the student/admin dashboard chunk is
 // still downloading (it's cached after the first time, so this is normally
 // a flash rather than a real wait).
@@ -53,6 +57,13 @@ function LazyLoadingScreen() {
 
 export default function App() {
   const [page, setPage] = useState(() => (isRecoveryLink ? "resetPassword" : isExpiredAuthLink ? "linkExpired" : isTeamSignupLink ? "teamSignup" : isLibraryLink ? "resources" : "landing"));
+  // Switching "page" swaps which screen renders, but the browser itself
+  // never navigates (no new URL, no real page load), so it has no reason
+  // to reset scroll on its own -- without this, opening a new screen from
+  // partway down a long one (e.g. clicking Resources after scrolling the
+  // landing page) left you looking at that new screen's own partway-down
+  // scroll position, its top content already scrolled past.
+  useEffect(() => { window.scrollTo(0, 0); }, [page]);
   const [presetCourseId, setPresetCourseId] = useState(null);
   const [viewCourseId, setViewCourseId] = useState(null);
   const [applyingAsExisting, setApplyingAsExisting] = useState(null);
@@ -80,7 +91,24 @@ export default function App() {
   const [community, setCommunity] = useState([]);
   const [notices, setNotices] = useState([]);
   const [directThreads, setDirectThreads] = useState({});
-  const [brand, setBrand] = useState({ name: "FJ Room", accent: "#1C6FA0", email: "FJRoomm@gmail.com", whatsapp: "2348135793935", instagram: "VA_WEY_DEY_PAMPER", twitter: "VA_WeyDeyPamper" });
+  // Real brand settings (including the chosen accent color) only exist in
+  // Supabase, so they can't be known until that fetch below resolves -- on
+  // every load, however fast, the page briefly shows this hardcoded
+  // default color first and then visibly swaps to the real one.
+  // Caching the last-fetched settings in localStorage and reading them
+  // back here closes that gap on every visit after the first: the real
+  // color is already in `brand` before the first paint, and the fetch
+  // below just quietly confirms (or updates) it in the background. A
+  // true first-ever visit, with nothing cached yet, still shows this
+  // default for a moment -- that part isn't avoidable without a server
+  // render.
+  const [brand, setBrand] = useState(() => {
+    try {
+      const cached = localStorage.getItem("fjroom_brand_cache");
+      if (cached) return JSON.parse(cached);
+    } catch { /* ignore -- fall through to the default below */ }
+    return { name: "FJ Room", accent: "#1C6FA0", email: "FJRoomm@gmail.com", whatsapp: "2348135793935", instagram: "VA_WEY_DEY_PAMPER", twitter: "VA_WeyDeyPamper" };
+  });
   const [adminProfile, setAdminProfile] = useState({ name: "Fidelia Joseph", photo: null, bio: "" });
   const [activeStudent, setActiveStudent] = useState(null);
   const [activeApplicant, setActiveApplicant] = useState(null);
@@ -250,9 +278,9 @@ export default function App() {
       return next;
     });
   }
-  useEffect(() => { fetchSettings().then((s) => { if (s) { setBrand(s.brand); setAdminProfile(s.adminProfile); } }).catch((e) => console.error("fetchSettings failed", e)); }, []);
+  useEffect(() => { fetchSettings().then((s) => { if (s) { setBrand(s.brand); setAdminProfile(s.adminProfile); cacheBrand(s.brand); } }).catch((e) => console.error("fetchSettings failed", e)); }, []);
   function syncBrand(updater) {
-    setBrand((prev) => { const next = typeof updater === "function" ? updater(prev) : updater; updateSettings({ brand: next, adminProfile }).catch(reportSaveError("updateSettings failed")); return next; });
+    setBrand((prev) => { const next = typeof updater === "function" ? updater(prev) : updater; updateSettings({ brand: next, adminProfile }).catch(reportSaveError("updateSettings failed")); cacheBrand(next); return next; });
   }
   function syncAdminProfile(updater) {
     setAdminProfile((prev) => { const next = typeof updater === "function" ? updater(prev) : updater; updateSettings({ brand, adminProfile: next }).catch(reportSaveError("updateSettings failed")); return next; });

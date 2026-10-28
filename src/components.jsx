@@ -819,7 +819,12 @@ export function Landing({ courses, resources, testimonials, faqs, brand, onSignI
           bundle, there's a brief real network gap before it paints, and an
           un-backgrounded header showed through to white during that gap. */}
       <header className="relative overflow-hidden" style={{ minHeight: "92vh", background: "#1E2A38" }}>
-        <img src={HERO_SRC} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+        {/* fetchPriority tells the browser to fetch this ahead of
+            lower-priority requests competing for bandwidth at the same
+            moment (icons, fonts, etc.), since this is the very first thing
+            anyone sees -- shrinks the window the dark fallback above is
+            visible for. */}
+        <img src={HERO_SRC} alt="" fetchPriority="high" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
         <div style={{ position: "absolute", inset: 0, background: "linear-gradient(100deg, rgba(30,42,56,.82) 0%, rgba(30,42,56,.58) 42%, rgba(30,42,56,.16) 70%, rgba(30,42,56,0) 100%)" }} />
         <nav className="relative flex items-center justify-between px-8 md:px-16 py-6 max-w-[1500px] mx-auto">
           <LogoMark height={84} />

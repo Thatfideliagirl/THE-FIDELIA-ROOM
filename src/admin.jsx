@@ -1155,7 +1155,7 @@ export function TasksTab({ tasks, setTasks, students, courses, cohorts }) {
   );
 }
 
-export function ResourceForm({ courses, folders = [], initial, onSave, onClose }) {
+export function ResourceForm({ courses, folders = [], cohorts = [], initial, onSave, onClose }) {
   // "category" only ever existed as this form's own way of asking "should
   // this be public" -- it was never actually saved (only isPublic was), so
   // reopening an existing resource to edit anything else about it always
@@ -1172,6 +1172,15 @@ export function ResourceForm({ courses, folders = [], initial, onSave, onClose }
   const [folderChoice, setFolderChoice] = useState(initial?.folder ? (folderIsExisting ? initial.folder : "__new__") : (folders[0] || "__new__"));
   const [newFolderName, setNewFolderName] = useState(initial?.folder && !folderIsExisting ? initial.folder : "");
   const [title, setTitle] = useState(initial?.title || ""); const [description, setDescription] = useState(initial?.description || ""); const [type, setType] = useState(initial?.type || "Doc"); const [url, setUrl] = useState(initial?.url || ""); const [file, setFile] = useState(initial?.file || null); const [kind, setKind] = useState(initial?.kind || "link"); const [visibility, setVisibility] = useState(initial?.visibility || "course"); const [courseId, setCourseId] = useState(initial?.courseId || courses[0]?.id);
+  // Cohort is just a filter here, to make a long course list shorter while
+  // picking one -- it's not saved on the resource itself (resources are
+  // scoped by course, same as always), only used to narrow this dropdown.
+  const [cohortId, setCohortId] = useState("all");
+  const activeCohort = cohortId === "all" ? null : cohorts.find((c) => c.id === cohortId);
+  const filterCourses = activeCohort ? courses.filter((c) => activeCohort.courseIds.includes(c.id)) : courses;
+  useEffect(() => {
+    if (!filterCourses.some((c) => c.id === courseId)) setCourseId(filterCourses[0]?.id);
+  }, [cohortId]);
   const [saving, setSaving] = useState(false); const [error, setError] = useState("");
   const isPublic = category === "free";
   const folder = folderChoice === "__new__" ? newFolderName.trim() : folderChoice;
@@ -1193,7 +1202,8 @@ export function ResourceForm({ courses, folders = [], initial, onSave, onClose }
     <div className="card rounded-xl p-6 mb-6 flex flex-col gap-3">
       <SelectF label="Category" value={category} onChange={(e) => setCategory(e.target.value)} options={[{ value: "module", label: "Module resource (for enrolled students)" }, { value: "free", label: "Free download (public)" }]} />
       {category === "module" && <SelectF label="Visible to" value={visibility} onChange={(e) => setVisibility(e.target.value)} options={[{ value: "course", label: "Just this course" }, { value: "all", label: "All courses" }]} />}
-      {category === "module" && <SelectF label="Course" value={courseId} onChange={(e) => setCourseId(e.target.value)} options={courses.map((c) => ({ value: c.id, label: c.title }))} />}
+      {category === "module" && cohorts.length > 0 && <SelectF label="Cohort (just to narrow the course list below)" value={cohortId} onChange={(e) => setCohortId(e.target.value)} options={[{ value: "all", label: "All cohorts" }, ...cohorts.map((c) => ({ value: c.id, label: c.name }))]} />}
+      {category === "module" && <SelectF label="Course" value={courseId} onChange={(e) => setCourseId(e.target.value)} options={filterCourses.map((c) => ({ value: c.id, label: c.title }))} />}
       <SelectF label="Folder" value={folderChoice} onChange={(e) => setFolderChoice(e.target.value)} options={[...folders.map((f) => ({ value: f, label: f })), { value: "__new__", label: "+ New folder…" }]} />
       {folderChoice === "__new__" && <Field label="New folder name" value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder="e.g. Prompts" />}
       <Field label="Resource title" value={title} onChange={(e) => setTitle(e.target.value)} />
@@ -1206,7 +1216,7 @@ export function ResourceForm({ courses, folders = [], initial, onSave, onClose }
     </div>
   );
 }
-export function LibraryTab({ resources, onAdd, onEdit, onRemove, courses }) {
+export function LibraryTab({ resources, onAdd, onEdit, onRemove, courses, cohorts }) {
   const [showAdd, setShowAdd] = useState(false); const [editingId, setEditingId] = useState(null); const [copiedId, setCopiedId] = useState(null);
   // Which folder the filter row is showing -- "all" renders every folder's
   // own section one after another, picking one jumps straight to just that
@@ -1234,7 +1244,7 @@ export function LibraryTab({ resources, onAdd, onEdit, onRemove, courses }) {
   return (
     <>
       <SectionHeader eyebrow="MANAGE" title="Resource library" action={<div className="flex items-center gap-2"><button onClick={copyLibraryLink} className="btn-soft rounded-full px-5 py-2.5 text-[14px] flex items-center gap-1.5" style={{ fontWeight: 700 }}><Send size={14} /> {copiedId === "library" ? "Copied!" : "Copy library link"}</button><button onClick={() => setShowAdd((s) => !s)} className="btn-primary rounded-full px-5 py-2.5 text-[14px] flex items-center gap-1.5"><Plus size={16} /> Add resource</button></div>} />
-      {showAdd && <ResourceForm courses={courses} folders={folders} onSave={onAdd} onClose={() => setShowAdd(false)} />}
+      {showAdd && <ResourceForm courses={courses} folders={folders} cohorts={cohorts} onSave={onAdd} onClose={() => setShowAdd(false)} />}
       {folders.length > 0 && (
         <div className="flex items-center gap-2 mb-6 flex-wrap">
           <button onClick={() => setActiveFolder("all")} className="f-label text-[11px] px-4 py-2 rounded-full" style={{ background: activeFolder === "all" ? "var(--accent)" : "#F0E7D6", color: activeFolder === "all" ? "#FAF6EC" : "#71675A" }}>ALL ({resources.length})</button>
@@ -1269,7 +1279,7 @@ export function LibraryTab({ resources, onAdd, onEdit, onRemove, courses }) {
                     <button onClick={() => onRemove(r.id)}><Trash2 size={14} color="#B04A3A" /></button>
                   </div>
                 </div>
-                {editingId === r.id && <ResourceForm courses={courses} folders={folders} initial={r} onSave={(data) => onEdit(r.id, data)} onClose={() => setEditingId(null)} />}
+                {editingId === r.id && <ResourceForm courses={courses} folders={folders} cohorts={cohorts} initial={r} onSave={(data) => onEdit(r.id, data)} onClose={() => setEditingId(null)} />}
               </div>
             ))}
           </div>
@@ -2051,7 +2061,7 @@ export function AdminDashboard({ courses, setCourses, students, setStudents, onR
         {tab === "students" && <StudentsTab students={students} setStudents={setStudents} onRemove={onRemoveStudent} applicants={applicants} courses={courses} cohorts={cohorts} tasks={tasks} />}
         {tab === "gradebook" && <GradebookTab students={students} courses={courses} cohorts={cohorts} tasks={tasks} />}
         {tab === "tasks" && <TasksTab tasks={tasks} setTasks={setTasks} students={students} courses={courses} cohorts={cohorts} />}
-        {tab === "library" && <LibraryTab resources={resources} onAdd={onAddResource} onEdit={onEditResource} onRemove={onRemoveResource} courses={courses} />}
+        {tab === "library" && <LibraryTab resources={resources} onAdd={onAddResource} onEdit={onEditResource} onRemove={onRemoveResource} courses={courses} cohorts={cohorts} />}
         {tab === "certificates" && <CertificatesTab students={students} setStudents={setStudents} courses={courses} setCourses={setCourses} tasks={tasks} />}
         {tab === "testimonials" && <TestimonialsTab testimonials={testimonials} setTestimonials={setTestimonials} students={students} cohorts={cohorts} courses={courses} brand={brand} setBrand={setBrand} />}
         {tab === "faq" && <FaqTab faqs={faqs} setFaqs={setFaqs} />}
