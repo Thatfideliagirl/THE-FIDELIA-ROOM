@@ -1155,16 +1155,26 @@ export function TasksTab({ tasks, setTasks, students, courses, cohorts }) {
   );
 }
 
-export function ResourceForm({ courses, initial, onSave, onClose }) {
+export function ResourceForm({ courses, folders = [], initial, onSave, onClose }) {
   // "category" only ever existed as this form's own way of asking "should
   // this be public" -- it was never actually saved (only isPublic was), so
   // reopening an existing resource to edit anything else about it always
   // reset this dropdown to "Module resource" regardless of its real status,
   // and saving from there would silently un-publish a resource that was
   // meant to stay public.
-  const [category, setCategory] = useState(initial ? (initial.isPublic ? "free" : "module") : "module"); const [folder, setFolder] = useState(initial?.folder || ""); const [title, setTitle] = useState(initial?.title || ""); const [description, setDescription] = useState(initial?.description || ""); const [type, setType] = useState(initial?.type || "Doc"); const [url, setUrl] = useState(initial?.url || ""); const [file, setFile] = useState(initial?.file || null); const [kind, setKind] = useState(initial?.kind || "link"); const [visibility, setVisibility] = useState(initial?.visibility || "course"); const [courseId, setCourseId] = useState(initial?.courseId || courses[0]?.id);
+  const [category, setCategory] = useState(initial ? (initial.isPublic ? "free" : "module") : "module");
+  // Folder used to be free text, which meant retyping an existing folder's
+  // name exactly (including case) was the only way to drop a resource into
+  // it -- one typo quietly created a second, near-identical folder instead.
+  // Picking from the real list of folders that already exist removes that,
+  // with "+ New folder" as the one deliberate way to start a new one.
+  const folderIsExisting = initial?.folder && folders.includes(initial.folder);
+  const [folderChoice, setFolderChoice] = useState(initial?.folder ? (folderIsExisting ? initial.folder : "__new__") : (folders[0] || "__new__"));
+  const [newFolderName, setNewFolderName] = useState(initial?.folder && !folderIsExisting ? initial.folder : "");
+  const [title, setTitle] = useState(initial?.title || ""); const [description, setDescription] = useState(initial?.description || ""); const [type, setType] = useState(initial?.type || "Doc"); const [url, setUrl] = useState(initial?.url || ""); const [file, setFile] = useState(initial?.file || null); const [kind, setKind] = useState(initial?.kind || "link"); const [visibility, setVisibility] = useState(initial?.visibility || "course"); const [courseId, setCourseId] = useState(initial?.courseId || courses[0]?.id);
   const [saving, setSaving] = useState(false); const [error, setError] = useState("");
   const isPublic = category === "free";
+  const folder = folderChoice === "__new__" ? newFolderName.trim() : folderChoice;
   const canSave = folder && title && (kind === "file" ? file : url);
   async function submit() {
     // Silently doing nothing when a required field was empty (no error, no
@@ -1184,7 +1194,8 @@ export function ResourceForm({ courses, initial, onSave, onClose }) {
       <SelectF label="Category" value={category} onChange={(e) => setCategory(e.target.value)} options={[{ value: "module", label: "Module resource (for enrolled students)" }, { value: "free", label: "Free download (public)" }]} />
       {category === "module" && <SelectF label="Visible to" value={visibility} onChange={(e) => setVisibility(e.target.value)} options={[{ value: "course", label: "Just this course" }, { value: "all", label: "All courses" }]} />}
       {category === "module" && <SelectF label="Course" value={courseId} onChange={(e) => setCourseId(e.target.value)} options={courses.map((c) => ({ value: c.id, label: c.title }))} />}
-      <Field label="Folder name" value={folder} onChange={(e) => setFolder(e.target.value)} placeholder="e.g. Module 1 resources" />
+      <SelectF label="Folder" value={folderChoice} onChange={(e) => setFolderChoice(e.target.value)} options={[...folders.map((f) => ({ value: f, label: f })), { value: "__new__", label: "+ New folder…" }]} />
+      {folderChoice === "__new__" && <Field label="New folder name" value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder="e.g. Prompts" />}
       <Field label="Resource title" value={title} onChange={(e) => setTitle(e.target.value)} />
       <TextArea label="Full description (what it's for, who it's for, how it helps) — shown when someone clicks View" value={description} onChange={(e) => setDescription(e.target.value)} rows={4} />
       <SelectF label="Output" value={kind} onChange={(e) => setKind(e.target.value)} options={[{ value: "link", label: "Link — Download opens the link" }, { value: "file", label: "Uploaded file — Download serves the file" }]} />
@@ -1197,20 +1208,65 @@ export function ResourceForm({ courses, initial, onSave, onClose }) {
 }
 export function LibraryTab({ resources, onAdd, onEdit, onRemove, courses }) {
   const [showAdd, setShowAdd] = useState(false); const [editingId, setEditingId] = useState(null); const [copiedId, setCopiedId] = useState(null);
+  // Which folder the filter row is showing -- "all" renders every folder's
+  // own section one after another (same as before), picking one jumps
+  // straight to just that folder instead of scrolling past the rest.
+  const [activeFolder, setActiveFolder] = useState("all");
   const folders = [...new Set(resources.map((r) => r.folder))];
+  const visibleFolders = activeFolder === "all" ? folders : folders.filter((f) => f === activeFolder);
   function copyLink(id) {
     navigator.clipboard?.writeText(`${window.location.origin}/?r=${id}`).then(() => { setCopiedId(id); setTimeout(() => setCopiedId(null), 2000); });
   }
   function copyLibraryLink() {
     navigator.clipboard?.writeText(`${window.location.origin}/?library=1`).then(() => { setCopiedId("library"); setTimeout(() => setCopiedId(null), 2000); });
   }
+  // Quick reassignment straight from the card, without opening the full
+  // edit form -- the data shape editResource expects is the whole resource
+  // with just the one field changed, same as a normal edit-form save.
+  function moveToFolder(r, newFolder) {
+    if (newFolder === r.folder) return;
+    onEdit(r.id, { ...r, folder: newFolder });
+  }
   return (
     <>
       <SectionHeader eyebrow="MANAGE" title="Resource library" action={<div className="flex items-center gap-2"><button onClick={copyLibraryLink} className="btn-soft rounded-full px-5 py-2.5 text-[14px] flex items-center gap-1.5" style={{ fontWeight: 700 }}><Send size={14} /> {copiedId === "library" ? "Copied!" : "Copy library link"}</button><button onClick={() => setShowAdd((s) => !s)} className="btn-primary rounded-full px-5 py-2.5 text-[14px] flex items-center gap-1.5"><Plus size={16} /> Add resource</button></div>} />
-      {showAdd && <ResourceForm courses={courses} onSave={onAdd} onClose={() => setShowAdd(false)} />}
-      {folders.map((f) => <div key={f} className="mb-6"><div className="f-label text-[12px] mb-3" style={{ color: "#71675A" }}>{f.toUpperCase()}</div><div className="flex flex-col gap-2">{resources.filter((r) => r.folder === f).map((r) => (
-        <div key={r.id}><div className="card rounded-lg px-5 py-3 flex items-center justify-between text-[14px]"><span className="flex items-center gap-2">{r.title} {r.isPublic && <span className="f-code text-[9px] tint-badge px-2 py-0.5 rounded-full">PUBLIC</span>}{r.visibility === "all" && !r.isPublic && <span className="f-code text-[9px] tint-badge px-2 py-0.5 rounded-full">ALL COURSES</span>}</span><div className="flex items-center gap-3">{r.isPublic && <button onClick={() => copyLink(r.id)} className="f-label text-[10px] accent-text flex items-center gap-1"><Send size={11} /> {copiedId === r.id ? "COPIED!" : "COPY LINK"}</button>}<button onClick={() => setEditingId(editingId === r.id ? null : r.id)} className="f-label text-[10px] accent-text flex items-center gap-1"><Pencil size={11} /> EDIT</button><button onClick={() => onRemove(r.id)}><Trash2 size={14} color="#B04A3A" /></button></div></div>{editingId === r.id && <ResourceForm courses={courses} initial={r} onSave={(data) => onEdit(r.id, data)} onClose={() => setEditingId(null)} />}</div>
-      ))}</div></div>)}
+      {showAdd && <ResourceForm courses={courses} folders={folders} onSave={onAdd} onClose={() => setShowAdd(false)} />}
+      {folders.length > 0 && (
+        <div className="flex items-center gap-2 mb-6 flex-wrap">
+          <button onClick={() => setActiveFolder("all")} className="f-label text-[11px] px-4 py-2 rounded-full" style={{ background: activeFolder === "all" ? "var(--accent)" : "#F0E7D6", color: activeFolder === "all" ? "#FAF6EC" : "#71675A" }}>ALL ({resources.length})</button>
+          {folders.map((f) => (
+            <button key={f} onClick={() => setActiveFolder(f)} className="f-label text-[11px] px-4 py-2 rounded-full flex items-center gap-1.5" style={{ background: activeFolder === f ? "var(--accent)" : "#F0E7D6", color: activeFolder === f ? "#FAF6EC" : "#71675A" }}><Folder size={11} /> {f.toUpperCase()} ({resources.filter((r) => r.folder === f).length})</button>
+          ))}
+        </div>
+      )}
+      {resources.length === 0 && <div className="card rounded-2xl p-8 text-center text-[14px]" style={{ color: "#A79B84" }}>Add a resource below to start your first folder.</div>}
+      {visibleFolders.map((f) => (
+        <div key={f} className="mb-8">
+          <div className="flex items-center gap-2 mb-3"><Folder size={14} color="var(--accent)" /><span className="f-label text-[12px]" style={{ color: "#71675A" }}>{f.toUpperCase()}</span></div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {resources.filter((r) => r.folder === f).map((r) => (
+              <div key={r.id} className="card rounded-xl p-4 flex flex-col gap-3">
+                <div className="text-[14px]" style={{ fontWeight: 700 }}>{r.title}</div>
+                {(r.isPublic || (r.visibility === "all" && !r.isPublic)) && (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {r.isPublic && <span className="f-code text-[9px] tint-badge px-2 py-0.5 rounded-full">PUBLIC</span>}
+                    {r.visibility === "all" && !r.isPublic && <span className="f-code text-[9px] tint-badge px-2 py-0.5 rounded-full">ALL COURSES</span>}
+                  </div>
+                )}
+                <SelectF label="Folder" value={r.folder} onChange={(e) => moveToFolder(r, e.target.value)} options={folders.map((ff) => ({ value: ff, label: ff }))} />
+                <div className="flex items-center gap-3 text-[12px] pt-2 mt-auto" style={{ borderTop: "1px dashed #E7DEC9" }}>
+                  {r.isPublic && <button onClick={() => copyLink(r.id)} className="f-label text-[10px] accent-text flex items-center gap-1"><Send size={11} /> {copiedId === r.id ? "COPIED!" : "LINK"}</button>}
+                  <button onClick={() => setEditingId(editingId === r.id ? null : r.id)} className="f-label text-[10px] accent-text flex items-center gap-1"><Pencil size={11} /> EDIT</button>
+                  <button onClick={() => onRemove(r.id)}><Trash2 size={14} color="#B04A3A" /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+          {editingId && resources.find((r) => r.id === editingId)?.folder === f && (
+            <ResourceForm courses={courses} folders={folders} initial={resources.find((r) => r.id === editingId)} onSave={(data) => onEdit(editingId, data)} onClose={() => setEditingId(null)} />
+          )}
+        </div>
+      ))}
     </>
   );
 }

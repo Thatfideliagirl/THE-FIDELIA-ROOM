@@ -448,6 +448,7 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
   const [viewingResourceId, setViewingResourceId] = useState(null);
   const [meetingsFilter, setMeetingsFilter] = useState("upcoming"); // "upcoming" | "past"
   const [expandedMeetingId, setExpandedMeetingId] = useState(null);
+  const [libraryFolder, setLibraryFolder] = useState("all");
   const myTasks = tasks.filter((t) => t.courseId === course.id && t.assigned.includes(student.id));
   const peers = allStudents.filter((s) => s.id !== student.id && s.cohortId === student.cohortId);
   const key = pairKey(student.id, activePeer);
@@ -571,9 +572,38 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
           );
         })()}
 
-        {tab === "library" && <><SectionHeader eyebrow="ALWAYS OPEN" title="Resource library" />{[...new Set(resources.filter((r) => r.courseId === course.id || r.visibility === "all").map((r) => r.folder))].map((folder) => <div key={folder} className="mb-7"><div className="flex items-center gap-2 mb-3"><Folder size={16} color="var(--accent)" /><span className="f-label text-[12px]" style={{ color: "#71675A" }}>{folder.toUpperCase()}</span></div><div className="grid gap-3">{resources.filter((r) => (r.courseId === course.id || r.visibility === "all") && r.folder === folder).map((r) => <div key={r.id} className="card rounded-xl p-4 flex items-center justify-between"><div className="flex items-center gap-3"><FileText size={18} color="var(--accent)" /><div><div className="text-[15px]" style={{ fontWeight: 700 }}>{r.title}</div><div className="text-[12px]" style={{ color: "#71675A" }}>{r.description.slice(0, 70)}{r.description.length > 70 ? "…" : ""}</div></div></div><button onClick={() => setViewingResourceId(r.id)} className="btn-soft rounded-full px-4 py-2 text-[12px] flex items-center gap-1.5 shrink-0" style={{ fontWeight: 700 }}><Eye size={13} /> View</button></div>)}</div></div>)}
-          {viewingResourceId && <ResourceDetail resource={resources.find((r) => r.id === viewingResourceId)} onClose={() => setViewingResourceId(null)} />}
-        </>}
+        {tab === "library" && (() => {
+          const myResources = resources.filter((r) => r.courseId === course.id || r.visibility === "all");
+          const libraryFolders = [...new Set(myResources.map((r) => r.folder))];
+          const visibleFolders = libraryFolder === "all" ? libraryFolders : libraryFolders.filter((f) => f === libraryFolder);
+          return (
+            <>
+              <SectionHeader eyebrow="ALWAYS OPEN" title="Resource library" />
+              {libraryFolders.length > 1 && (
+                <div className="flex items-center gap-2 mb-6 flex-wrap">
+                  <button onClick={() => setLibraryFolder("all")} className="f-label text-[11px] px-4 py-2 rounded-full" style={{ background: libraryFolder === "all" ? "var(--accent)" : "#F0E7D6", color: libraryFolder === "all" ? "#FAF6EC" : "#71675A" }}>ALL</button>
+                  {libraryFolders.map((f) => <button key={f} onClick={() => setLibraryFolder(f)} className="f-label text-[11px] px-4 py-2 rounded-full" style={{ background: libraryFolder === f ? "var(--accent)" : "#F0E7D6", color: libraryFolder === f ? "#FAF6EC" : "#71675A" }}>{f.toUpperCase()}</button>)}
+                </div>
+              )}
+              {myResources.length === 0 && <div className="text-[15px]" style={{ color: "#A79B84" }}>No resources here yet.</div>}
+              {visibleFolders.map((folder) => (
+                <div key={folder} className="mb-7">
+                  <div className="flex items-center gap-2 mb-3"><Folder size={16} color="var(--accent)" /><span className="f-label text-[12px]" style={{ color: "#71675A" }}>{folder.toUpperCase()}</span></div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {myResources.filter((r) => r.folder === folder).map((r) => (
+                      <div key={r.id} className="card rounded-xl p-4 flex flex-col gap-3">
+                        <div className="flex items-center gap-3"><FileText size={18} color="var(--accent)" /><div className="text-[15px]" style={{ fontWeight: 700 }}>{r.title}</div></div>
+                        <div className="text-[12px]" style={{ color: "#71675A" }}>{r.description.slice(0, 90)}{r.description.length > 90 ? "…" : ""}</div>
+                        <button onClick={() => setViewingResourceId(r.id)} className="btn-soft rounded-full px-4 py-2 text-[12px] flex items-center gap-1.5 self-start mt-auto" style={{ fontWeight: 700 }}><Eye size={13} /> View</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {viewingResourceId && <ResourceDetail resource={resources.find((r) => r.id === viewingResourceId)} onClose={() => setViewingResourceId(null)} />}
+            </>
+          );
+        })()}
 
         {tab === "tasks" && (openTask ? <TaskDetailStudent task={openTask} student={student} allStudents={allStudents} setTasks={setTasks} onBack={() => setOpenTaskId(null)} /> : <><SectionHeader eyebrow="ASSIGNED TO YOU" title="Tasks" />{myTasks.length === 0 && <div className="text-[15px]" style={{ color: "#A79B84" }}>No tasks assigned yet.</div>}<div className="flex flex-col gap-3">{myTasks.map((t) => { const sub = t.submissions[student.id]; return <button key={t.id} onClick={() => setOpenTaskId(t.id)} className="card card-pop rounded-xl p-5 text-left"><div className="flex items-center justify-between mb-1.5"><div className="text-[16px]" style={{ fontWeight: 700 }}>{t.title}</div>{sub ? <span className="f-code text-[10px] px-2.5 py-1 rounded-full tint-badge">{sub.status.toUpperCase()}</span> : t.deadlineAt && Date.now() > new Date(t.deadlineAt).getTime() ? <span className="f-code text-[10px] flex items-center gap-1" style={{ color: "#B04A3A" }}><Clock size={11} /> CLOSED</span> : <span className="f-code text-[10px] flex items-center gap-1" style={{ color: "#A79B84" }}><Clock size={11} /> {t.deadlineAt ? new Date(t.deadlineAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : `${t.dueInDays}D LEFT`}</span>}</div><RichText html={t.description} className="rich-content text-[14px] line-clamp-2" style={{ color: "#71675A" }} /></button>; })}</div></>)}
 

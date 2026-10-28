@@ -1006,14 +1006,24 @@ export function ResourceDetail({ resource, onClose, onBrowseMore }) {
 }
 export function ResourcesPage({ resources, onBack }) {
   const [viewing, setViewing] = useState(null);
+  const [activeFolder, setActiveFolder] = useState("all");
   const publicResources = resources.filter((r) => r.isPublic);
   const categories = [...new Set(publicResources.map((r) => r.folder))];
+  const visibleCategories = activeFolder === "all" ? categories : categories.filter((c) => c === activeFolder);
   const viewingResource = viewing ? resources.find((r) => r.id === viewing) : null;
   return (
     <div className="min-h-screen">
       <BackBar onBack={onBack} />
       <header className="max-w-[800px] mx-auto px-8 text-center pt-8 pb-16"><div className="f-label text-[13px] mb-4 accent-text">HELPFUL RESOURCES</div><h1 className="f-display text-[42px] mb-4" style={{ fontWeight: 800 }}>Free tools & templates.</h1></header>
-      <div className="max-w-[1200px] mx-auto px-8 pb-28">{categories.map((cat) => <div key={cat} className="mb-14"><div className="f-label text-[13px] mb-5 accent-text">{cat.toUpperCase()}</div><div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-5">{publicResources.filter((r) => r.folder === cat).map((r, i) => (
+      {categories.length > 1 && (
+        <div className="max-w-[1200px] mx-auto px-8 flex items-center justify-center gap-2 mb-12 flex-wrap">
+          <button onClick={() => setActiveFolder("all")} className="f-label text-[12px] px-5 py-2.5 rounded-full" style={{ background: activeFolder === "all" ? "var(--accent)" : "#F0E7D6", color: activeFolder === "all" ? "#FAF6EC" : "#71675A" }}>ALL</button>
+          {categories.map((cat) => (
+            <button key={cat} onClick={() => setActiveFolder(cat)} className="f-label text-[12px] px-5 py-2.5 rounded-full" style={{ background: activeFolder === cat ? "var(--accent)" : "#F0E7D6", color: activeFolder === cat ? "#FAF6EC" : "#71675A" }}>{cat.toUpperCase()}</button>
+          ))}
+        </div>
+      )}
+      <div className="max-w-[1200px] mx-auto px-8 pb-28">{visibleCategories.map((cat) => <div key={cat} className="mb-14"><div className="f-label text-[13px] mb-5 accent-text">{cat.toUpperCase()}</div><div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-5">{publicResources.filter((r) => r.folder === cat).map((r, i) => (
         <Reveal key={r.id} delay={i * 60}>
           <div className="card card-pop rounded-xl p-5 flex flex-col h-full">
             <FileText size={20} color="var(--accent)" className="mb-3" />
