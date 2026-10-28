@@ -776,7 +776,7 @@ function HowItWorksSection() {
         </div>
         <div className="order-first md:order-2">
           <div style={{ position: "sticky", top: 40 }}>
-          <div className="mx-auto" style={{ position: "relative", width: 220, aspectRatio: "360/726", filter: "drop-shadow(0 30px 50px rgba(38,32,25,.3))" }}>
+          <div className="mx-auto w-[220px] md:w-[300px] lg:w-[330px]" style={{ position: "relative", aspectRatio: "360/726", filter: "drop-shadow(0 30px 50px rgba(38,32,25,.3))" }}>
             <div style={{ position: "absolute", left: "7.5%", top: "4.4%", width: "85.3%", height: "91.9%", borderRadius: 17, overflow: "hidden", background: "#FAF6EC" }}>
               {HOWITWORKS_STEPS.map((s, i) => (
                 <img key={i} src={s.src} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "top center", opacity: active === i ? 1 : 0, transition: "opacity .18s ease" }} />
@@ -845,18 +845,22 @@ export function Landing({ courses, resources, testimonials, faqs, brand, onSignI
         <Reveal><div className="rounded-2xl p-10 grid md:grid-cols-2 gap-10" style={{ background: "var(--accent)" }}><div><div className="f-label text-[13px] mb-3" style={{ color: "#CDE8F5" }}>OUR MISSION</div><p className="text-[17px] leading-relaxed" style={{ color: "#FAF6EC" }}>To help people build practical digital skills through intentional learning, real world practice, and meaningful support.</p></div><div><div className="f-label text-[13px] mb-3" style={{ color: "#CDE8F5" }}>OUR VISION</div><p className="text-[17px] leading-relaxed" style={{ color: "#FAF6EC" }}>A world where learning is practical, accessible, and personal.</p></div></div></Reveal>
       </section>
 
-      <section id="about" className="max-w-[1500px] mx-auto px-8 md:px-16 py-28 grid md:grid-cols-5 gap-16 items-center">
+      <section id="about" className="px-8 md:px-16 py-28" style={{ background: "#F3E9D6" }}>
+        <div className="max-w-[1500px] mx-auto grid md:grid-cols-5 gap-16 items-center">
         <Reveal className="md:col-span-2 flex justify-center"><div className="rounded-3xl overflow-hidden" style={{ width: 280, height: 280 }}><img src={CREATOR_SRC} alt="Fidelia Joseph" style={{ width: "100%", height: "100%", objectFit: "cover" }} /></div></Reveal>
         <Reveal delay={100} className="md:col-span-3">
           <div className="f-label text-[13px] mb-4 accent-text">MEET THE CREATOR</div><h2 className="f-display text-[40px] mb-6" style={{ fontWeight: 800 }}>Fidelia Joseph.</h2>
           <p className="f-display text-[20px] leading-relaxed mb-5" style={{ fontStyle: "italic", color: "#4A4237" }}>"You're not in this room by mistake. You're here to learn. I've been coaching for over two years now, and I kept seeing the same thing: people finishing a course and still not knowing what to actually do with it. So I asked myself: what if it wasn't just an LMS. What if it was a room. Somewhere that feels cozy, somewhere homely, where you can learn freely, ask your questions, and get all the clarity and guidance you need, to stay positioned, and to actually make the money you set out to make."</p>
           <div className="text-[14px]" style={{ color: "#71675A", fontWeight: 600 }}>— The Creator</div>
         </Reveal>
+        </div>
       </section>
 
-      <section className="max-w-[1500px] mx-auto px-8 md:px-16 pb-28">
+      <section className="px-8 md:px-16 py-28" style={{ background: "#FFFDF6" }}>
+        <div className="max-w-[1500px] mx-auto">
         <Reveal><div className="flex items-end justify-between mb-10 flex-wrap gap-4"><div><div className="f-label text-[13px] mb-4 accent-text">FREE RESOURCES</div><h2 className="f-display text-[34px]" style={{ fontWeight: 800 }}>Templates, guides & checklists.</h2></div><button onClick={onViewResources} className="btn-ghost rounded-full px-5 py-2.5 text-[13px]" style={{ fontWeight: 700 }}>Browse Resources</button></div></Reveal>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-5">{publicResources.slice(0, 4).map((r, i) => <Reveal key={r.id} delay={i * 80}><div className="card card-pop rounded-xl p-5 flex flex-col h-full"><FileText size={22} color="var(--accent)" className="mb-3" /><div className="text-[15px] mb-1" style={{ fontWeight: 700, lineHeight: 1.3, height: "2.6em", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{r.title}</div><div className="text-[13px] mb-3 flex-1" style={{ color: "#71675A", lineHeight: 1.5, height: "4.5em", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{r.description}</div><div className="flex items-center gap-1.5 text-[12px] accent-text" style={{ fontWeight: 700 }}><Download size={13} /> FREE {r.kind === "file" ? "DOWNLOAD" : "RESOURCE"}</div></div></Reveal>)}</div>
+        </div>
       </section>
 
       <section className="px-8 md:px-16 py-28" style={{ background: "var(--accent)" }}>

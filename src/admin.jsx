@@ -451,6 +451,11 @@ export function AdminMeetingsTab({ courses, setCourses, cohorts, students }) {
   }, [courses]);
   const [savedIds, setSavedIds] = useState(() => new Set());
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  // Every meeting used to render fully expanded all the time -- fine with
+  // one or two, unreadable with a real list of them. Collapsed to a single
+  // summary row (title + when) by default, same as the student side
+  // already does, with the full editor behind a click.
+  const [expandedId, setExpandedId] = useState(null);
 
   function updateMeeting(id, field, value) { setDraft((d) => d.map((mt) => mt.id !== id ? mt : { ...mt, [field]: value })); }
   function updateMeetingCourse(id, newCourseId) {
@@ -468,7 +473,9 @@ export function AdminMeetingsTab({ courses, setCourses, cohorts, students }) {
   function addMeeting() {
     const defaultCourse = (courseFilterId !== "all" ? courses.find((c) => c.id === courseFilterId) : filterCourses[0]) || coursesWithModules[0];
     if (!defaultCourse) return;
-    setDraft((d) => [...d, { id: "mt" + Date.now(), label: `Class ${d.length + 1}`, date: "", link: "", recordingLink: "", recordingFile: null, assignedStudentIds: [], createdAt: Date.now(), courseId: defaultCourse.id, moduleId: defaultCourse.modules[0]?.id }]);
+    const newId = "mt" + Date.now();
+    setDraft((d) => [...d, { id: newId, label: `Class ${d.length + 1}`, date: "", link: "", recordingLink: "", recordingFile: null, assignedStudentIds: [], createdAt: Date.now(), courseId: defaultCourse.id, moduleId: defaultCourse.modules[0]?.id }]);
+    setExpandedId(newId);
   }
   // Delete is immediate — it drops the meeting from wherever it currently lives, no separate save needed.
   // Only the course that actually contains this meeting gets a new object
@@ -542,51 +549,66 @@ export function AdminMeetingsTab({ courses, setCourses, cohorts, students }) {
       <div className="flex flex-col gap-4">
         {visible.map((mt) => {
           const course = courses.find((c) => c.id === mt.courseId);
+          const expanded = expandedId === mt.id;
           return (
-            <div key={mt.id} className="card rounded-2xl p-5 flex flex-col gap-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <SelectF label="Course" value={mt.courseId} onChange={(e) => updateMeetingCourse(mt.id, e.target.value)} options={coursesWithModules.map((c) => ({ value: c.id, label: c.title }))} />
-                <SelectF label="Which module is this?" value={mt.moduleId} onChange={(e) => updateMeeting(mt.id, "moduleId", e.target.value === "other" ? "other" : Number(e.target.value))} options={[...(course?.modules || []).map((m, i) => ({ value: m.id, label: `Module ${i + 1} — ${m.title}` })), { value: "other", label: "Other — not part of a module" }]} />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-[1fr_0.85fr_0.75fr_1.5fr_auto] gap-3 items-end">
-                <Field label={mt.moduleId === "other" ? "Meeting title" : "Label"} value={mt.label} onChange={(e) => updateMeeting(mt.id, "label", e.target.value)} placeholder={mt.moduleId === "other" ? "e.g. Onboarding call" : "e.g. Tuesday class"} />
-                <Field label="Date" type="date" value={mt.date ? mt.date.split("T")[0] : ""} onChange={(e) => updateMeetingDatePart(mt.id, "date", e.target.value)} />
-                <Field label="Time" type="time" value={mt.date && mt.date.includes("T") ? mt.date.split("T")[1] : ""} onChange={(e) => updateMeetingDatePart(mt.id, "time", e.target.value)} />
-                <Field label="Meeting link" value={mt.link} onChange={(e) => updateMeeting(mt.id, "link", e.target.value)} placeholder="https://…" />
-                {confirmDeleteId === mt.id ? (
-                  <div className="flex items-center gap-2 mb-2.5 text-[12px]"><span style={{ color: "#B04A3A" }}>Delete?</span><button onClick={() => { removeMeeting(mt.id); setConfirmDeleteId(null); }} className="f-label" style={{ color: "#B04A3A", fontWeight: 700 }}>YES</button><button onClick={() => setConfirmDeleteId(null)} style={{ color: "#A79B84" }}>Cancel</button></div>
-                ) : (
-                  <button onClick={() => setConfirmDeleteId(mt.id)} title="Delete this meeting" className="mb-2.5 flex items-center gap-1.5 text-[12px]" style={{ color: "#B04A3A" }}><Trash2 size={16} /> Delete</button>
-                )}
-              </div>
-              {mt.moduleId === "other" && (() => {
-                // Scoped to whichever cohort is picked in the filter bar above --
-                // "All cohorts" shows everyone enrolled in the course, same as
-                // before; picking one cohort narrows the tag list to just its
-                // students, so a typo-prone list of 80 names doesn't have to be
-                // scrolled through to tag two people in one cohort.
-                const taggable = students.filter((s) => s.enrollments.some((e) => e.courseId === mt.courseId) && (cohortId === "all" || s.cohortId === cohortId));
-                return (
+            <div key={mt.id} className="card rounded-2xl overflow-hidden">
+              <button onClick={() => setExpandedId(expanded ? null : mt.id)} className="w-full flex items-center justify-between gap-3 px-5 py-4 text-left">
+                <div>
+                  <div className="text-[14px]" style={{ fontWeight: 700 }}>{mt.label || "Untitled meeting"}</div>
+                  <div className="text-[12px] mt-0.5" style={{ color: "#71675A" }}>
+                    {course?.title || "No course yet"}
+                    {mt.date ? ` · ${new Date(mt.date).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : " · Date to be confirmed"}
+                  </div>
+                </div>
+                <ChevronDown size={18} color="#A79B84" style={{ transform: expanded ? "rotate(180deg)" : "none", flexShrink: 0 }} />
+              </button>
+              {expanded && (
+                <div className="px-5 pb-5 flex flex-col gap-3" style={{ borderTop: "1px dashed #E7DEC9" }}>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3">
+                    <SelectF label="Course" value={mt.courseId} onChange={(e) => updateMeetingCourse(mt.id, e.target.value)} options={coursesWithModules.map((c) => ({ value: c.id, label: c.title }))} />
+                    <SelectF label="Which module is this?" value={mt.moduleId} onChange={(e) => updateMeeting(mt.id, "moduleId", e.target.value === "other" ? "other" : Number(e.target.value))} options={[...(course?.modules || []).map((m, i) => ({ value: m.id, label: `Module ${i + 1} — ${m.title}` })), { value: "other", label: "Other — not part of a module" }]} />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-[1fr_0.85fr_0.75fr_1.5fr_auto] gap-3 items-end">
+                    <Field label={mt.moduleId === "other" ? "Meeting title" : "Label"} value={mt.label} onChange={(e) => updateMeeting(mt.id, "label", e.target.value)} placeholder={mt.moduleId === "other" ? "e.g. Onboarding call" : "e.g. Tuesday class"} />
+                    <Field label="Date" type="date" value={mt.date ? mt.date.split("T")[0] : ""} onChange={(e) => updateMeetingDatePart(mt.id, "date", e.target.value)} />
+                    <Field label="Time" type="time" value={mt.date && mt.date.includes("T") ? mt.date.split("T")[1] : ""} onChange={(e) => updateMeetingDatePart(mt.id, "time", e.target.value)} />
+                    <Field label="Meeting link" value={mt.link} onChange={(e) => updateMeeting(mt.id, "link", e.target.value)} placeholder="https://…" />
+                    {confirmDeleteId === mt.id ? (
+                      <div className="flex items-center gap-2 mb-2.5 text-[12px]"><span style={{ color: "#B04A3A" }}>Delete?</span><button onClick={() => { removeMeeting(mt.id); setConfirmDeleteId(null); }} className="f-label" style={{ color: "#B04A3A", fontWeight: 700 }}>YES</button><button onClick={() => setConfirmDeleteId(null)} style={{ color: "#A79B84" }}>Cancel</button></div>
+                    ) : (
+                      <button onClick={() => setConfirmDeleteId(mt.id)} title="Delete this meeting" className="mb-2.5 flex items-center gap-1.5 text-[12px]" style={{ color: "#B04A3A" }}><Trash2 size={16} /> Delete</button>
+                    )}
+                  </div>
+                  {mt.moduleId === "other" && (() => {
+                    // Scoped to whichever cohort is picked in the filter bar above --
+                    // "All cohorts" shows everyone enrolled in the course, same as
+                    // before; picking one cohort narrows the tag list to just its
+                    // students, so a typo-prone list of 80 names doesn't have to be
+                    // scrolled through to tag two people in one cohort.
+                    const taggable = students.filter((s) => s.enrollments.some((e) => e.courseId === mt.courseId) && (cohortId === "all" || s.cohortId === cohortId));
+                    return (
+                      <div className="pt-3" style={{ borderTop: "1px dashed #E7DEC9" }}>
+                        <div className="f-label text-[10px] mb-2" style={{ color: "#A79B84" }}>TAG PEOPLE (they'll be notified and see this under their own Virtual Meetings){cohortId !== "all" && ` — showing ${cohorts.find((c) => c.id === cohortId)?.name || "this cohort"} only`}</div>
+                        <div className="flex flex-wrap gap-2">
+                          {taggable.map((s) => {
+                            const tagged = (mt.assignedStudentIds || []).includes(s.id);
+                            return <button key={s.id} type="button" onClick={() => updateMeeting(mt.id, "assignedStudentIds", tagged ? (mt.assignedStudentIds || []).filter((x) => x !== s.id) : [...(mt.assignedStudentIds || []), s.id])} className="f-code text-[11px] px-3 py-1.5 rounded-full" style={{ background: tagged ? "var(--accent)" : "#F0E7D6", color: tagged ? "#FAF6EC" : "#71675A", fontWeight: 700 }}>{s.name}</button>;
+                          })}
+                          {taggable.length === 0 && <span className="text-[13px]" style={{ color: "#A79B84" }}>No students enrolled in this course {cohortId !== "all" ? "in this cohort " : ""}yet.</span>}
+                        </div>
+                      </div>
+                    );
+                  })()}
                   <div className="pt-3" style={{ borderTop: "1px dashed #E7DEC9" }}>
-                    <div className="f-label text-[10px] mb-2" style={{ color: "#A79B84" }}>TAG PEOPLE (they'll be notified and see this under their own Virtual Meetings){cohortId !== "all" && ` — showing ${cohorts.find((c) => c.id === cohortId)?.name || "this cohort"} only`}</div>
-                    <div className="flex flex-wrap gap-2">
-                      {taggable.map((s) => {
-                        const tagged = (mt.assignedStudentIds || []).includes(s.id);
-                        return <button key={s.id} type="button" onClick={() => updateMeeting(mt.id, "assignedStudentIds", tagged ? (mt.assignedStudentIds || []).filter((x) => x !== s.id) : [...(mt.assignedStudentIds || []), s.id])} className="f-code text-[11px] px-3 py-1.5 rounded-full" style={{ background: tagged ? "var(--accent)" : "#F0E7D6", color: tagged ? "#FAF6EC" : "#71675A", fontWeight: 700 }}>{s.name}</button>;
-                      })}
-                      {taggable.length === 0 && <span className="text-[13px]" style={{ color: "#A79B84" }}>No students enrolled in this course {cohortId !== "all" ? "in this cohort " : ""}yet.</span>}
+                    <div className="f-label text-[10px] mb-2" style={{ color: "#A79B84" }}>VIRTUAL RECORDING (after class, if there is one)</div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+                      <Field label="Recording link" value={mt.recordingLink || ""} onChange={(e) => updateMeeting(mt.id, "recordingLink", e.target.value)} placeholder="https://…" />
+                      <FileField label="Or upload a document (minutes, transcript)" value={mt.recordingFile || null} onChange={(v) => updateMeeting(mt.id, "recordingFile", v)} accept=".pdf,.doc,.docx,.txt" />
                     </div>
                   </div>
-                );
-              })()}
-              <div className="pt-3" style={{ borderTop: "1px dashed #E7DEC9" }}>
-                <div className="f-label text-[10px] mb-2" style={{ color: "#A79B84" }}>VIRTUAL RECORDING (after class, if there is one)</div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
-                  <Field label="Recording link" value={mt.recordingLink || ""} onChange={(e) => updateMeeting(mt.id, "recordingLink", e.target.value)} placeholder="https://…" />
-                  <FileField label="Or upload a document (minutes, transcript)" value={mt.recordingFile || null} onChange={(v) => updateMeeting(mt.id, "recordingFile", v)} accept=".pdf,.doc,.docx,.txt" />
+                  <div className="flex items-center gap-3 pt-1"><button onClick={() => saveMeeting(mt.id)} className="btn-primary rounded-lg px-5 py-2 text-[13px] self-start">Save</button>{savedIds.has(mt.id) && <span className="text-[13px] accent-text" style={{ fontWeight: 700 }}>Saved.</span>}</div>
                 </div>
-              </div>
-              <div className="flex items-center gap-3 pt-1"><button onClick={() => saveMeeting(mt.id)} className="btn-primary rounded-lg px-5 py-2 text-[13px] self-start">Save</button>{savedIds.has(mt.id) && <span className="text-[13px] accent-text" style={{ fontWeight: 700 }}>Saved.</span>}</div>
+              )}
             </div>
           );
         })}
