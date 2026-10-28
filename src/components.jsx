@@ -1009,7 +1009,12 @@ export function ResourcesPage({ resources, onBack }) {
   const [activeFolder, setActiveFolder] = useState("all");
   const publicResources = resources.filter((r) => r.isPublic);
   const categories = [...new Set(publicResources.map((r) => r.folder))];
-  const visibleCategories = activeFolder === "all" ? categories : categories.filter((c) => c === activeFolder);
+  // "All" lists every resource together in one grid rather than a section
+  // per folder -- a folder with only one or two items still claimed a
+  // whole row of its own that way, so "All" read as a tall, mostly-empty
+  // vertical stack instead of a dense grid. Picking one folder below still
+  // narrows it down to just that folder's resources.
+  const visibleResources = activeFolder === "all" ? publicResources : publicResources.filter((r) => r.folder === activeFolder);
   const viewingResource = viewing ? resources.find((r) => r.id === viewing) : null;
   return (
     <div className="min-h-screen">
@@ -1023,27 +1028,31 @@ export function ResourcesPage({ resources, onBack }) {
           ))}
         </div>
       )}
-      <div className="max-w-[1200px] mx-auto px-8 pb-28">{visibleCategories.map((cat) => <div key={cat} className="mb-14"><div className="f-label text-[13px] mb-5 accent-text">{cat.toUpperCase()}</div><div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-5">{publicResources.filter((r) => r.folder === cat).map((r, i) => (
-        <Reveal key={r.id} delay={i * 60}>
-          <div className="card card-pop rounded-xl p-5 flex flex-col h-full">
-            <FileText size={20} color="var(--accent)" className="mb-3" />
-            {/* Clamped to a fixed number of lines rather than truncated by
-                character count -- a character limit still let different
-                descriptions wrap to a different number of visual lines
-                (a short word-heavy line looks nothing like a long one at
-                the same character count), so cards ended up different
-                heights depending on what was typed. A clamp alone caps the
-                longest case but still lets a short title/description take
-                less room than a long one, which is the same unevenness
-                again -- an explicit height reserves that space regardless,
-                so every card is identically shaped whether its text fills
-                it or not. */}
-            <div className="text-[15px] mb-1.5" style={{ fontWeight: 700, lineHeight: 1.3, height: "2.6em", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{r.title}</div>
-            <div className="text-[13px] mb-4" style={{ color: "#71675A", lineHeight: 1.5, height: "4.5em", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{r.description}</div>
-            <button onClick={() => setViewing(r.id)} className="btn-soft rounded-full px-3 py-2 text-[11px] flex items-center gap-1 self-start" style={{ fontWeight: 700 }}><Eye size={12} /> View details</button>
-          </div>
-        </Reveal>
-      ))}</div></div>)}</div>
+      <div className="max-w-[1200px] mx-auto px-8 pb-28">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-5">
+          {visibleResources.map((r, i) => (
+            <Reveal key={r.id} delay={i * 40}>
+              <div className="card card-pop rounded-xl p-5 flex flex-col h-full">
+                <FileText size={20} color="var(--accent)" className="mb-3" />
+                {/* Clamped to a fixed number of lines rather than truncated by
+                    character count -- a character limit still let different
+                    descriptions wrap to a different number of visual lines
+                    (a short word-heavy line looks nothing like a long one at
+                    the same character count), so cards ended up different
+                    heights depending on what was typed. A clamp alone caps the
+                    longest case but still lets a short title/description take
+                    less room than a long one, which is the same unevenness
+                    again -- an explicit height reserves that space regardless,
+                    so every card is identically shaped whether its text fills
+                    it or not. */}
+                <div className="text-[15px] mb-1.5" style={{ fontWeight: 700, lineHeight: 1.3, height: "2.6em", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{r.title}</div>
+                <div className="text-[13px] mb-4" style={{ color: "#71675A", lineHeight: 1.5, height: "4.5em", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{r.description}</div>
+                <button onClick={() => setViewing(r.id)} className="btn-soft rounded-full px-3 py-2 text-[11px] flex items-center gap-1 self-start" style={{ fontWeight: 700 }}><Eye size={12} /> View details</button>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+      </div>
       {viewingResource && <ResourceDetail resource={viewingResource} onClose={() => setViewing(null)} />}
     </div>
   );

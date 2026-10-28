@@ -4,7 +4,7 @@ import {
   MessageCircle, ListChecks, Settings, LogOut, Library, ChevronRight,
   ChevronDown, Sparkles, Plus, Check, Send, X, Heart, MessageSquare,
   FileText, Download, GraduationCap, Mail, Phone, Award,
-  UserCircle, FolderPlus, Folder, UploadCloud, ClipboardCheck, HelpCircle as HelpIcon,
+  UserCircle, FolderPlus, UploadCloud, ClipboardCheck, HelpCircle as HelpIcon,
   Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Compass, Home, Repeat, Pause, IdCard as IdCardIcon
 } from "lucide-react";
 import { pairKey, moduleStatus, scoreSubmission, AUTO_APPROVE_THRESHOLD, LINK_TYPES, deriveSubmissionStatus, courseEligibility, formatDateTime } from "./lib/data.js";
@@ -575,7 +575,11 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
         {tab === "library" && (() => {
           const myResources = resources.filter((r) => r.courseId === course.id || r.visibility === "all");
           const libraryFolders = [...new Set(myResources.map((r) => r.folder))];
-          const visibleFolders = libraryFolder === "all" ? libraryFolders : libraryFolders.filter((f) => f === libraryFolder);
+          // "All" lists every resource together in one grid rather than a
+          // section per folder -- a folder with only a couple of items
+          // still claimed a whole row of its own, so "All" read as a tall,
+          // half-empty vertical stack instead of a dense grid.
+          const visibleResources = libraryFolder === "all" ? myResources : myResources.filter((r) => r.folder === libraryFolder);
           return (
             <>
               <SectionHeader eyebrow="ALWAYS OPEN" title="Resource library" />
@@ -586,20 +590,15 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
                 </div>
               )}
               {myResources.length === 0 && <div className="text-[15px]" style={{ color: "#A79B84" }}>No resources here yet.</div>}
-              {visibleFolders.map((folder) => (
-                <div key={folder} className="mb-7">
-                  <div className="flex items-center gap-2 mb-3"><Folder size={16} color="var(--accent)" /><span className="f-label text-[12px]" style={{ color: "#71675A" }}>{folder.toUpperCase()}</span></div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {myResources.filter((r) => r.folder === folder).map((r) => (
-                      <div key={r.id} className="card rounded-xl p-4 flex flex-col gap-3">
-                        <div className="flex items-center gap-3"><FileText size={18} color="var(--accent)" /><div className="text-[15px]" style={{ fontWeight: 700 }}>{r.title}</div></div>
-                        <div className="text-[12px]" style={{ color: "#71675A" }}>{r.description.slice(0, 90)}{r.description.length > 90 ? "…" : ""}</div>
-                        <button onClick={() => setViewingResourceId(r.id)} className="btn-soft rounded-full px-4 py-2 text-[12px] flex items-center gap-1.5 self-start mt-auto" style={{ fontWeight: 700 }}><Eye size={13} /> View</button>
-                      </div>
-                    ))}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {visibleResources.map((r) => (
+                  <div key={r.id} className="card rounded-xl p-4 flex flex-col gap-3">
+                    <div className="flex items-center gap-3"><FileText size={18} color="var(--accent)" /><div className="text-[15px]" style={{ fontWeight: 700 }}>{r.title}</div></div>
+                    <div className="text-[12px]" style={{ color: "#71675A" }}>{r.description.slice(0, 90)}{r.description.length > 90 ? "…" : ""}</div>
+                    <button onClick={() => setViewingResourceId(r.id)} className="btn-soft rounded-full px-4 py-2 text-[12px] flex items-center gap-1.5 self-start mt-auto" style={{ fontWeight: 700 }}><Eye size={13} /> View</button>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
               {viewingResourceId && <ResourceDetail resource={resources.find((r) => r.id === viewingResourceId)} onClose={() => setViewingResourceId(null)} />}
             </>
           );
