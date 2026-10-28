@@ -1208,15 +1208,17 @@ export function ResourceForm({ courses, folders = [], initial, onSave, onClose }
 }
 export function LibraryTab({ resources, onAdd, onEdit, onRemove, courses }) {
   const [showAdd, setShowAdd] = useState(false); const [editingId, setEditingId] = useState(null); const [copiedId, setCopiedId] = useState(null);
-  // Which folder the filter row is showing. "All" lists every resource
-  // together in one grid rather than a section per folder -- a folder with
-  // only a couple of items still claimed a whole row of its own that way,
-  // so "All" read as a tall, half-empty vertical stack instead of a dense
-  // grid. Picking one folder below still narrows it down to just that
-  // folder's resources.
+  // Which folder the filter row is showing -- "all" renders every folder's
+  // own section one after another, picking one jumps straight to just that
+  // folder instead of scrolling past the rest. Unlike the public resources
+  // page, this stays grouped by folder even under "all": this is the
+  // management view, so seeing each folder as its own clearly bordered
+  // section (with its own delete control) matters more here than a dense
+  // grid does.
   const [activeFolder, setActiveFolder] = useState("all");
+  const [confirmDeleteFolder, setConfirmDeleteFolder] = useState(null);
   const folders = [...new Set(resources.map((r) => r.folder))];
-  const visibleResources = activeFolder === "all" ? resources : resources.filter((r) => r.folder === activeFolder);
+  const visibleFolders = activeFolder === "all" ? folders : folders.filter((f) => f === activeFolder);
   function copyLink(id) {
     navigator.clipboard?.writeText(`${window.location.origin}/?r=${id}`).then(() => { setCopiedId(id); setTimeout(() => setCopiedId(null), 2000); });
   }
@@ -1229,6 +1231,12 @@ export function LibraryTab({ resources, onAdd, onEdit, onRemove, courses }) {
   function moveToFolder(r, newFolder) {
     if (newFolder === r.folder) return;
     onEdit(r.id, { ...r, folder: newFolder });
+  }
+  // A folder is just a label on each resource, not its own row anywhere --
+  // "deleting" one means removing every resource still carrying that label.
+  function deleteFolder(f) {
+    resources.filter((r) => r.folder === f).forEach((r) => onRemove(r.id));
+    if (activeFolder === f) setActiveFolder("all");
   }
   return (
     <>
@@ -1243,28 +1251,44 @@ export function LibraryTab({ resources, onAdd, onEdit, onRemove, courses }) {
         </div>
       )}
       {resources.length === 0 && <div className="card rounded-2xl p-8 text-center text-[14px]" style={{ color: "#A79B84" }}>Add a resource below to start your first folder.</div>}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {visibleResources.map((r) => (
-          <div key={r.id} className="card rounded-xl p-4 flex flex-col gap-3">
-            <div className="text-[14px]" style={{ fontWeight: 700 }}>{r.title}</div>
-            {(r.isPublic || (r.visibility === "all" && !r.isPublic)) && (
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {r.isPublic && <span className="f-code text-[9px] tint-badge px-2 py-0.5 rounded-full">PUBLIC</span>}
-                {r.visibility === "all" && !r.isPublic && <span className="f-code text-[9px] tint-badge px-2 py-0.5 rounded-full">ALL COURSES</span>}
+      {visibleFolders.map((f) => (
+        <div key={f} className="mb-8">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2"><Folder size={14} color="var(--accent)" /><span className="f-label text-[12px]" style={{ color: "#71675A" }}>{f.toUpperCase()}</span></div>
+            {confirmDeleteFolder === f ? (
+              <div className="flex items-center gap-2 text-[12px]">
+                <span style={{ color: "#B04A3A" }}>Delete this folder{resources.filter((r) => r.folder === f).length > 0 ? ` and its ${resources.filter((r) => r.folder === f).length} resource${resources.filter((r) => r.folder === f).length === 1 ? "" : "s"}` : ""}?</span>
+                <button onClick={() => { deleteFolder(f); setConfirmDeleteFolder(null); }} className="f-label" style={{ color: "#B04A3A", fontWeight: 700 }}>YES</button>
+                <button onClick={() => setConfirmDeleteFolder(null)} style={{ color: "#A79B84" }}>Cancel</button>
               </div>
+            ) : (
+              <button onClick={() => setConfirmDeleteFolder(f)} title="Delete this folder" style={{ color: "#A79B84" }}><X size={15} /></button>
             )}
-            <SelectF label="Folder" value={r.folder} onChange={(e) => moveToFolder(r, e.target.value)} options={folders.map((ff) => ({ value: ff, label: ff }))} />
-            <div className="flex items-center gap-3 text-[12px] pt-2 mt-auto" style={{ borderTop: "1px dashed #E7DEC9" }}>
-              {r.isPublic && <button onClick={() => copyLink(r.id)} className="f-label text-[10px] accent-text flex items-center gap-1"><Send size={11} /> {copiedId === r.id ? "COPIED!" : "LINK"}</button>}
-              <button onClick={() => setEditingId(editingId === r.id ? null : r.id)} className="f-label text-[10px] accent-text flex items-center gap-1"><Pencil size={11} /> EDIT</button>
-              <button onClick={() => onRemove(r.id)}><Trash2 size={14} color="#B04A3A" /></button>
-            </div>
           </div>
-        ))}
-      </div>
-      {editingId && visibleResources.some((r) => r.id === editingId) && (
-        <ResourceForm courses={courses} folders={folders} initial={resources.find((r) => r.id === editingId)} onSave={(data) => onEdit(editingId, data)} onClose={() => setEditingId(null)} />
-      )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {resources.filter((r) => r.folder === f).map((r) => (
+              <div key={r.id} className="card rounded-xl p-4 flex flex-col gap-3">
+                <div className="text-[14px]" style={{ fontWeight: 700 }}>{r.title}</div>
+                {(r.isPublic || (r.visibility === "all" && !r.isPublic)) && (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {r.isPublic && <span className="f-code text-[9px] tint-badge px-2 py-0.5 rounded-full">PUBLIC</span>}
+                    {r.visibility === "all" && !r.isPublic && <span className="f-code text-[9px] tint-badge px-2 py-0.5 rounded-full">ALL COURSES</span>}
+                  </div>
+                )}
+                <SelectF label="Folder" value={r.folder} onChange={(e) => moveToFolder(r, e.target.value)} options={folders.map((ff) => ({ value: ff, label: ff }))} />
+                <div className="flex items-center gap-3 text-[12px] pt-2 mt-auto" style={{ borderTop: "1px dashed #E7DEC9" }}>
+                  {r.isPublic && <button onClick={() => copyLink(r.id)} className="f-label text-[10px] accent-text flex items-center gap-1"><Send size={11} /> {copiedId === r.id ? "COPIED!" : "LINK"}</button>}
+                  <button onClick={() => setEditingId(editingId === r.id ? null : r.id)} className="f-label text-[10px] accent-text flex items-center gap-1"><Pencil size={11} /> EDIT</button>
+                  <button onClick={() => onRemove(r.id)}><Trash2 size={14} color="#B04A3A" /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+          {editingId && resources.find((r) => r.id === editingId)?.folder === f && (
+            <ResourceForm courses={courses} folders={folders} initial={resources.find((r) => r.id === editingId)} onSave={(data) => onEdit(editingId, data)} onClose={() => setEditingId(null)} />
+          )}
+        </div>
+      ))}
     </>
   );
 }
