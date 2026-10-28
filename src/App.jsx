@@ -4,8 +4,13 @@ import {
   Landing, CoursesIndex, CourseDetail, ResourcesPage, TestimonialsPage, ApplicationForm,
   SignInScreen, InReviewScreen, CodeRedeemScreen, LogoMark, Field, ResourceDetail,
 } from "./components.jsx";
-import { MyCourses } from "./student.jsx";
-import { AdminDashboard } from "./admin.jsx";
+// Loaded on demand instead of bundled into the initial page -- these two
+// screens (the student dashboard and the full admin panel) are by far the
+// heaviest code in the app, and a first-time visitor just landing on the
+// marketing site or applying never needs either. Splitting them into their
+// own chunks means that visitor's first load only pays for components.jsx.
+const MyCourses = React.lazy(() => import("./student.jsx").then((m) => ({ default: m.MyCourses })));
+const AdminDashboard = React.lazy(() => import("./admin.jsx").then((m) => ({ default: m.AdminDashboard })));
 import { supabase } from "./lib/supabaseClient.js";
 import { signIn, signOut, signUpApplicant, sendPasswordReset, isAdminEmail } from "./lib/auth.js";
 import { fetchApplicants, insertApplicant, updateApplicant, deleteApplicant, fetchStudents, insertStudent, updateStudent, deleteStudent, fetchResources, insertResource, updateResource, deleteResource, fetchCourses, upsertCourse, deleteCourse, fetchCohorts, upsertCohort, deleteCohort, fetchSettings, updateSettings, fetchTestimonials, upsertTestimonial, deleteTestimonial, fetchFaqs, upsertFaq, deleteFaq, fetchNotices, upsertNotice, fetchTasks, upsertTask, deleteTask, fetchCommunityPosts, upsertCommunityPost, fetchDirectMessages, insertDirectMessage, fetchNotifSeen, saveNotifSeen } from "./lib/db.js";
@@ -34,6 +39,17 @@ const isTeamSignupLink = typeof window !== "undefined" && new URLSearchParams(wi
 // link for a single resource (that's what ?r=<id> is for -- this is the
 // whole library page instead).
 const isLibraryLink = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("library") === "1";
+
+// Brief fallback shown only while the student/admin dashboard chunk is
+// still downloading (it's cached after the first time, so this is normally
+// a flash rather than a real wait).
+function LazyLoadingScreen() {
+  return (
+    <div className="min-h-screen flex items-center justify-center" style={{ background: "#FAF6EC" }}>
+      <div className="f-label text-[13px]" style={{ color: "#A79B84" }}>LOADING…</div>
+    </div>
+  );
+}
 
 export default function App() {
   const [page, setPage] = useState(() => (isRecoveryLink ? "resetPassword" : isExpiredAuthLink ? "linkExpired" : isTeamSignupLink ? "teamSignup" : isLibraryLink ? "resources" : "landing"));
@@ -664,23 +680,29 @@ export default function App() {
       )}
       {page === "studentDash" && liveStudent && pendingEnrollment && <CodeRedeemScreen student={liveStudent} enrollment={pendingEnrollment} onRedeem={() => redeemCode(pendingEnrollment.id)} onExit={handleSignOut} />}
       {page === "studentDash" && liveStudent && !pendingEnrollment && (
-        <MyCourses student={liveStudent} setStudents={syncStudents} courses={courses} cohorts={cohorts} applicants={applicants} tasks={tasks} setTasks={syncTasks} resources={resources} community={community} setCommunity={syncCommunity} notices={notices.filter((n) => n.cohortId === "all" || n.cohortId === liveStudent.cohortId)} setNotices={syncNotices} directThreads={directThreads} setDirectThreads={syncDirectThreads} allStudents={students} brand={brand} onExit={handleSignOut} onViewSite={() => setPage("landing")} onApplyMore={(courseId) => { setApplyingAsExisting(liveStudent); setPresetCourseId(courseId || null); setPage("signup"); }} notifItems={studentNotifItems} notifSeen={notifSeen} onMarkSeen={syncNotifSeen} />
+        <React.Suspense fallback={<LazyLoadingScreen />}>
+          <MyCourses student={liveStudent} setStudents={syncStudents} courses={courses} cohorts={cohorts} applicants={applicants} tasks={tasks} setTasks={syncTasks} resources={resources} community={community} setCommunity={syncCommunity} notices={notices.filter((n) => n.cohortId === "all" || n.cohortId === liveStudent.cohortId)} setNotices={syncNotices} directThreads={directThreads} setDirectThreads={syncDirectThreads} allStudents={students} brand={brand} onExit={handleSignOut} onViewSite={() => setPage("landing")} onApplyMore={(courseId) => { setApplyingAsExisting(liveStudent); setPresetCourseId(courseId || null); setPage("signup"); }} notifItems={studentNotifItems} notifSeen={notifSeen} onMarkSeen={syncNotifSeen} />
+        </React.Suspense>
       )}
       {page === "adminDash" && teamAccess && teamViewMode === "student" && liveStudent && (
-        <MyCourses student={liveStudent} setStudents={syncStudents} courses={courses} cohorts={cohorts} applicants={applicants} tasks={tasks} setTasks={syncTasks} resources={resources} community={community} setCommunity={syncCommunity} notices={notices.filter((n) => n.cohortId === "all" || n.cohortId === liveStudent.cohortId)} setNotices={syncNotices} directThreads={directThreads} setDirectThreads={syncDirectThreads} allStudents={students} brand={brand} onExit={handleSignOut} onViewSite={() => setPage("landing")} onApplyMore={(courseId) => { setApplyingAsExisting(liveStudent); setPresetCourseId(courseId || null); setPage("signup"); }} notifItems={studentNotifItems} notifSeen={notifSeen} onMarkSeen={syncNotifSeen} onSwitchToTeamAdmin={() => setTeamViewMode("admin")} />
+        <React.Suspense fallback={<LazyLoadingScreen />}>
+          <MyCourses student={liveStudent} setStudents={syncStudents} courses={courses} cohorts={cohorts} applicants={applicants} tasks={tasks} setTasks={syncTasks} resources={resources} community={community} setCommunity={syncCommunity} notices={notices.filter((n) => n.cohortId === "all" || n.cohortId === liveStudent.cohortId)} setNotices={syncNotices} directThreads={directThreads} setDirectThreads={syncDirectThreads} allStudents={students} brand={brand} onExit={handleSignOut} onViewSite={() => setPage("landing")} onApplyMore={(courseId) => { setApplyingAsExisting(liveStudent); setPresetCourseId(courseId || null); setPage("signup"); }} notifItems={studentNotifItems} notifSeen={notifSeen} onMarkSeen={syncNotifSeen} onSwitchToTeamAdmin={() => setTeamViewMode("admin")} />
+        </React.Suspense>
       )}
       {page === "adminDash" && !(teamAccess && teamViewMode === "student") && (
-        <AdminDashboard courses={courses} setCourses={syncCourses} students={students} setStudents={syncStudents} onRemoveStudent={removeStudent} applicants={applicants} setApplicants={syncApplicants} onRemoveApplicant={removeApplicant} onAcceptApplicant={acceptApplicant} cohorts={cohorts} setCohorts={syncCohorts} tasks={tasks} setTasks={syncTasks} resources={resources} onAddResource={addResource} onEditResource={editResource} onRemoveResource={removeResource} community={community} setCommunity={syncCommunity} notices={notices} setNotices={syncNotices} directThreads={directThreads} setDirectThreads={syncDirectThreads} testimonials={testimonials} setTestimonials={syncTestimonials} faqs={faqs} setFaqs={syncFaqs} brand={brand} setBrand={syncBrand} adminProfile={adminProfile} setAdminProfile={syncAdminProfile} onExit={handleSignOut} onViewSite={() => setPage("landing")} notifItems={adminNotifItems} notifSeen={notifSeen} onMarkSeen={syncNotifSeen} teamAccess={teamAccess} onSwitchToStudent={teamAccess ? () => {
-          if (liveStudent) { setTeamViewMode("student"); return; }
-          // Not enrolled anywhere yet -- same "apply" flow any brand-new
-          // visitor uses, skipping straight to picking a course since
-          // they're already signed in (existingUser mode on the form).
-          const myPendingApplicant = [...applicants].reverse().find((a) => a.email.toLowerCase() === teamAccess.email.toLowerCase() && a.status === "pending");
-          if (myPendingApplicant) { setActiveApplicant(myPendingApplicant); setPage("inReview"); return; }
-          setApplyingAsExisting({ isTeamMember: true, name: teamAccess.name, email: teamAccess.email, cohortId: null, enrollments: [] });
-          setPresetCourseId(null);
-          setPage("signup");
-        } : null} onUpdateTeamAccess={(patch) => setTeamAccess((prev) => prev ? { ...prev, ...patch } : prev)} />
+        <React.Suspense fallback={<LazyLoadingScreen />}>
+          <AdminDashboard courses={courses} setCourses={syncCourses} students={students} setStudents={syncStudents} onRemoveStudent={removeStudent} applicants={applicants} setApplicants={syncApplicants} onRemoveApplicant={removeApplicant} onAcceptApplicant={acceptApplicant} cohorts={cohorts} setCohorts={syncCohorts} tasks={tasks} setTasks={syncTasks} resources={resources} onAddResource={addResource} onEditResource={editResource} onRemoveResource={removeResource} community={community} setCommunity={syncCommunity} notices={notices} setNotices={syncNotices} directThreads={directThreads} setDirectThreads={syncDirectThreads} testimonials={testimonials} setTestimonials={syncTestimonials} faqs={faqs} setFaqs={syncFaqs} brand={brand} setBrand={syncBrand} adminProfile={adminProfile} setAdminProfile={syncAdminProfile} onExit={handleSignOut} onViewSite={() => setPage("landing")} notifItems={adminNotifItems} notifSeen={notifSeen} onMarkSeen={syncNotifSeen} teamAccess={teamAccess} onSwitchToStudent={teamAccess ? () => {
+            if (liveStudent) { setTeamViewMode("student"); return; }
+            // Not enrolled anywhere yet -- same "apply" flow any brand-new
+            // visitor uses, skipping straight to picking a course since
+            // they're already signed in (existingUser mode on the form).
+            const myPendingApplicant = [...applicants].reverse().find((a) => a.email.toLowerCase() === teamAccess.email.toLowerCase() && a.status === "pending");
+            if (myPendingApplicant) { setActiveApplicant(myPendingApplicant); setPage("inReview"); return; }
+            setApplyingAsExisting({ isTeamMember: true, name: teamAccess.name, email: teamAccess.email, cohortId: null, enrollments: [] });
+            setPresetCourseId(null);
+            setPage("signup");
+          } : null} onUpdateTeamAccess={(patch) => setTeamAccess((prev) => prev ? { ...prev, ...patch } : prev)} />
+        </React.Suspense>
       )}
     </div>
   );

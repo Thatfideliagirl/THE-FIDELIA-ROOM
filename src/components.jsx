@@ -752,7 +752,15 @@ function HowItWorksSection() {
   return (
     <section id="how" className="px-8 md:px-16 py-28" style={{ background: "#F0E7D6" }}>
       <div className="max-w-[1500px] mx-auto grid md:grid-cols-2 gap-16">
-        <div className="md:order-1">
+        {/* The extra bottom padding at md/lg isn't decorative -- it's buffer
+            for the sticky phone opposite. A sticky element can only stay
+            pinned for (this column's height minus the phone's own height)
+            of scrolling before it runs out of room and detaches early,
+            scrolling off partially cut-off. Making the phone bigger for
+            desktop shrank that margin enough that it detached around step
+            3-4 instead of after step 5. Padding this column back out
+            restores the buffer the bigger phone eats into. */}
+        <div className="md:order-1 md:pb-56 lg:pb-64">
           <Reveal><div className="f-label text-[13px] mb-4 accent-text">GET STARTED</div><h2 className="f-display text-[44px] mb-10" style={{ fontWeight: 800 }}>How you actually get into the Room.</h2></Reveal>
           <div className="flex flex-col gap-4">
             {HOWITWORKS_STEPS.map((s, i) => (
