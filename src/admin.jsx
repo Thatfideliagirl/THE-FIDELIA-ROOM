@@ -1172,38 +1172,52 @@ export function ResourceForm({ courses, folders = [], cohorts = [], initial, onS
   const [folderChoice, setFolderChoice] = useState(initial?.folder ? (folderIsExisting ? initial.folder : "__new__") : (folders[0] || "__new__"));
   const [newFolderName, setNewFolderName] = useState(initial?.folder && !folderIsExisting ? initial.folder : "");
   const [title, setTitle] = useState(initial?.title || ""); const [description, setDescription] = useState(initial?.description || ""); const [type, setType] = useState(initial?.type || "Doc"); const [url, setUrl] = useState(initial?.url || ""); const [file, setFile] = useState(initial?.file || null); const [kind, setKind] = useState(initial?.kind || "link"); const [visibility, setVisibility] = useState(initial?.visibility || "course"); const [courseId, setCourseId] = useState(initial?.courseId || courses[0]?.id);
-  // Cohort is just a filter here, to make a long course list shorter while
-  // picking one -- it's not saved on the resource itself (resources are
-  // scoped by course, same as always), only used to narrow this dropdown.
-  const [cohortId, setCohortId] = useState("all");
+  // Cohort does two different jobs depending on "Visible to" above. When
+  // visibility is "course" or "all" it's just a filter, to make a long
+  // course list shorter while picking one -- not saved anywhere. When
+  // visibility is "cohort" it IS what gets saved (cohortId), and "All
+  // cohorts" isn't a valid choice there -- a resource can't be visible to
+  // "all courses in [no cohort in particular]".
+  const [cohortId, setCohortId] = useState(initial?.cohortId || "all");
   const activeCohort = cohortId === "all" ? null : cohorts.find((c) => c.id === cohortId);
   const filterCourses = activeCohort ? courses.filter((c) => activeCohort.courseIds.includes(c.id)) : courses;
   useEffect(() => {
     if (!filterCourses.some((c) => c.id === courseId)) setCourseId(filterCourses[0]?.id);
   }, [cohortId]);
+  function changeVisibility(v) {
+    setVisibility(v);
+    if (v === "cohort" && cohortId === "all") setCohortId(cohorts[0]?.id || "all");
+  }
   const [saving, setSaving] = useState(false); const [error, setError] = useState("");
   const isPublic = category === "free";
   const folder = folderChoice === "__new__" ? newFolderName.trim() : folderChoice;
-  const canSave = folder && title && (kind === "file" ? file : url);
+  const needsRealCohort = category === "module" && visibility === "cohort";
+  const canSave = folder && title && (kind === "file" ? file : url) && (!needsRealCohort || cohortId !== "all");
   async function submit() {
     // Silently doing nothing when a required field was empty (no error, no
     // "saving" state) looked exactly like a successful save that just
     // didn't stick -- there was nothing here to tell you otherwise.
     if (!canSave) {
-      setError(!folder ? "Folder name is required." : !title ? "Resource title is required." : kind === "file" ? "Please upload a file." : "Please add a link.");
+      setError(!folder ? "Folder name is required." : !title ? "Resource title is required." : needsRealCohort && cohortId === "all" ? "Pick which cohort this is for." : kind === "file" ? "Please upload a file." : "Please add a link.");
       return;
     }
     setSaving(true); setError("");
-    const err = await onSave({ courseId: category === "free" ? null : courseId, folder, title, description, type, url, file, kind, visibility: category === "free" ? "all" : visibility, isPublic });
+    const err = await onSave({
+      courseId: category === "free" || visibility === "cohort" ? null : courseId,
+      cohortId: needsRealCohort ? cohortId : null,
+      folder, title, description, type, url, file, kind,
+      visibility: category === "free" ? "all" : visibility,
+      isPublic,
+    });
     setSaving(false);
     if (err) setError(err); else onClose();
   }
   return (
     <div className="card rounded-xl p-6 mb-6 flex flex-col gap-3">
       <SelectF label="Category" value={category} onChange={(e) => setCategory(e.target.value)} options={[{ value: "module", label: "Module resource (for enrolled students)" }, { value: "free", label: "Free download (public)" }]} />
-      {category === "module" && <SelectF label="Visible to" value={visibility} onChange={(e) => setVisibility(e.target.value)} options={[{ value: "course", label: "Just this course" }, { value: "all", label: "All courses" }]} />}
-      {category === "module" && cohorts.length > 0 && <SelectF label="Cohort (just to narrow the course list below)" value={cohortId} onChange={(e) => setCohortId(e.target.value)} options={[{ value: "all", label: "All cohorts" }, ...cohorts.map((c) => ({ value: c.id, label: c.name }))]} />}
-      {category === "module" && <SelectF label="Course" value={courseId} onChange={(e) => setCourseId(e.target.value)} options={filterCourses.map((c) => ({ value: c.id, label: c.title }))} />}
+      {category === "module" && <SelectF label="Visible to" value={visibility} onChange={(e) => changeVisibility(e.target.value)} options={[{ value: "course", label: "Just this course" }, { value: "cohort", label: "All courses in this cohort" }, { value: "all", label: "All courses" }]} />}
+      {category === "module" && cohorts.length > 0 && <SelectF label={needsRealCohort ? "Cohort" : "Cohort (just to narrow the course list below)"} value={cohortId} onChange={(e) => setCohortId(e.target.value)} options={[...(needsRealCohort ? [] : [{ value: "all", label: "All cohorts" }]), ...cohorts.map((c) => ({ value: c.id, label: c.name }))]} />}
+      {category === "module" && visibility !== "cohort" && <SelectF label="Course" value={courseId} onChange={(e) => setCourseId(e.target.value)} options={filterCourses.map((c) => ({ value: c.id, label: c.title }))} />}
       <SelectF label="Folder" value={folderChoice} onChange={(e) => setFolderChoice(e.target.value)} options={[...folders.map((f) => ({ value: f, label: f })), { value: "__new__", label: "+ New folder…" }]} />
       {folderChoice === "__new__" && <Field label="New folder name" value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder="e.g. Prompts" />}
       <Field label="Resource title" value={title} onChange={(e) => setTitle(e.target.value)} />
@@ -1216,7 +1230,7 @@ export function ResourceForm({ courses, folders = [], cohorts = [], initial, onS
     </div>
   );
 }
-export function LibraryTab({ resources, onAdd, onEdit, onRemove, courses, cohorts }) {
+export function LibraryTab({ resources, onAdd, onEdit, onRemove, courses, cohorts = [] }) {
   const [showAdd, setShowAdd] = useState(false); const [editingId, setEditingId] = useState(null); const [copiedId, setCopiedId] = useState(null);
   // Which folder the filter row is showing -- "all" renders every folder's
   // own section one after another, picking one jumps straight to just that
@@ -1272,7 +1286,7 @@ export function LibraryTab({ resources, onAdd, onEdit, onRemove, courses, cohort
             {resources.filter((r) => r.folder === f).map((r) => (
               <div key={r.id}>
                 <div className="card rounded-lg px-5 py-3 flex items-center justify-between text-[14px]">
-                  <span className="flex items-center gap-2">{r.title} {r.isPublic && <span className="f-code text-[9px] tint-badge px-2 py-0.5 rounded-full">PUBLIC</span>}{r.visibility === "all" && !r.isPublic && <span className="f-code text-[9px] tint-badge px-2 py-0.5 rounded-full">ALL COURSES</span>}</span>
+                  <span className="flex items-center gap-2">{r.title} {r.isPublic && <span className="f-code text-[9px] tint-badge px-2 py-0.5 rounded-full">PUBLIC</span>}{r.visibility === "all" && !r.isPublic && <span className="f-code text-[9px] tint-badge px-2 py-0.5 rounded-full">ALL COURSES</span>}{r.visibility === "cohort" && !r.isPublic && <span className="f-code text-[9px] tint-badge px-2 py-0.5 rounded-full">{(cohorts.find((c) => c.id === r.cohortId)?.name || "COHORT").toUpperCase()}</span>}</span>
                   <div className="flex items-center gap-3">
                     {r.isPublic && <button onClick={() => copyLink(r.id)} className="f-label text-[10px] accent-text flex items-center gap-1"><Send size={11} /> {copiedId === r.id ? "COPIED!" : "COPY LINK"}</button>}
                     <button onClick={() => setEditingId(editingId === r.id ? null : r.id)} className="f-label text-[10px] accent-text flex items-center gap-1"><Pencil size={11} /> EDIT</button>

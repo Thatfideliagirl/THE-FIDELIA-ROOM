@@ -28,12 +28,12 @@ const studentIn = (s) => ({
 });
 
 const resourceOut = (r) => ({
-  id: r.id, courseId: r.course_id, folder: r.folder, title: r.title, description: r.description || "",
+  id: r.id, courseId: r.course_id, cohortId: r.cohort_id, folder: r.folder, title: r.title, description: r.description || "",
   type: r.type, kind: r.kind, url: r.url || "", file: r.file_url ? { name: r.title, dataUrl: r.file_url } : null,
   visibility: r.visibility, isPublic: r.is_public,
 });
 const resourceIn = (r) => ({
-  course_id: r.courseId || null, folder: r.folder, title: r.title, description: r.description || "",
+  course_id: r.courseId || null, cohort_id: r.cohortId || null, folder: r.folder, title: r.title, description: r.description || "",
   type: r.type, kind: r.kind || "link", url: r.url || null, file_url: r.file?.dataUrl || null,
   visibility: r.visibility || "course", is_public: !!r.isPublic,
 });

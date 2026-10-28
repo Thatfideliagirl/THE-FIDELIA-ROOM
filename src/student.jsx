@@ -573,7 +573,7 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
         })()}
 
         {tab === "library" && (() => {
-          const myResources = resources.filter((r) => r.courseId === course.id || r.visibility === "all");
+          const myResources = resources.filter((r) => r.courseId === course.id || r.visibility === "all" || (r.visibility === "cohort" && cohorts.find((c) => c.id === r.cohortId)?.courseIds.includes(course.id)));
           const libraryFolders = [...new Set(myResources.map((r) => r.folder))];
           // "All" lists every resource together in one grid rather than a
           // section per folder -- a folder with only a couple of items
