@@ -293,6 +293,27 @@ export function scoreSubmission(text, markingGuide) {
   const missed = guideWords.filter((w) => !lowerText.includes(w));
   return { pct: Math.round((matched.length / guideWords.length) * 100), matched, missed, total: guideWords.length };
 }
+// A module's written/file-upload/milestone quick check used to carry one
+// questionPrompt + markingGuide; it's now a list of { id, prompt,
+// markingGuide } so a check can ask more than one question, each with its
+// own answer space -- same pattern multiple-choice already had with its
+// own question list. Reading every module through this instead of
+// module.questions directly means a module saved before this change
+// keeps working exactly as it did: its lone prompt/guide just becomes a
+// one-question list the first time anything reads it.
+export function normalizeQuestions(module) {
+  if (module.questions?.length) return module.questions;
+  if (module.questionPrompt || module.markingGuide) return [{ id: "legacy", prompt: module.questionPrompt || "", markingGuide: module.markingGuide || "" }];
+  return [{ id: "q1", prompt: "", markingGuide: "" }];
+}
+// One question's score is scoreSubmission against its own marking guide;
+// the whole check's score is the plain average across every question, so
+// one weak answer among several strong ones doesn't zero out the rest.
+export function scoreQuestions(proofs, questions) {
+  if (questions.length === 0) return 0;
+  const pcts = questions.map((q, i) => scoreSubmission(proofs[i] || "", q.markingGuide).pct);
+  return Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length);
+}
 export function genCode() { const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; let out = "FJ-"; for (let i = 0; i < 5; i++) out += chars[Math.floor(Math.random() * chars.length)]; return out; }
 // Based on the highest student code actually in use, not students.length --
 // counting rows breaks the instant anyone's ever been deleted (a gap in the

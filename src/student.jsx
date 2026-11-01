@@ -7,7 +7,7 @@ import {
   UserCircle, FolderPlus, UploadCloud, ClipboardCheck, HelpCircle as HelpIcon,
   Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Compass, Home, Repeat, Pause, IdCard as IdCardIcon
 } from "lucide-react";
-import { pairKey, moduleStatus, scoreSubmission, AUTO_APPROVE_THRESHOLD, LINK_TYPES, deriveSubmissionStatus, courseEligibility, formatDateTime } from "./lib/data.js";
+import { pairKey, moduleStatus, scoreSubmission, scoreQuestions, normalizeQuestions, AUTO_APPROVE_THRESHOLD, LINK_TYPES, deriveSubmissionStatus, courseEligibility, formatDateTime } from "./lib/data.js";
 import { renderCertificate, formatIssueDate } from "./lib/certificate.js";
 import { renderIdCard } from "./lib/idcard.js";
 import { SectionHeader, NotifBell, WelcomeTour, SidebarLink, LogoMark, Spine, TextArea, ProgressBar, ResourceDetail, Field, ChangePasswordCard, RichText, RichTextEditor, DashboardShell, TaskFileList } from "./components.jsx";
@@ -209,7 +209,8 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
   const [lectureStep, setLectureStep] = useState("brief"); // "brief" | "content" | "summary"
   const [sectionIdx, setSectionIdx] = useState(0);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [answers, setAnswers] = useState({}); const [result, setResult] = useState(null); const [proof, setProof] = useState("");
+  const [answers, setAnswers] = useState({}); const [result, setResult] = useState(null); const [proofs, setProofs] = useState([]);
+  function setProofAt(i, value) { setProofs((p) => { const next = [...p]; next[i] = value; return next; }); }
   const currentIndex = Math.min(enrollment.completedModuleIds.length, course.modules.length - 1);
   const requestedIndex = moduleId != null ? course.modules.findIndex((m) => m.id === moduleId) : -1;
   const moduleIndex = requestedIndex >= 0 ? requestedIndex : currentIndex;
@@ -220,7 +221,8 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
   const hasNext = enrollment.completedModuleIds.length < course.modules.length;
   const pendingHere = enrollment.pendingReview?.moduleId === module.id;
 
-  useEffect(() => { setView("lecture"); setLectureStep(module.brief ? "brief" : "content"); setSectionIdx(0); setDrawerOpen(false); setAnswers({}); setResult(null); setProof(""); setJustPassed(!!justApproved); }, [module.id]);
+  useEffect(() => { setView("lecture"); setLectureStep(module.brief ? "brief" : "content"); setSectionIdx(0); setDrawerOpen(false); setAnswers({}); setResult(null); setProofs([]); setJustPassed(!!justApproved); }, [module.id]);
+  const checkQuestions = useMemo(() => normalizeQuestions(module), [module]);
   const sections = useMemo(() => {
     const s = splitLectureSections(module.notes);
     return s.length > 0 ? s : [{ heading: null, html: "" }];
@@ -238,18 +240,19 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
   function submitQuiz() { let correct = 0; module.quiz.forEach((q, i) => { if (answers[i] === q.correct) correct++; }); const pct = Math.round((correct / module.quiz.length) * 100); setResult(pct); if (pct >= (module.passPct || 70)) completeModule(); }
   const isLinkProof = (module.testType === "file-upload" || module.testType === "milestone") && module.proofType === "link";
   const linkType = isLinkProof ? (LINK_TYPES.find((t) => t.key === module.linkType) || LINK_TYPES.find((t) => t.key === "other")) : null;
-  const linkValid = isLinkProof && linkType?.test(proof.trim());
+  const linkValids = checkQuestions.map((_, i) => isLinkProof && linkType?.test((proofs[i] || "").trim()));
+  const allFilled = checkQuestions.every((_, i) => (proofs[i] || "").trim());
   function submitForReview() {
-    if (!proof.trim()) return;
-    // A link already gets checked for shape as it's typed (see linkValid) --
-    // there's nothing left to keyword-match against the marking guide, so
+    if (!allFilled) return;
+    // A link already gets checked for shape as it's typed (see linkValids) --
+    // there's nothing left to keyword-match against a marking guide, so
     // every link submission just goes straight to review instead of risking
     // an auto-approve on an unrelated keyword overlap with the URL itself.
-    if (isLinkProof) { updateEnrollment({ pendingReview: { moduleId: module.id, proof, submittedAt: Date.now() } }); return; }
-    const { pct } = scoreSubmission(proof, module.markingGuide);
+    if (isLinkProof) { updateEnrollment({ pendingReview: { moduleId: module.id, proofs, submittedAt: Date.now() } }); return; }
+    const pct = scoreQuestions(proofs, checkQuestions);
     if (module.autoGradeOnly) { setResult(pct); if (pct >= (module.passPct || 70)) completeModule(); return; }
     if (pct >= AUTO_APPROVE_THRESHOLD) completeModule();
-    else updateEnrollment({ pendingReview: { moduleId: module.id, proof, submittedAt: Date.now(), autoScore: pct } });
+    else updateEnrollment({ pendingReview: { moduleId: module.id, proofs, submittedAt: Date.now(), autoScore: pct } });
   }
   if (justPassed) return (
     <div className="min-h-screen px-10 md:px-16 py-12 max-w-[600px] mx-auto flex flex-col items-center text-center justify-center" style={{ minHeight: "70vh" }}>
@@ -407,23 +410,30 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
           {status === "current" && !pendingHere && (module.testType === "written" || module.testType === "file-upload" || module.testType === "milestone") && (
             <>
               <div className="f-display text-[19px] mb-3" style={{ fontWeight: 700 }}>{module.testType === "written" ? "Written response" : module.testType === "milestone" ? "Milestone project" : `Upload your work${module.proofType === "document" ? " (document)" : ""}`}</div>
-              {module.questionPrompt && <RichText html={module.questionPrompt} className="rich-content text-[14px] mb-4" style={{ color: "#4A4237" }} />}
-              {module.testType === "written" ? (
-                <div><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Your answer</div><RichTextEditor value={proof} onChange={setProof} minRows={6} /></div>
-              ) : isLinkProof ? (
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="f-label text-[11px]" style={{ color: "#71675A" }}>{linkType?.label?.toUpperCase()} LINK</span>
-                    <span className="f-code text-[10px] px-2 py-0.5 rounded-full" style={{ background: !proof.trim() ? "#F0E7D6" : linkValid ? "#E4F3E9" : "#FBEAE7", color: !proof.trim() ? "#A79B84" : linkValid ? "#2F7D4F" : "#B04A3A" }}>{!proof.trim() ? "NOT FILLED" : linkValid ? "✓ LOOKS RIGHT" : `NOT A ${linkType?.label?.toUpperCase()} LINK`}</span>
+              <div className="flex flex-col gap-6">
+                {checkQuestions.map((q, qi) => (
+                  <div key={q.id || qi}>
+                    {checkQuestions.length > 1 && <div className="f-label text-[11px] mb-1.5" style={{ color: "#A79B84" }}>QUESTION {qi + 1} OF {checkQuestions.length}</div>}
+                    {q.prompt && <RichText html={q.prompt} className="rich-content text-[14px] mb-3" style={{ color: "#4A4237" }} />}
+                    {module.testType === "written" ? (
+                      <div><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Your answer</div><RichTextEditor value={proofs[qi] || ""} onChange={(v) => setProofAt(qi, v)} minRows={6} /></div>
+                    ) : isLinkProof ? (
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="f-label text-[11px]" style={{ color: "#71675A" }}>{linkType?.label?.toUpperCase()} LINK</span>
+                          <span className="f-code text-[10px] px-2 py-0.5 rounded-full" style={{ background: !(proofs[qi] || "").trim() ? "#F0E7D6" : linkValids[qi] ? "#E4F3E9" : "#FBEAE7", color: !(proofs[qi] || "").trim() ? "#A79B84" : linkValids[qi] ? "#2F7D4F" : "#B04A3A" }}>{!(proofs[qi] || "").trim() ? "NOT FILLED" : linkValids[qi] ? "✓ LOOKS RIGHT" : `NOT A ${linkType?.label?.toUpperCase()} LINK`}</span>
+                        </div>
+                        <input className="input-field rounded-lg px-3.5 py-2.5 text-[14px] w-full" placeholder={linkType?.placeholder} value={proofs[qi] || ""} onChange={(e) => setProofAt(qi, e.target.value)} />
+                        {linkValids[qi] && <a href={(proofs[qi] || "").trim()} target="_blank" rel="noreferrer" className="text-[12px] accent-text mt-1 inline-flex items-center gap-1" style={{ fontWeight: 700 }}>Preview ↗</a>}
+                      </div>
+                    ) : (
+                      <TextArea label="Link to your file" value={proofs[qi] || ""} onChange={(e) => setProofAt(qi, e.target.value)} />
+                    )}
                   </div>
-                  <input className="input-field rounded-lg px-3.5 py-2.5 text-[14px] w-full" placeholder={linkType?.placeholder} value={proof} onChange={(e) => setProof(e.target.value)} />
-                  {linkValid && <a href={proof.trim()} target="_blank" rel="noreferrer" className="text-[12px] accent-text mt-1 inline-flex items-center gap-1" style={{ fontWeight: 700 }}>Preview ↗</a>}
-                </div>
-              ) : (
-                <TextArea label="Link to your file" value={proof} onChange={(e) => setProof(e.target.value)} />
-              )}
-              {module.autoGradeOnly && result != null && result < (module.passPct || 70) && <div className="text-[14px] mt-3" style={{ color: "#B04A3A", fontWeight: 700 }}>Scored {result}% — revise your answer and try again to unlock the next module.</div>}
-              <button onClick={submitForReview} disabled={isLinkProof && !linkValid} className="btn-primary rounded-lg px-6 py-3 text-[14px] mt-4">{module.autoGradeOnly ? "Submit answer" : "Submit for review"}</button>
+                ))}
+              </div>
+              {module.autoGradeOnly && result != null && result < (module.passPct || 70) && <div className="text-[14px] mt-3" style={{ color: "#B04A3A", fontWeight: 700 }}>Scored {result}% — revise your answer{checkQuestions.length > 1 ? "s" : ""} and try again to unlock the next module.</div>}
+              <button onClick={submitForReview} disabled={isLinkProof ? !linkValids.every(Boolean) : !allFilled} className="btn-primary rounded-lg px-6 py-3 text-[14px] mt-4">{module.autoGradeOnly ? "Submit answer" : "Submit for review"}</button>
             </>
           )}
         </div>

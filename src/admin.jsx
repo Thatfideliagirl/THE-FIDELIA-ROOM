@@ -8,7 +8,7 @@ import {
   Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Home, UserCog, Repeat, RotateCcw, IdCard
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from "recharts";
-import { genCode, pairKey, ADMIN_EMAIL, TEAM_PERMISSION_TABS, LINK_TYPES, STUDENT_ACCESS_TABS, linkShare, deriveSubmissionStatus, sumLinkScores, capstoneStatus, courseEligibility, formatDateTime, formatRelativeTime, AUTO_APPROVE_THRESHOLD } from "./lib/data.js";
+import { genCode, pairKey, ADMIN_EMAIL, TEAM_PERMISSION_TABS, LINK_TYPES, STUDENT_ACCESS_TABS, linkShare, deriveSubmissionStatus, sumLinkScores, capstoneStatus, courseEligibility, formatDateTime, formatRelativeTime, AUTO_APPROVE_THRESHOLD, normalizeQuestions } from "./lib/data.js";
 import { renderCertificate, formatIssueDate } from "./lib/certificate.js";
 import { renderTestimonialCard } from "./lib/testimonial.js";
 import { Field, SectionHeader, NotifBell, SidebarLink, LogoMark, TextArea, SelectF, ImgField, FileField, TaskFileList, ChangePasswordCard, RichTextEditor, RichText, DashboardShell, WelcomeTour, TEAM_TOUR_STEPS } from "./components.jsx";
@@ -173,10 +173,16 @@ export function ModuleEditor({ course, module, setCourses, onBack }) {
   const [slideDescription, setSlideDescription] = useState(module.slideDescription || "");
   const [summary, setSummary] = useState(module.summary || "");
   const [testType, setTestType] = useState(module.testType); const [passPct, setPassPct] = useState(module.passPct || 70);
-  const [proofType, setProofType] = useState(module.proofType || "text"); const [markingGuide, setMarkingGuide] = useState(module.markingGuide || "");
+  const [proofType, setProofType] = useState(module.proofType || "text");
   const [autoGradeOnly, setAutoGradeOnly] = useState(module.autoGradeOnly || false);
   const [linkType, setLinkType] = useState(module.linkType || "other");
-  const [questionPrompt, setQuestionPrompt] = useState(module.questionPrompt || "");
+  // Written / file-upload / milestone checks can now ask more than one
+  // question, same as multiple-choice already could -- each with its own
+  // prompt and (unless the proof is a link) its own marking guide.
+  const [questions, setQuestions] = useState(() => normalizeQuestions(module));
+  function addCheckQuestion() { setQuestions((qs) => [...qs, { id: "cq" + Date.now(), prompt: "", markingGuide: "" }]); }
+  function updateCheckQuestion(i, patch) { setQuestions((qs) => qs.map((q, idx) => idx !== i ? q : { ...q, ...patch })); }
+  function removeCheckQuestion(i) { setQuestions((qs) => qs.filter((_, idx) => idx !== i)); }
   const [quiz, setQuiz] = useState(module.quiz || []);
   const [meetings, setMeetings] = useState(module.meetings || []);
   // A separate step from the lecture notes and from the Resources/Library
@@ -200,7 +206,7 @@ export function ModuleEditor({ course, module, setCourses, onBack }) {
   function addVideo() { setVideos((v) => [...v, { id: "v" + Date.now(), label: "", url: "", file: null }]); }
   function updateVideo(i, patch) { setVideos((v) => v.map((item, idx) => idx === i ? { ...item, ...patch } : item)); }
   function removeVideo(i) { setVideos((v) => v.filter((_, idx) => idx !== i)); }
-  function save() { setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, modules: c.modules.map((m) => m.id !== module.id ? m : { ...m, title, brief, notes, summary, videoUrl, slideUrl, slideFile, slideDescription, testType, passPct: Number(passPct), proofType, linkType, markingGuide, questionPrompt, quiz, meetings, videoIntro, videos, resourceFiles: resourceFiles.filter((r) => r.file), autoGradeOnly }) })); onBack(); }
+  function save() { setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, modules: c.modules.map((m) => m.id !== module.id ? m : { ...m, title, brief, notes, summary, videoUrl, slideUrl, slideFile, slideDescription, testType, passPct: Number(passPct), proofType, linkType, questions, quiz, meetings, videoIntro, videos, resourceFiles: resourceFiles.filter((r) => r.file), autoGradeOnly }) })); onBack(); }
   const [confirmDelete, setConfirmDelete] = useState(false);
   function deleteModuleNow() { setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, modules: c.modules.filter((m) => m.id !== module.id) })); onBack(); }
   return (
@@ -271,8 +277,20 @@ export function ModuleEditor({ course, module, setCourses, onBack }) {
           <>
             {(testType === "file-upload" || testType === "milestone") && <SelectF label="Required proof type" value={proofType} onChange={(e) => setProofType(e.target.value)} options={[{ value: "document", label: "Document upload" }, { value: "link", label: "Link" }, { value: "image", label: "Image / screenshot link" }]} />}
             {(testType === "file-upload" || testType === "milestone") && proofType === "link" && <SelectF label="What kind of link is this?" value={linkType} onChange={(e) => setLinkType(e.target.value)} options={LINK_TYPES.map((t) => ({ value: t.key, label: t.label }))} />}
-            <div><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>{testType === "written" ? "The question students will answer" : testType === "milestone" ? "Milestone project brief (what they need to build and submit)" : "What students need to submit"}</div><RichTextEditor value={questionPrompt} onChange={setQuestionPrompt} minRows={5} /></div>
-            {proofType !== "link" && <TextArea label="Marking guide — list the key points a good submission should cover, one per idea (used both for your review and for auto-checking matches)" value={markingGuide} onChange={(e) => setMarkingGuide(e.target.value)} rows={6} />}
+            {/* As many questions as the check needs, each with its own prompt
+                and (unless the proof is a link, which needs no marking guide)
+                its own marking guide -- same "add another one" pattern as
+                multiple choice above, just for this question shape instead. */}
+            <div className="flex flex-col gap-4">
+              {questions.map((q, qi) => (
+                <div key={q.id} className="rounded-xl p-4 flex flex-col gap-3" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
+                  {questions.length > 1 && <div className="flex items-center justify-between"><div className="f-label text-[11px]" style={{ color: "#71675A" }}>QUESTION {qi + 1}</div><button onClick={() => removeCheckQuestion(qi)}><Trash2 size={14} color="#B04A3A" /></button></div>}
+                  <div><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>{testType === "written" ? "The question students will answer" : testType === "milestone" ? "Milestone project brief (what they need to build and submit)" : "What students need to submit"}</div><RichTextEditor value={q.prompt} onChange={(v) => updateCheckQuestion(qi, { prompt: v })} minRows={5} /></div>
+                  {proofType !== "link" && <TextArea label="Marking guide — list the key points a good answer should cover, one per idea (used both for your review and for auto-checking matches)" value={q.markingGuide} onChange={(e) => updateCheckQuestion(qi, { markingGuide: e.target.value })} rows={6} />}
+                </div>
+              ))}
+              <button onClick={addCheckQuestion} className="text-[13px] accent-text flex items-center gap-1.5 self-start" style={{ fontWeight: 700 }}><Plus size={14} /> Add another question</button>
+            </div>
             {proofType !== "link" && (
               <div className="rounded-lg px-4 py-3 flex flex-col gap-3" style={{ background: "#FAF6EC" }}>
                 <label className="flex items-center gap-2 text-[13px] cursor-pointer" style={{ fontWeight: 600 }}>
@@ -797,8 +815,12 @@ export function StudentDetail({ student, applicant, setStudents, courses, cohort
             return (
               <div key={e.id} className="rounded-xl p-4" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
                 <div className="flex items-center justify-between mb-1"><div className="text-[13px]" style={{ fontWeight: 700 }}>{course?.title} — {module?.title}</div>{typeof e.pendingReview.autoScore === "number" && <span className="f-code text-[10px] px-2 py-0.5 rounded-full" style={{ background: "#F0E7D6", color: "#71675A" }}>AUTO-CHECK: {e.pendingReview.autoScore}% match</span>}</div>
-                {module?.questionPrompt && <RichText html={module.questionPrompt} className="rich-content text-[12px] mb-2" style={{ color: "#71675A" }} />}
-                <RichText html={e.pendingReview.proof} className="rich-content text-[14px] mb-3 rounded-lg px-3 py-2.5" style={{ background: "#fff", border: "1px solid #E7DEC9" }} />
+                {module && normalizeQuestions(module).map((q, qi) => (
+                  <div key={q.id || qi} className="mb-3">
+                    {q.prompt && <RichText html={q.prompt} className="rich-content text-[12px] mb-1.5" style={{ color: "#71675A" }} />}
+                    <RichText html={(e.pendingReview.proofs || [e.pendingReview.proof])[qi] || ""} className="rich-content text-[14px] rounded-lg px-3 py-2.5" style={{ background: "#fff", border: "1px solid #E7DEC9" }} />
+                  </div>
+                ))}
                 <div className="flex items-center gap-2"><button onClick={() => decideReview(e.id, true)} className="btn-primary rounded-lg px-4 py-2 text-[12px]">Approve — unlock next module</button><button onClick={() => decideReview(e.id, false)} className="text-[12px]" style={{ color: "#B04A3A" }}>Send back</button></div>
               </div>
             );
