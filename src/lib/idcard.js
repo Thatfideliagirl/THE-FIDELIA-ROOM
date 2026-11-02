@@ -19,6 +19,13 @@ export function loadImage(src) {
   if (imageCache.has(src)) return imageCache.get(src);
   const promise = new Promise((resolve, reject) => {
     const img = new Image();
+    // Template and photo uploads are real Storage URLs now (a different
+    // origin from the app itself), not data: URIs -- without requesting
+    // CORS access before the image loads, drawing it onto the canvas below
+    // "taints" that canvas, and toBlob() later either throws or silently
+    // returns null. This has to be set before src so the browser knows to
+    // fetch it in CORS mode in the first place.
+    img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
     img.onerror = () => { imageCache.delete(src); reject(new Error("Couldn't load an image.")); };
     img.src = src;

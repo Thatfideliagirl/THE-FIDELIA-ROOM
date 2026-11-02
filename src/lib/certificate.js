@@ -13,6 +13,11 @@
 export function renderCertificate(templateDataUrl, { name, namePos, fontSizePct, date, datePos, dateFontSizePct }, color = "#2A2620") {
   return new Promise((resolve, reject) => {
     const img = new Image();
+    // The template is a real Storage URL (a different origin from the app
+    // itself), not a data: URI -- without requesting CORS access before it
+    // loads, drawing it onto the canvas below "taints" that canvas, and
+    // toBlob() further down either throws or silently returns null.
+    img.crossOrigin = "anonymous";
     img.onload = () => {
       const canvas = document.createElement("canvas");
       canvas.width = img.naturalWidth;

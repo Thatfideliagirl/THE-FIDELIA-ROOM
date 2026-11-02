@@ -942,7 +942,13 @@ export function TaskForm({ students, courses, cohorts, initial, onSave, onClose 
   function removeFileRow(i) { setFiles((prev) => prev.filter((_, idx) => idx !== i)); }
   const eligible = students.filter((s) => s.enrollments.some((e) => e.courseId === courseId));
   const cohortEligible = cohortId === "all" ? eligible : eligible.filter((s) => s.cohortId === cohortId);
-  const effectiveAssigned = cohortId === "all" ? assigned : cohortEligible.map((s) => s.id);
+  // A cohort-assigned task re-syncs to whoever's currently in that cohort
+  // every time it's saved, including a save that only touched something
+  // unrelated like the deadline -- so anyone who already submitted is kept
+  // regardless of today's cohort membership, instead of a routine edit
+  // silently unassigning (and hiding) a task someone already has work in.
+  const alreadySubmitted = Object.keys(initial?.submissions || {});
+  const effectiveAssigned = cohortId === "all" ? assigned : [...new Set([...cohortEligible.map((s) => s.id), ...alreadySubmitted])];
   function addLinkRow() {
     const used = new Set(requiredLinks.map((r) => r.type));
     const next = LINK_TYPES.find((t) => !used.has(t.key)) || LINK_TYPES[0];

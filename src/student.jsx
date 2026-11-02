@@ -10,6 +10,7 @@ import {
 import { pairKey, moduleStatus, scoreSubmission, scoreQuestions, normalizeQuestions, AUTO_APPROVE_THRESHOLD, LINK_TYPES, deriveSubmissionStatus, courseEligibility, formatDateTime } from "./lib/data.js";
 import { renderCertificate, formatIssueDate } from "./lib/certificate.js";
 import { renderIdCard } from "./lib/idcard.js";
+import { uploadFile } from "./lib/storage.js";
 import { SectionHeader, NotifBell, WelcomeTour, SidebarLink, LogoMark, Spine, TextArea, ProgressBar, ResourceDetail, Field, ChangePasswordCard, RichText, RichTextEditor, DashboardShell, TaskFileList } from "./components.jsx";
 
 // List markers (•, ‣, etc.) are sometimes present as literal characters
@@ -753,12 +754,28 @@ function StudentIdTab({ course, cohort, student, setStudents, template }) {
   const cacheKey = template ? JSON.stringify([template.file.dataUrl, template.photoBox, template.namePos, template.idPos, template.programmePos, template.cohortPos, template.fontSizePct, student.photo?.dataUrl, student.name, student.studentId, course.title, cohort?.name]) : null;
   const [finalUrl, setFinalUrl] = useState(() => (cacheKey && idCardCache.get(cacheKey)) || null);
   const [error, setError] = useState("");
-  function onPhotoPick(e) {
+  const [photoUploading, setPhotoUploading] = useState(false);
+  // Uploads to real Storage and saves a real URL, same fix as every other
+  // upload in the app (course images, slide decks, rich-text images) --
+  // a phone photo straight off the camera can be several MB, and this used
+  // to embed it as a base64 "data:" string directly in the student's own
+  // row. A save that size is slow and, on a weak connection, can fail
+  // outright -- which looked exactly like "I uploaded my photo but it
+  // keeps disappearing," since the picked photo showed in the browser for
+  // that moment but the save behind it never actually finished.
+  async function onPhotoPick(e) {
     const f = e.target.files?.[0];
     if (!f) return;
-    const r = new FileReader();
-    r.onload = () => setStudents((prev) => prev.map((s) => s.id === student.id ? { ...s, photo: { name: f.name, dataUrl: r.result } } : s));
-    r.readAsDataURL(f);
+    setPhotoUploading(true); setError("");
+    try {
+      const url = await uploadFile(f);
+      setStudents((prev) => prev.map((s) => s.id === student.id ? { ...s, photo: { name: f.name, dataUrl: url } } : s));
+    } catch (err) {
+      console.error("photo upload failed", err);
+      setError("Photo upload failed — check your connection and try again.");
+    } finally {
+      setPhotoUploading(false);
+    }
   }
   useEffect(() => {
     if (!template) { setFinalUrl(null); return; }
@@ -793,7 +810,7 @@ function StudentIdTab({ course, cohort, student, setStudents, template }) {
       {!student.photo && <div className="text-[13px] mb-4 text-center" style={{ color: "#A79B84" }}>Add a photo below to finish your card.</div>}
       {error && <div className="text-[13px] mb-4 text-center" style={{ color: "#B04A3A" }}>{error}</div>}
       <div className="flex items-center gap-3 flex-wrap justify-center">
-        <label className="btn-soft rounded-full px-5 py-2.5 text-[14px] cursor-pointer" style={{ fontWeight: 700 }}>{student.photo ? "Change photo" : "Upload your photo"}<input type="file" accept="image/*" onChange={onPhotoPick} style={{ display: "none" }} /></label>
+        <label className="btn-soft rounded-full px-5 py-2.5 text-[14px]" style={{ fontWeight: 700, cursor: photoUploading ? "default" : "pointer", opacity: photoUploading ? 0.7 : 1 }}>{photoUploading ? "Uploading…" : student.photo ? "Change photo" : "Upload your photo"}<input type="file" accept="image/*" onChange={onPhotoPick} style={{ display: "none" }} disabled={photoUploading} /></label>
         <a href={finalUrl || "#"} download={`${student.name} - FJ Room ID.png`} className="btn-primary rounded-full px-6 py-2.5 text-[14px]" style={{ opacity: finalUrl && student.photo ? 1 : 0.5, pointerEvents: finalUrl && student.photo ? "auto" : "none" }}>{finalUrl ? "Download ID card" : "Preparing…"}</a>
       </div>
     </div>
@@ -1085,12 +1102,29 @@ export function ProfilePage({ student, setStudents, cohort }) {
   const [bio, setBio] = useState(student.bio || "");
   const [socialLinks, setSocialLinks] = useState(student.socialLinks || []);
   const [saved, setSaved] = useState(false);
-  // A blob: URL only ever existed for this tab's own lifetime -- saving it
-  // wrote nothing a page reload (or the DB) could keep, since it doesn't
-  // survive a refresh and isn't a real {name, dataUrl} photo object the
-  // rest of the app (and the ID card) knows how to read. FileReader gives
-  // back a real, storable dataUrl, same as every other photo upload here.
-  function onPhotoPick(e) { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = () => setPhoto({ name: f.name, dataUrl: r.result }); r.readAsDataURL(f); }
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoError, setPhotoError] = useState("");
+  // Uploads to real Storage and saves a real URL, same fix as every other
+  // upload in the app -- embedding a phone photo as a base64 "data:"
+  // string directly in the student's own row made that save several MB
+  // bigger and, on a weak connection, let it fail outright. That looked
+  // exactly like "I uploaded my photo but it keeps disappearing": the
+  // picked photo showed in the browser for that moment, but the save
+  // behind it never actually went through.
+  async function onPhotoPick(e) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setPhotoUploading(true); setPhotoError("");
+    try {
+      const url = await uploadFile(f);
+      setPhoto({ name: f.name, dataUrl: url });
+    } catch (err) {
+      console.error("photo upload failed", err);
+      setPhotoError("Photo upload failed — check your connection and try again.");
+    } finally {
+      setPhotoUploading(false);
+    }
+  }
   function addLink() { setSocialLinks((prev) => [...prev, { id: "sl" + Date.now(), platform: "instagram", url: "" }]); }
   function updateLink(i, patch) { setSocialLinks((prev) => prev.map((l, idx) => idx === i ? { ...l, ...patch } : l)); }
   function removeLink(i) { setSocialLinks((prev) => prev.filter((_, idx) => idx !== i)); }
@@ -1099,7 +1133,8 @@ export function ProfilePage({ student, setStudents, cohort }) {
     <div className="max-w-[520px]">
       <div className="mb-8"><div className="f-label text-[12px] mb-2 accent-text">YOUR PROFILE</div><h1 className="f-display text-[30px]" style={{ fontWeight: 800 }}>Profile details.</h1></div>
       <div className="card rounded-2xl p-8">
-        <div className="flex items-center gap-5 mb-6"><div className="rounded-full overflow-hidden flex items-center justify-center shrink-0" style={{ width: 76, height: 76, background: "color-mix(in srgb, var(--accent) 14%, white)" }}>{photo ? <img src={photo.dataUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <UserCircle size={34} color="var(--accent)" />}</div><label className="btn-soft rounded-full px-4 py-2 text-[13px] cursor-pointer" style={{ fontWeight: 600 }}>Change photo<input type="file" accept="image/*" onChange={onPhotoPick} style={{ display: "none" }} /></label></div>
+        <div className="flex items-center gap-5 mb-1"><div className="rounded-full overflow-hidden flex items-center justify-center shrink-0" style={{ width: 76, height: 76, background: "color-mix(in srgb, var(--accent) 14%, white)" }}>{photo ? <img src={photo.dataUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <UserCircle size={34} color="var(--accent)" />}</div><label className="btn-soft rounded-full px-4 py-2 text-[13px]" style={{ fontWeight: 600, cursor: photoUploading ? "default" : "pointer", opacity: photoUploading ? 0.7 : 1 }}>{photoUploading ? "Uploading…" : "Change photo"}<input type="file" accept="image/*" onChange={onPhotoPick} style={{ display: "none" }} disabled={photoUploading} /></label></div>
+        <div className="mb-6">{photoError && <div className="text-[12px]" style={{ color: "#B04A3A" }}>{photoError}</div>}</div>
         {/* A grid item's default min-width is "auto", so a long, spaceless
             string like an email address doesn't wrap at the column edge --
             it just keeps going and visually spills into the next column
