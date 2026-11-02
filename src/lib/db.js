@@ -17,12 +17,14 @@ const applicantIn = (a) => ({
 const studentOut = (s) => ({
   id: s.id, studentId: s.student_code, name: s.name, email: s.email, cohortId: s.cohort_id,
   photo: s.photo_url ? { name: "photo", dataUrl: s.photo_url } : null, bio: s.bio || "",
+  socialLinks: s.social_links || [],
   seenTour: s.seen_tour, accountStatus: s.account_status, authUserId: s.auth_user_id,
   enrollments: s.enrollments || [],
 });
 const studentIn = (s) => ({
   student_code: s.studentId, name: s.name, email: s.email, cohort_id: s.cohortId || null,
   photo_url: s.photo?.dataUrl || null, bio: s.bio || "",
+  social_links: s.socialLinks || [],
   seen_tour: !!s.seenTour, account_status: s.accountStatus || "active", auth_user_id: s.authUserId || null,
   enrollments: s.enrollments || [],
 });
@@ -99,8 +101,8 @@ export async function insertStudent(student) {
 // not this list. A student's own save (profile edits) just echoes their
 // existing name/email back unchanged either way.
 export async function updateStudent(id, student) {
-  const { name, email, studentId, cohortId, accountStatus, seenTour, photo, bio, enrollments } = student;
-  const dbPatch = { name, email, student_code: studentId, cohort_id: cohortId || null, account_status: accountStatus, seen_tour: !!seenTour, photo_url: photo?.dataUrl || null, bio: bio || "", enrollments: enrollments || [] };
+  const { name, email, studentId, cohortId, accountStatus, seenTour, photo, bio, socialLinks, enrollments } = student;
+  const dbPatch = { name, email, student_code: studentId, cohort_id: cohortId || null, account_status: accountStatus, seen_tour: !!seenTour, photo_url: photo?.dataUrl || null, bio: bio || "", social_links: socialLinks || [], enrollments: enrollments || [] };
   const { data, error } = await supabase.from("students").update(dbPatch).eq("id", id).select().single();
   if (error) throw error;
   return studentOut(data);
