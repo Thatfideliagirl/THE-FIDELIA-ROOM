@@ -244,6 +244,15 @@ export function LessonView({ course, enrollment, student, updateEnrollment, onBa
   const linkType = isLinkProof ? (LINK_TYPES.find((t) => t.key === module.linkType) || LINK_TYPES.find((t) => t.key === "other")) : null;
   const linkValids = checkQuestions.map((_, i) => isLinkProof && linkType?.test((proofs[i] || "").trim()));
   const allFilled = checkQuestions.every((_, i) => (proofs[i] || "").trim());
+  // Plain text either way for the admin-notify email -- a "written" answer
+  // is rich HTML in the app itself, but stripped down to text here so the
+  // email shows a quick, readable preview rather than raw formatting.
+  function buildProofSummary() {
+    return checkQuestions.map((q, i) => {
+      const text = stripHtml(proofs[i] || "");
+      return checkQuestions.length > 1 ? `Q${i + 1}: ${text}` : text;
+    }).join("\n\n");
+  }
   function submitForReview() {
     if (!allFilled) return;
     // A link already gets checked for shape as it's typed (see linkValids) --
@@ -252,7 +261,7 @@ export function LessonView({ course, enrollment, student, updateEnrollment, onBa
     // an auto-approve on an unrelated keyword overlap with the URL itself.
     if (isLinkProof) {
       updateEnrollment({ pendingReview: { moduleId: module.id, proofs, submittedAt: Date.now() } });
-      notifyAdminQuickCheckSubmitted({ studentName: student.name, moduleTitle: module.title, courseName: course.title });
+      notifyAdminQuickCheckSubmitted({ studentName: student.name, moduleTitle: module.title, courseName: course.title, submissionSummary: buildProofSummary() });
       return;
     }
     const pct = scoreQuestions(proofs, checkQuestions);
@@ -260,7 +269,7 @@ export function LessonView({ course, enrollment, student, updateEnrollment, onBa
     if (pct >= AUTO_APPROVE_THRESHOLD) completeModule();
     else {
       updateEnrollment({ pendingReview: { moduleId: module.id, proofs, submittedAt: Date.now(), autoScore: pct } });
-      notifyAdminQuickCheckSubmitted({ studentName: student.name, moduleTitle: module.title, courseName: course.title });
+      notifyAdminQuickCheckSubmitted({ studentName: student.name, moduleTitle: module.title, courseName: course.title, submissionSummary: buildProofSummary() });
     }
   }
   if (justPassed) return (
@@ -839,14 +848,17 @@ export function TaskDetailStudent({ task, student, allStudents, setTasks, onBack
   const isPastDeadline = task.deadlineAt ? Date.now() > new Date(task.deadlineAt).getTime() : false;
   function submit() {
     if (isPastDeadline) return;
+    let submissionSummary;
     if (hasLinks) {
       const linksObj = {}; links.forEach((v, i) => { linksObj[i] = v; });
       setTasks((prev) => prev.map((t) => t.id !== task.id ? t : { ...t, submissions: { ...t.submissions, [student.id]: { status: "needs review", links: linksObj, linkGrades: {}, note: "", score: null, round: 0, submittedAt: Date.now(), lastActivityAt: Date.now() } } }));
+      submissionSummary = task.requiredLinks.map((r, i) => `${r.label || r.type}: ${links[i]}`).join("\n");
     } else {
       if (!note.trim()) return;
       setTasks((prev) => prev.map((t) => t.id !== task.id ? t : { ...t, submissions: { ...t.submissions, [student.id]: { status: "in review", note, score: null, submittedAt: Date.now(), lastActivityAt: Date.now() } } }));
+      submissionSummary = note;
     }
-    notifyAdminTaskSubmitted({ studentName: student.name, taskTitle: task.title, courseName });
+    notifyAdminTaskSubmitted({ studentName: student.name, taskTitle: task.title, courseName, submissionSummary });
   }
   // Resubmitting one flagged link only reopens that link -- every other
   // link keeps whatever the admin already decided, so nothing already

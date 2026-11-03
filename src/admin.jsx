@@ -1163,7 +1163,7 @@ export function TaskDetail({ task, setTasks, students, courses, cohorts, onClose
     setEditing(false);
     newlyAssigned.forEach((sid) => {
       const s = students.find((x) => x.id === sid);
-      if (s) sendTaskAssignedEmail({ email: s.email, name: s.name, taskTitle: data.title, courseName: course?.title });
+      if (s) sendTaskAssignedEmail({ email: s.email, name: s.name, taskTitle: data.title, courseName: course?.title, taskDescription: data.description });
     });
   }
   if (editing) return <TaskForm students={students} courses={courses} cohorts={cohorts} initial={task} onSave={save} onClose={() => setEditing(false)} />;
@@ -1204,7 +1204,7 @@ export function TasksTab({ tasks, setTasks, students, courses, cohorts }) {
     setShowAdd(false);
     (data.assigned || []).forEach((sid) => {
       const s = students.find((x) => x.id === sid);
-      if (s) sendTaskAssignedEmail({ email: s.email, name: s.name, taskTitle: data.title, courseName: course?.title });
+      if (s) sendTaskAssignedEmail({ email: s.email, name: s.name, taskTitle: data.title, courseName: course?.title, taskDescription: data.description });
     });
   }
   function deleteTask(id) { setTasks((prev) => prev.filter((t) => t.id !== id)); setSelected(null); }
@@ -1805,17 +1805,13 @@ function EmailTemplateRow({ def, custom, onSave, onReset }) {
   const defaults = EMAIL_DEFAULTS[def.key];
   const [subject, setSubject] = useState(custom?.subject || defaults.subject(SAMPLE_VARS));
   const [body, setBody] = useState(custom?.body || defaults.body(SAMPLE_VARS));
-  const taRef = useRef(null);
+  const editorRef = useRef(null);
   // Inserts right where the cursor was, not just at the end -- so a token
   // can be dropped into the middle of a sentence she's already written.
   function insertToken(token) {
-    const el = taRef.current;
     const tag = `{{${token}}}`;
-    if (!el) { setBody((b) => b + tag); return; }
-    const start = el.selectionStart ?? body.length, end = el.selectionEnd ?? body.length;
-    const next = body.slice(0, start) + tag + body.slice(end);
-    setBody(next);
-    requestAnimationFrame(() => { el.focus(); el.selectionStart = el.selectionEnd = start + tag.length; });
+    if (!editorRef.current) { setBody((b) => b + tag); return; }
+    editorRef.current.chain().focus().insertContent(tag).run();
   }
   function save() { onSave(def.key, { subject, body }); setEditing(false); }
   function reset() { onReset(def.key); setSubject(defaults.subject(SAMPLE_VARS)); setBody(defaults.body(SAMPLE_VARS)); setEditing(false); }
@@ -1831,10 +1827,10 @@ function EmailTemplateRow({ def, custom, onSave, onReset }) {
       {editing && (
         <div className="mt-3 pt-3 flex flex-col gap-3" style={{ borderTop: "1px solid #E7DEC9" }}>
           <Field label="Subject line" value={subject} onChange={(e) => setSubject(e.target.value)} />
-          <label className="block">
+          <div>
             <div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Message</div>
-            <textarea ref={taRef} className="input-field rounded-lg px-3.5 py-2.5 resize-y leading-relaxed w-full" rows={6} value={body} onChange={(e) => setBody(e.target.value)} />
-          </label>
+            <RichTextEditor value={body} onChange={setBody} onEditorReady={(ed) => { editorRef.current = ed; }} minRows={6} />
+          </div>
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-[11px]" style={{ color: "#A79B84" }}>Click to insert:</span>
             {def.vars.map((v) => <button key={v} onClick={() => insertToken(v)} className="f-code text-[11px] px-2.5 py-1 rounded-full" style={{ background: "#F0E7D6", color: "#71675A" }}>{VAR_LABELS[v] || v}</button>)}

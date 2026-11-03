@@ -78,14 +78,31 @@ function accessCodeBox(code) {
     <div style="font-size:22px;font-weight:700;color:${BRAND.accent};letter-spacing:.04em;">${code}</div>
   </div>`;
 }
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+// The task's own instructions, shown under "a new task was assigned" --
+// already-sanitized rich HTML (the same admin rich-text editor that saves
+// it), so it's embedded as-is rather than escaped.
+function taskDescriptionBlock(html) {
+  if (!html) return "";
+  return `<div style="margin:0 0 20px;padding:14px 16px;background:${BRAND.bg};border-radius:10px;font-size:14px;line-height:1.6;color:${BRAND.ink};">${html}</div>`;
+}
+// What a student actually typed/pasted -- always plain text by the time it
+// gets here (the client strips any rich-text formatting first), so this
+// escapes it and only preserves line breaks.
+function submissionBlock(text) {
+  if (!text) return "";
+  return `<div style="margin:0 0 20px;padding:14px 16px;background:${BRAND.bg};border-radius:10px;font-size:14px;line-height:1.6;color:${BRAND.ink};white-space:pre-wrap;">${escapeHtml(text)}</div>`;
+}
 // The structural bits every template of a given kind needs -- never part of
 // the admin's editable text (see emailDefaults.js), so rewriting the
 // message can't delete the one thing that actually shows the access code
 // or the button that actually links anywhere.
 function extra(templateKey, vars) {
   if (templateKey === "acceptance") return accessCodeBox(vars.accessCode) + (vars.loginUrl ? button("Sign in to FJ Room", vars.loginUrl) : "");
-  if (templateKey === "task-assigned") return button("View the task", vars.loginUrl || SITE_URL);
-  if (templateKey === "task-submitted" || templateKey === "quickcheck-submitted") return button("Review it", SITE_URL);
+  if (templateKey === "task-assigned") return taskDescriptionBlock(vars.taskDescription) + button("View the task", vars.loginUrl || SITE_URL);
+  if (templateKey === "task-submitted" || templateKey === "quickcheck-submitted") return submissionBlock(vars.submissionSummary) + button("Review it", SITE_URL);
   if (templateKey === "task-approved" || templateKey === "quickcheck-approved") return button("Continue", vars.loginUrl || SITE_URL);
   if (templateKey === "task-rejected" || templateKey === "quickcheck-rejected") return button("Revise it", vars.loginUrl || SITE_URL);
   return "";
@@ -95,7 +112,7 @@ export default async function handler(req, res) {
   if (req.method !== "POST") { res.status(405).json({ error: "Method not allowed" }); return; }
   if (!RESEND_API_KEY || !FROM) { res.status(200).json({ skipped: true, reason: "Email not configured yet" }); return; }
 
-  const { kind, email, name, courseName, accessCode, loginUrl, taskTitle, moduleTitle, studentName, itemTitle, approved } = req.body || {};
+  const { kind, email, name, courseName, accessCode, loginUrl, taskTitle, moduleTitle, studentName, itemTitle, approved, taskDescription, submissionSummary } = req.body || {};
   if (!kind) { res.status(400).json({ error: "Missing kind" }); return; }
 
   const templateKey = resolveTemplateKey(kind, approved);
@@ -112,7 +129,7 @@ export default async function handler(req, res) {
   // task-decided/quickcheck-decided send one shared "itemTitle" field --
   // filled into whichever of taskTitle/moduleTitle this template actually
   // uses, so the same payload works for either outcome template.
-  const vars = { name, studentName, courseName, accessCode, loginUrl, taskTitle: taskTitle || itemTitle, moduleTitle: moduleTitle || itemTitle };
+  const vars = { name, studentName, courseName, accessCode, loginUrl, taskTitle: taskTitle || itemTitle, moduleTitle: moduleTitle || itemTitle, taskDescription, submissionSummary };
   const defaults = EMAIL_DEFAULTS[templateKey];
   const custom = (await fetchCustomTemplates())[templateKey];
   const subject = custom?.subject ? fillTemplatePlain(custom.subject, vars) : defaults.subject(vars);

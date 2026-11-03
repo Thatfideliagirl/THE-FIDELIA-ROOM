@@ -37,16 +37,16 @@ export function sendWelcomeEmail({ email, name, courseName }) {
 export function sendAcceptanceEmail({ email, name, courseName, accessCode, loginUrl }) {
   return send("acceptance", { email, name, courseName, accessCode, loginUrl });
 }
-export function sendTaskAssignedEmail({ email, name, taskTitle, courseName, loginUrl }) {
-  return send("task-assigned", { email, name, taskTitle, courseName, loginUrl });
+export function sendTaskAssignedEmail({ email, name, taskTitle, courseName, loginUrl, taskDescription }) {
+  return send("task-assigned", { email, name, taskTitle, courseName, loginUrl, taskDescription });
 }
 // No "email" field -- the server always routes these two to the admin's
 // own address, never wherever the caller happens to point them.
-export function notifyAdminTaskSubmitted({ studentName, taskTitle, courseName }) {
-  return send("task-submitted", { studentName, taskTitle, courseName });
+export function notifyAdminTaskSubmitted({ studentName, taskTitle, courseName, submissionSummary }) {
+  return send("task-submitted", { studentName, taskTitle, courseName, submissionSummary });
 }
-export function notifyAdminQuickCheckSubmitted({ studentName, moduleTitle, courseName }) {
-  return send("quickcheck-submitted", { studentName, moduleTitle, courseName });
+export function notifyAdminQuickCheckSubmitted({ studentName, moduleTitle, courseName, submissionSummary }) {
+  return send("quickcheck-submitted", { studentName, moduleTitle, courseName, submissionSummary });
 }
 export function sendTaskDecisionEmail({ email, name, taskTitle, courseName, approved, loginUrl }) {
   return send("task-decided", { email, name, itemTitle: taskTitle, courseName, approved, loginUrl });

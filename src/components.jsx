@@ -269,7 +269,7 @@ function ImageFigureView({ node, updateAttributes, deleteNode }) {
 // unreliability of that browser API, confirmed by testing it directly.
 // Tiptap edits a real document model with proper transactions instead of
 // raw DOM selection hacks, so combining formats behaves predictably.
-export function RichTextEditor({ value, onChange, minRows = 8 }) {
+export function RichTextEditor({ value, onChange, minRows = 8, onEditorReady }) {
   const wrapRef = useRef(null);
   const imageInputRef = useRef(null);
   const [slashMenu, setSlashMenu] = useState(null);
@@ -310,6 +310,10 @@ export function RichTextEditor({ value, onChange, minRows = 8 }) {
     if (editor && !editor.isFocused && value !== editor.getHTML()) editor.commands.setContent(value || "", false);
   }, [value, editor]);
   useEffect(() => () => editor?.destroy(), [editor]);
+  // Lets a caller that needs to insert text programmatically (e.g. a
+  // "click to insert {{token}}" button next to the editor) reach the real
+  // TipTap instance -- nothing else here needs this, so it's opt-in.
+  useEffect(() => { if (editor && onEditorReady) onEditorReady(editor); }, [editor]);
 
   // Notion-style "/" menu: typing "/" right after whitespace or at the
   // start of a block opens a list of block types.
