@@ -11,6 +11,7 @@ import { pairKey, moduleStatus, scoreSubmission, scoreQuestions, normalizeQuesti
 import { renderCertificate, formatIssueDate } from "./lib/certificate.js";
 import { renderIdCard } from "./lib/idcard.js";
 import { uploadFile } from "./lib/storage.js";
+import { notifyAdminTaskSubmitted, notifyAdminQuickCheckSubmitted } from "./lib/email.js";
 import { SectionHeader, NotifBell, WelcomeTour, SidebarLink, LogoMark, Spine, TextArea, ProgressBar, ResourceDetail, Field, ChangePasswordCard, RichText, RichTextEditor, DashboardShell, TaskFileList } from "./components.jsx";
 
 // List markers (•, ‣, etc.) are sometimes present as literal characters
@@ -205,7 +206,7 @@ function splitLectureSections(html) {
   return sections;
 }
 
-export function LessonView({ course, enrollment, updateEnrollment, onBack, onNext, moduleId, justApproved, onAcknowledgeApproval }) {
+export function LessonView({ course, enrollment, student, updateEnrollment, onBack, onNext, moduleId, justApproved, onAcknowledgeApproval }) {
   const [view, setView] = useState("lecture"); // "lecture" | "check" | "meetings"
   const [lectureStep, setLectureStep] = useState("brief"); // "brief" | "content" | "summary"
   const [sectionIdx, setSectionIdx] = useState(0);
@@ -249,11 +250,18 @@ export function LessonView({ course, enrollment, updateEnrollment, onBack, onNex
     // there's nothing left to keyword-match against a marking guide, so
     // every link submission just goes straight to review instead of risking
     // an auto-approve on an unrelated keyword overlap with the URL itself.
-    if (isLinkProof) { updateEnrollment({ pendingReview: { moduleId: module.id, proofs, submittedAt: Date.now() } }); return; }
+    if (isLinkProof) {
+      updateEnrollment({ pendingReview: { moduleId: module.id, proofs, submittedAt: Date.now() } });
+      notifyAdminQuickCheckSubmitted({ studentName: student.name, moduleTitle: module.title, courseName: course.title });
+      return;
+    }
     const pct = scoreQuestions(proofs, checkQuestions);
     if (module.autoGradeOnly) { setResult(pct); if (pct >= (module.passPct || 70)) completeModule(); return; }
     if (pct >= AUTO_APPROVE_THRESHOLD) completeModule();
-    else updateEnrollment({ pendingReview: { moduleId: module.id, proofs, submittedAt: Date.now(), autoScore: pct } });
+    else {
+      updateEnrollment({ pendingReview: { moduleId: module.id, proofs, submittedAt: Date.now(), autoScore: pct } });
+      notifyAdminQuickCheckSubmitted({ studentName: student.name, moduleTitle: module.title, courseName: course.title });
+    }
   }
   if (justPassed) return (
     <div className="min-h-screen px-10 md:px-16 py-12 max-w-[600px] mx-auto flex flex-col items-center text-center justify-center" style={{ minHeight: "70vh" }}>
@@ -518,7 +526,7 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
           const justApproved = !!openMod && enrollment.completedModuleIds.includes(openModuleId) && ["written", "file-upload", "milestone"].includes(openMod.testType) && !notifSeen.includes(approvalNotifId);
           return (
             <LessonView
-              course={course} enrollment={enrollment} updateEnrollment={updateEnrollment}
+              course={course} enrollment={enrollment} student={student} updateEnrollment={updateEnrollment}
               onBack={() => setOpenModuleId(null)}
               onNext={() => setOpenModuleId(course.modules[enrollment.completedModuleIds.length]?.id ?? null)}
               moduleId={openModuleId}
@@ -615,7 +623,7 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
           );
         })()}
 
-        {tab === "tasks" && (openTask ? <TaskDetailStudent task={openTask} student={student} allStudents={allStudents} setTasks={setTasks} onBack={() => setOpenTaskId(null)} /> : <><SectionHeader eyebrow="ASSIGNED TO YOU" title="Tasks" />{myTasks.length === 0 && <div className="text-[15px]" style={{ color: "#A79B84" }}>No tasks assigned yet.</div>}<div className="flex flex-col gap-3">{myTasks.map((t) => { const sub = t.submissions[student.id]; return <button key={t.id} onClick={() => setOpenTaskId(t.id)} className="card card-pop rounded-xl p-5 text-left"><div className="flex items-center justify-between mb-1.5"><div className="text-[16px]" style={{ fontWeight: 700 }}>{t.title}</div>{sub ? <span className="f-code text-[10px] px-2.5 py-1 rounded-full tint-badge">{sub.status.toUpperCase()}</span> : t.deadlineAt && Date.now() > new Date(t.deadlineAt).getTime() ? <span className="f-code text-[10px] flex items-center gap-1" style={{ color: "#B04A3A" }}><Clock size={11} /> CLOSED</span> : <span className="f-code text-[10px] flex items-center gap-1" style={{ color: "#A79B84" }}><Clock size={11} /> {t.deadlineAt ? new Date(t.deadlineAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : `${t.dueInDays}D LEFT`}</span>}</div><RichText html={t.description} className="rich-content text-[14px] line-clamp-2" style={{ color: "#71675A" }} /></button>; })}</div></>)}
+        {tab === "tasks" && (openTask ? <TaskDetailStudent task={openTask} student={student} allStudents={allStudents} setTasks={setTasks} onBack={() => setOpenTaskId(null)} courseName={course.title} /> : <><SectionHeader eyebrow="ASSIGNED TO YOU" title="Tasks" />{myTasks.length === 0 && <div className="text-[15px]" style={{ color: "#A79B84" }}>No tasks assigned yet.</div>}<div className="flex flex-col gap-3">{myTasks.map((t) => { const sub = t.submissions[student.id]; return <button key={t.id} onClick={() => setOpenTaskId(t.id)} className="card card-pop rounded-xl p-5 text-left"><div className="flex items-center justify-between mb-1.5"><div className="text-[16px]" style={{ fontWeight: 700 }}>{t.title}</div>{sub ? <span className="f-code text-[10px] px-2.5 py-1 rounded-full tint-badge">{sub.status.toUpperCase()}</span> : t.deadlineAt && Date.now() > new Date(t.deadlineAt).getTime() ? <span className="f-code text-[10px] flex items-center gap-1" style={{ color: "#B04A3A" }}><Clock size={11} /> CLOSED</span> : <span className="f-code text-[10px] flex items-center gap-1" style={{ color: "#A79B84" }}><Clock size={11} /> {t.deadlineAt ? new Date(t.deadlineAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : `${t.dueInDays}D LEFT`}</span>}</div><RichText html={t.description} className="rich-content text-[14px] line-clamp-2" style={{ color: "#71675A" }} /></button>; })}</div></>)}
 
         {tab === "certificate" && <><SectionHeader eyebrow="YOUR ACHIEVEMENT" title="Certificate" /><CertificateTab course={course} enrollment={enrollment} student={student} tasks={tasks} setStudents={setStudents} /></>}
 
@@ -816,7 +824,7 @@ function StudentIdTab({ course, cohort, student, setStudents, template }) {
     </div>
   );
 }
-export function TaskDetailStudent({ task, student, allStudents, setTasks, onBack }) {
+export function TaskDetailStudent({ task, student, allStudents, setTasks, onBack, courseName }) {
   const [note, setNote] = useState(""); const sub = task.submissions[student.id];
   const hasLinks = task.requiredLinks?.length > 0;
   // One entry per required link, keyed by its position in task.requiredLinks
@@ -838,6 +846,7 @@ export function TaskDetailStudent({ task, student, allStudents, setTasks, onBack
       if (!note.trim()) return;
       setTasks((prev) => prev.map((t) => t.id !== task.id ? t : { ...t, submissions: { ...t.submissions, [student.id]: { status: "in review", note, score: null, submittedAt: Date.now(), lastActivityAt: Date.now() } } }));
     }
+    notifyAdminTaskSubmitted({ studentName: student.name, taskTitle: task.title, courseName });
   }
   // Resubmitting one flagged link only reopens that link -- every other
   // link keeps whatever the admin already decided, so nothing already

@@ -14,6 +14,7 @@ import { renderTestimonialCard } from "./lib/testimonial.js";
 import { Field, SectionHeader, NotifBell, SidebarLink, LogoMark, TextArea, SelectF, ImgField, FileField, TaskFileList, ChangePasswordCard, RichTextEditor, RichText, DashboardShell, WelcomeTour, TEAM_TOUR_STEPS } from "./components.jsx";
 import { CommunityPanel, SOCIAL_PLATFORMS } from "./student.jsx";
 import { fetchTeamMembers, addTeamMember, updateTeamMember, removeTeamMember, fetchTeamActivity, updateMyTeamProfile, markTourSeen } from "./lib/team.js";
+import { sendTaskAssignedEmail, sendTaskDecisionEmail, sendQuickCheckDecisionEmail } from "./lib/email.js";
 
 export function ApplicantsTab({ applicants, setApplicants, onRemove, students, setStudents, courses, cohorts, onAccept }) {
   const [openId, setOpenId] = useState(null); const [cohortInput, setCohortInput] = useState(cohorts[0]?.id);
@@ -753,6 +754,9 @@ export function StudentDetail({ student, applicant, setStudents, courses, cohort
     }));
   }
   function decideReview(enrollmentId, approve) {
+    const enrollment = student.enrollments.find((e) => e.id === enrollmentId);
+    const course = courses.find((c) => c.id === enrollment?.courseId);
+    const module = course?.modules.find((m) => m.id === enrollment?.pendingReview?.moduleId);
     setStudents((prev) => prev.map((s) => s.id !== student.id ? s : {
       ...s,
       enrollments: s.enrollments.map((e) => {
@@ -765,6 +769,7 @@ export function StudentDetail({ student, applicant, setStudents, courses, cohort
         };
       }),
     }));
+    if (module) sendQuickCheckDecisionEmail({ email: student.email, name: student.name, moduleTitle: module.title, courseName: course?.title, approved: approve });
   }
   const pendingReviews = student.enrollments.filter((e) => e.pendingReview);
   return (
@@ -1115,7 +1120,13 @@ const SUBMISSION_FILTERS = [
 export function TaskDetail({ task, setTasks, students, courses, cohorts, onClose, onDelete }) {
   const [editing, setEditing] = useState(false); const [viewingSub, setViewingSub] = useState(null);
   const [filter, setFilter] = useState("all");
-  function grade(sid, status, score) { setTasks((prev) => prev.map((t) => t.id !== task.id ? t : { ...t, submissions: { ...t.submissions, [sid]: { ...t.submissions[sid], status, score, lastActivityAt: Date.now() } } })); setViewingSub(null); }
+  function grade(sid, status, score) {
+    setTasks((prev) => prev.map((t) => t.id !== task.id ? t : { ...t, submissions: { ...t.submissions, [sid]: { ...t.submissions[sid], status, score, lastActivityAt: Date.now() } } }));
+    setViewingSub(null);
+    const s = students.find((x) => x.id === sid);
+    const course = courses.find((c) => c.id === task.courseId);
+    if (s) sendTaskDecisionEmail({ email: s.email, name: s.name, taskTitle: task.title, courseName: course?.title, approved: status === "approved" });
+  }
   // Every link stays editable forever, approved or not -- decision, score
   // and feedback can all be revised at any time, any number of times.
   // Status and score always fall out of whatever's currently saved (that's
@@ -1128,18 +1139,32 @@ export function TaskDetail({ task, setTasks, students, courses, cohorts, onClose
   // saved. A plain "Save" updates everything the same way, it just leaves
   // notifiedRound where it was, so nothing fires until she's ready.
   function gradeLinks(sid, linkGrades, comment, notify) {
-    setTasks((prev) => prev.map((t) => {
-      if (t.id !== task.id) return t;
-      const prevSub = t.submissions[sid];
-      const nextSub = { ...prevSub, linkGrades, comment, round: (prevSub.round || 0) + 1, lastActivityAt: Date.now() };
-      nextSub.status = deriveSubmissionStatus(t, nextSub);
-      nextSub.score = sumLinkScores(t, nextSub);
-      if (notify) nextSub.notifiedRound = nextSub.round;
-      return { ...t, submissions: { ...t.submissions, [sid]: nextSub } };
-    }));
+    const prevSub = task.submissions[sid];
+    const nextSub = { ...prevSub, linkGrades, comment, round: (prevSub.round || 0) + 1, lastActivityAt: Date.now() };
+    nextSub.status = deriveSubmissionStatus(task, nextSub);
+    nextSub.score = sumLinkScores(task, nextSub);
+    if (notify) nextSub.notifiedRound = nextSub.round;
+    setTasks((prev) => prev.map((t) => t.id !== task.id ? t : { ...t, submissions: { ...t.submissions, [sid]: nextSub } }));
     setViewingSub(null);
+    if (notify) {
+      const s = students.find((x) => x.id === sid);
+      const course = courses.find((c) => c.id === task.courseId);
+      if (s) sendTaskDecisionEmail({ email: s.email, name: s.name, taskTitle: task.title, courseName: course?.title, approved: nextSub.status === "approved" });
+    }
   }
-  function save(data) { setTasks((prev) => applyCapstoneExclusivity(prev, task.id, data.courseId, data.isCapstone).map((t) => t.id !== task.id ? t : { ...t, ...data })); setEditing(false); }
+  // Only a student newly added to `assigned` by this edit gets emailed --
+  // re-saving the same roster (e.g. just changing the deadline) must never
+  // re-notify everyone already on the task.
+  function save(data) {
+    const course = courses.find((c) => c.id === data.courseId);
+    const newlyAssigned = (data.assigned || []).filter((sid) => !task.assigned.includes(sid));
+    setTasks((prev) => applyCapstoneExclusivity(prev, task.id, data.courseId, data.isCapstone).map((t) => t.id !== task.id ? t : { ...t, ...data }));
+    setEditing(false);
+    newlyAssigned.forEach((sid) => {
+      const s = students.find((x) => x.id === sid);
+      if (s) sendTaskAssignedEmail({ email: s.email, name: s.name, taskTitle: data.title, courseName: course?.title });
+    });
+  }
   if (editing) return <TaskForm students={students} courses={courses} cohorts={cohorts} initial={task} onSave={save} onClose={() => setEditing(false)} />;
   const rows = task.assigned.map((sid) => {
     const s = students.find((x) => x.id === sid);
@@ -1171,7 +1196,16 @@ export function TaskDetail({ task, setTasks, students, courses, cohorts, onClose
 }
 export function TasksTab({ tasks, setTasks, students, courses, cohorts }) {
   const [showAdd, setShowAdd] = useState(false); const [selected, setSelected] = useState(null);
-  function addTask(data) { const id = "t" + Date.now(); setTasks((prev) => [...applyCapstoneExclusivity(prev, id, data.courseId, data.isCapstone), { id, submissions: {}, ...data }]); setShowAdd(false); }
+  function addTask(data) {
+    const id = "t" + Date.now();
+    const course = courses.find((c) => c.id === data.courseId);
+    setTasks((prev) => [...applyCapstoneExclusivity(prev, id, data.courseId, data.isCapstone), { id, submissions: {}, ...data }]);
+    setShowAdd(false);
+    (data.assigned || []).forEach((sid) => {
+      const s = students.find((x) => x.id === sid);
+      if (s) sendTaskAssignedEmail({ email: s.email, name: s.name, taskTitle: data.title, courseName: course?.title });
+    });
+  }
   function deleteTask(id) { setTasks((prev) => prev.filter((t) => t.id !== id)); setSelected(null); }
   const selectedTask = tasks.find((t) => t.id === selected);
   return (
