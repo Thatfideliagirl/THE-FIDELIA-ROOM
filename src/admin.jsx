@@ -15,6 +15,7 @@ import { Field, SectionHeader, NotifBell, SidebarLink, LogoMark, TextArea, Selec
 import { CommunityPanel, SOCIAL_PLATFORMS } from "./student.jsx";
 import { fetchTeamMembers, addTeamMember, updateTeamMember, removeTeamMember, fetchTeamActivity, updateMyTeamProfile, markTourSeen } from "./lib/team.js";
 import { sendTaskAssignedEmail, sendTaskDecisionEmail, sendQuickCheckDecisionEmail } from "./lib/email.js";
+import { EMAIL_TEMPLATE_KEYS, EMAIL_DEFAULTS, VAR_LABELS, SAMPLE_VARS } from "./lib/emailDefaults.js";
 
 export function ApplicantsTab({ applicants, setApplicants, onRemove, students, setStudents, courses, cohorts, onAccept }) {
   const [openId, setOpenId] = useState(null); const [cohortInput, setCohortInput] = useState(cohorts[0]?.id);
@@ -1794,6 +1795,73 @@ export function AdminNoticeTab({ notices, setNotices, cohorts, students }) {
     </>
   );
 }
+// One row per email the app sends -- collapsed to its name until she wants
+// to rewrite it. Only the headline + message are ever edited here; the
+// access-code box and any button stay fixed (see `extra` in
+// api/send-email.js) so rewriting the words can't delete the thing that
+// actually shows the code or actually links anywhere.
+function EmailTemplateRow({ def, custom, onSave, onReset }) {
+  const [editing, setEditing] = useState(false);
+  const defaults = EMAIL_DEFAULTS[def.key];
+  const [subject, setSubject] = useState(custom?.subject || defaults.subject(SAMPLE_VARS));
+  const [body, setBody] = useState(custom?.body || defaults.body(SAMPLE_VARS));
+  const taRef = useRef(null);
+  // Inserts right where the cursor was, not just at the end -- so a token
+  // can be dropped into the middle of a sentence she's already written.
+  function insertToken(token) {
+    const el = taRef.current;
+    const tag = `{{${token}}}`;
+    if (!el) { setBody((b) => b + tag); return; }
+    const start = el.selectionStart ?? body.length, end = el.selectionEnd ?? body.length;
+    const next = body.slice(0, start) + tag + body.slice(end);
+    setBody(next);
+    requestAnimationFrame(() => { el.focus(); el.selectionStart = el.selectionEnd = start + tag.length; });
+  }
+  function save() { onSave(def.key, { subject, body }); setEditing(false); }
+  function reset() { onReset(def.key); setSubject(defaults.subject(SAMPLE_VARS)); setBody(defaults.body(SAMPLE_VARS)); setEditing(false); }
+  return (
+    <div className="rounded-lg px-4 py-3" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <div className="text-[13.5px]" style={{ fontWeight: 700 }}>{def.label}</div>
+          <div className="f-code text-[10px]" style={{ color: "#A79B84" }}>TO {def.to.toUpperCase()} · {custom ? "CUSTOM WORDING" : "DEFAULT WORDING"}</div>
+        </div>
+        <button onClick={() => setEditing((s) => !s)} className="f-label text-[11px] accent-text" style={{ fontWeight: 700 }}>{editing ? "CLOSE" : "EDIT"}</button>
+      </div>
+      {editing && (
+        <div className="mt-3 pt-3 flex flex-col gap-3" style={{ borderTop: "1px solid #E7DEC9" }}>
+          <Field label="Subject line" value={subject} onChange={(e) => setSubject(e.target.value)} />
+          <label className="block">
+            <div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Message</div>
+            <textarea ref={taRef} className="input-field rounded-lg px-3.5 py-2.5 resize-y leading-relaxed w-full" rows={6} value={body} onChange={(e) => setBody(e.target.value)} />
+          </label>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[11px]" style={{ color: "#A79B84" }}>Click to insert:</span>
+            {def.vars.map((v) => <button key={v} onClick={() => insertToken(v)} className="f-code text-[11px] px-2.5 py-1 rounded-full" style={{ background: "#F0E7D6", color: "#71675A" }}>{VAR_LABELS[v] || v}</button>)}
+          </div>
+          <div className="flex items-center gap-3">
+            <button onClick={save} className="btn-primary rounded-lg px-4 py-2 text-[13px]">Save</button>
+            {custom && <button onClick={reset} className="text-[13px]" style={{ color: "#B04A3A" }}>Reset to default wording</button>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+function EmailTemplatesSection({ brand, setBrand }) {
+  const templates = brand.emailTemplates || {};
+  function saveTemplate(key, t) { setBrand((b) => ({ ...b, emailTemplates: { ...b.emailTemplates, [key]: t } })); }
+  function resetTemplate(key) { setBrand((b) => { const next = { ...b.emailTemplates }; delete next[key]; return { ...b, emailTemplates: next }; }); }
+  return (
+    <div className="card rounded-2xl p-8 max-w-[560px] mt-6">
+      <div className="f-label text-[12px] mb-1" style={{ color: "#71675A" }}>EMAIL TEMPLATES</div>
+      <div className="text-[12px] mb-4" style={{ color: "#A79B84" }}>What students (and you) actually receive by email. Edit the wording any time — the access code box and buttons stay put, only the words around them change.</div>
+      <div className="flex flex-col gap-2.5">
+        {EMAIL_TEMPLATE_KEYS.map((def) => <EmailTemplateRow key={def.key} def={def} custom={templates[def.key]} onSave={saveTemplate} onReset={resetTemplate} />)}
+      </div>
+    </div>
+  );
+}
 export function BrandingTab({ brand, setBrand }) {
   const [editingIdCard, setEditingIdCard] = useState(false);
   const swatches = [{ n: "Deep sky", v: "#1C6FA0" }, { n: "Slate teal", v: "#2E7D6B" }, { n: "Plum", v: "#6E4C6B" }, { n: "Burgundy", v: "#7A2E3B" }, { n: "Forest", v: "#2F5233" }, { n: "Amber", v: "#B8752E" }, { n: "Charcoal blue", v: "#2C3E50" }, { n: "Rose", v: "#A65065" }, { n: "Ink violet", v: "#4B3F72" }, { n: "Clay", v: "#9C5A3C" }];
@@ -1818,6 +1886,7 @@ export function BrandingTab({ brand, setBrand }) {
         </div>
         {editingIdCard && <div className="mt-5"><IdCardTemplateEditor template={brand.idCardTemplate} onSave={saveIdCardTemplate} onClose={() => setEditingIdCard(false)} /></div>}
       </div>
+      <EmailTemplatesSection brand={brand} setBrand={setBrand} />
     </>
   );
 }

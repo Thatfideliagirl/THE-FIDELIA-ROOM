@@ -1,0 +1,94 @@
+// The starting wording for every email the app sends through Resend
+// (api/send-email.js reads these as its fallback), and also what the
+// admin's Email Templates editor (admin.jsx) shows as a starting point and
+// as its placeholder legend. Kept in one place so the two never drift --
+// editing a default here changes both the unedited-template fallback and
+// the editor's own example text.
+function firstName(name) { return (name || "").trim().split(/\s+/)[0] || "there"; }
+
+export const EMAIL_TEMPLATE_KEYS = [
+  { key: "welcome", label: "Application received", to: "student", vars: ["name", "courseName"] },
+  { key: "acceptance", label: "Access code", to: "student", vars: ["name", "courseName", "accessCode"] },
+  { key: "task-assigned", label: "Task assigned", to: "student", vars: ["name", "taskTitle", "courseName"] },
+  { key: "task-submitted", label: "Task submitted — notifies you", to: "you", vars: ["studentName", "taskTitle", "courseName"] },
+  { key: "quickcheck-submitted", label: "Quick check submitted — notifies you", to: "you", vars: ["studentName", "moduleTitle", "courseName"] },
+  { key: "task-approved", label: "Task approved", to: "student", vars: ["name", "taskTitle", "courseName"] },
+  { key: "task-rejected", label: "Task sent back", to: "student", vars: ["name", "taskTitle", "courseName"] },
+  { key: "quickcheck-approved", label: "Quick check approved", to: "student", vars: ["name", "moduleTitle", "courseName"] },
+  { key: "quickcheck-rejected", label: "Quick check sent back", to: "student", vars: ["name", "moduleTitle", "courseName"] },
+];
+
+// Shown next to each token button in the editor.
+export const VAR_LABELS = {
+  name: "Student's name",
+  studentName: "Student's name",
+  courseName: "Course name",
+  taskTitle: "Task title",
+  moduleTitle: "Module title",
+  accessCode: "Access code",
+};
+
+// Sample values the admin editor fills in so an unedited template still
+// previews with real-looking text instead of empty {{tokens}}.
+export const SAMPLE_VARS = {
+  name: "Amaka", studentName: "Amaka", courseName: "Voice Acting Mastery",
+  taskTitle: "Record a demo reel", moduleTitle: "Finding Your Voice", accessCode: "FJ-7K2QR",
+};
+
+// Every default body is just the headline + message -- the access-code box
+// and any "view/continue/revise" button are added separately (see `extra`
+// in api/send-email.js) and are never part of the editable text, so an
+// admin rewriting the message can't accidentally delete the one thing that
+// actually shows the access code.
+export const EMAIL_DEFAULTS = {
+  welcome: {
+    subject: (v) => `You're in review, ${firstName(v.name)} — FJ Room`,
+    body: (v) => `<h1>Thanks for applying, ${firstName(v.name)}.</h1><p>Your application to <strong>${v.courseName || "FJ Room"}</strong> is being reviewed by the Room.</p><p>Keep an eye on your inbox — including spam, just in case — for your access code.</p>`,
+  },
+  acceptance: {
+    subject: () => "You're in! Your FJ Room access code",
+    body: (v) => `<h1>You're in, ${firstName(v.name)}.</h1><p>Your application to <strong>${v.courseName || "FJ Room"}</strong> has been approved. Use the code below to unlock your course.</p>`,
+  },
+  "task-assigned": {
+    subject: (v) => `New task: ${v.taskTitle}`,
+    body: (v) => `<h1>A new task, ${firstName(v.name)}.</h1><p><strong>${v.taskTitle}</strong> has just been assigned to you in <strong>${v.courseName || "FJ Room"}</strong>.</p>`,
+  },
+  "task-submitted": {
+    subject: (v) => `${v.studentName} submitted: ${v.taskTitle}`,
+    body: (v) => `<h1>New submission.</h1><p><strong>${v.studentName}</strong> just submitted <strong>${v.taskTitle}</strong> in <strong>${v.courseName || "FJ Room"}</strong>.</p>`,
+  },
+  "quickcheck-submitted": {
+    subject: (v) => `${v.studentName} submitted a quick check for review`,
+    body: (v) => `<h1>New submission.</h1><p><strong>${v.studentName}</strong> just submitted the quick check for <strong>${v.moduleTitle}</strong> in <strong>${v.courseName || "FJ Room"}</strong>, awaiting your review.</p>`,
+  },
+  "task-approved": {
+    subject: (v) => `You passed: ${v.taskTitle}`,
+    body: (v) => `<h1>Nicely done, ${firstName(v.name)}.</h1><p><strong>${v.taskTitle}</strong> has been approved in <strong>${v.courseName || "FJ Room"}</strong>.</p>`,
+  },
+  "task-rejected": {
+    subject: (v) => `${v.taskTitle} needs another look`,
+    body: (v) => `<h1>One more pass, ${firstName(v.name)}.</h1><p><strong>${v.taskTitle}</strong> in <strong>${v.courseName || "FJ Room"}</strong> has been sent back for another look.</p>`,
+  },
+  "quickcheck-approved": {
+    subject: (v) => `You passed: ${v.moduleTitle}`,
+    body: (v) => `<h1>Nicely done, ${firstName(v.name)}.</h1><p><strong>${v.moduleTitle}</strong> has been approved in <strong>${v.courseName || "FJ Room"}</strong>.</p>`,
+  },
+  "quickcheck-rejected": {
+    subject: (v) => `${v.moduleTitle} needs another look`,
+    body: (v) => `<h1>One more pass, ${firstName(v.name)}.</h1><p><strong>${v.moduleTitle}</strong> in <strong>${v.courseName || "FJ Room"}</strong> has been sent back for another look.</p>`,
+  },
+};
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+// Used for the body (real HTML) -- a token's value is escaped, the admin's
+// own surrounding markup is left exactly as they wrote it.
+export function fillTemplate(html, vars) {
+  return (html || "").replace(/\{\{\s*([a-zA-Z]+)\s*\}\}/g, (_, token) => escapeHtml(vars[token] ?? ""));
+}
+// Used for the subject line (plain text, not HTML) -- no escaping, but a
+// stray newline in a name could otherwise inject extra email headers.
+export function fillTemplatePlain(str, vars) {
+  return (str || "").replace(/\{\{\s*([a-zA-Z]+)\s*\}\}/g, (_, token) => String(vars[token] ?? "").replace(/[\r\n]/g, " "));
+}

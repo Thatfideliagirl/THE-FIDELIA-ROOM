@@ -7,6 +7,8 @@
 // Both env vars are read fresh on every request, so setting them in
 // Vercel just needs a redeploy (any new push, or "Redeploy" in the
 // Vercel dashboard) to take effect -- no code change required here.
+import { EMAIL_DEFAULTS, fillTemplate, fillTemplatePlain } from "../src/lib/emailDefaults.js";
+
 const FROM = process.env.RESEND_FROM; // e.g. "FJ Room <hello@fjroom.com>" -- must match a verified Resend domain
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 // Where "a student did something" notifications go -- already the public
@@ -19,9 +21,40 @@ const ADMIN_EMAIL = process.env.ADMIN_NOTIFY_EMAIL || "fjroomm@gmail.com";
 // filename Vite gives the same image inside the app bundle.
 const LOGO_URL = "https://fjroom.com/logo-email.png";
 const SITE_URL = "https://fjroom.com";
+// Same values the client already builds with (VITE_-prefixed because Vite
+// needs that prefix to inline them into the browser bundle) -- Vercel hands
+// every env var to a serverless function regardless of its prefix, so this
+// reads the exact same Supabase project with no separate var to set.
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY;
 
-function firstName(name) {
-  return (name || "").trim().split(/\s+/)[0] || "there";
+// An admin-written override replaces the default body for one template at a
+// time -- stored on the same flexible `brand` settings blob the admin's own
+// branding/ID-card/testimonial templates already live on, so no migration
+// was needed for this. Read with the public anon key, same as the brand
+// colors/logo every visitor's browser already fetches on page load.
+async function fetchCustomTemplates() {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return {};
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/site_settings?id=eq.main&select=brand`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+    });
+    const rows = await r.json();
+    return rows?.[0]?.brand?.emailTemplates || {};
+  } catch (e) {
+    console.error("fetchCustomTemplates failed", e);
+    return {};
+  }
+}
+
+// task-decided/quickcheck-decided fan out into an approved and a rejected
+// template -- simpler for a non-technical editor to write two plain
+// versions than one template with a condition inside it.
+function resolveTemplateKey(kind, approved) {
+  if (EMAIL_DEFAULTS[kind]) return kind;
+  if (kind === "task-decided") return approved ? "task-approved" : "task-rejected";
+  if (kind === "quickcheck-decided") return approved ? "quickcheck-approved" : "quickcheck-rejected";
+  return null;
 }
 
 const BRAND = { bg: "#FAF6EC", accent: "#1C6FA0", ink: "#262019", muted: "#71675A" };
@@ -39,79 +72,23 @@ function wrap(bodyHtml) {
 function button(label, url) {
   return `<a href="${url}" style="display:inline-block;background:${BRAND.accent};color:#fff;text-decoration:none;padding:12px 24px;border-radius:999px;font-size:14px;font-weight:700;">${label}</a>`;
 }
-
-function welcomeEmail({ name, courseName }) {
-  return {
-    subject: `You're in review, ${firstName(name)} — FJ Room`,
-    html: wrap(`
-      <h1 style="font-size:22px;margin:0 0 14px;">Thanks for applying, ${firstName(name)}.</h1>
-      <p style="font-size:15px;line-height:1.6;color:${BRAND.muted};margin:0 0 14px;">Your application to <strong style="color:${BRAND.ink};">${courseName || "FJ Room"}</strong> is being reviewed by the Room.</p>
-      <p style="font-size:15px;line-height:1.6;color:${BRAND.muted};margin:0;">Keep an eye on your inbox — including spam, just in case — for your access code.</p>
-    `),
-  };
+function accessCodeBox(code) {
+  return `<div style="border:1.5px dashed #E7DEC9;border-radius:12px;padding:18px;text-align:center;margin:0 0 24px;">
+    <div style="font-size:11px;letter-spacing:.08em;color:${BRAND.muted};margin-bottom:6px;">ACCESS CODE</div>
+    <div style="font-size:22px;font-weight:700;color:${BRAND.accent};letter-spacing:.04em;">${code}</div>
+  </div>`;
 }
-
-function acceptanceEmail({ name, courseName, accessCode, loginUrl }) {
-  return {
-    subject: "You're in! Your FJ Room access code",
-    html: wrap(`
-      <h1 style="font-size:22px;margin:0 0 14px;">You're in, ${firstName(name)}.</h1>
-      <p style="font-size:15px;line-height:1.6;color:${BRAND.muted};margin:0 0 20px;">Your application to <strong style="color:${BRAND.ink};">${courseName || "FJ Room"}</strong> has been approved. Use the code below to unlock your course.</p>
-      <div style="border:1.5px dashed #E7DEC9;border-radius:12px;padding:18px;text-align:center;margin:0 0 24px;">
-        <div style="font-size:11px;letter-spacing:.08em;color:${BRAND.muted};margin-bottom:6px;">ACCESS CODE</div>
-        <div style="font-size:22px;font-weight:700;color:${BRAND.accent};letter-spacing:.04em;">${accessCode}</div>
-      </div>
-      ${loginUrl ? button("Sign in to FJ Room", loginUrl) : ""}
-    `),
-  };
-}
-
-function taskAssignedEmail({ name, taskTitle, courseName, loginUrl }) {
-  return {
-    subject: `New task: ${taskTitle}`,
-    html: wrap(`
-      <h1 style="font-size:22px;margin:0 0 14px;">A new task, ${firstName(name)}.</h1>
-      <p style="font-size:15px;line-height:1.6;color:${BRAND.muted};margin:0 0 14px;"><strong style="color:${BRAND.ink};">${taskTitle}</strong> has just been assigned to you in <strong style="color:${BRAND.ink};">${courseName || "FJ Room"}</strong>.</p>
-      ${button("View the task", loginUrl || SITE_URL)}
-    `),
-  };
-}
-
-function taskSubmittedEmail({ studentName, taskTitle, courseName }) {
-  return {
-    subject: `${studentName} submitted: ${taskTitle}`,
-    html: wrap(`
-      <h1 style="font-size:22px;margin:0 0 14px;">New submission.</h1>
-      <p style="font-size:15px;line-height:1.6;color:${BRAND.muted};margin:0 0 14px;"><strong style="color:${BRAND.ink};">${studentName}</strong> just submitted <strong style="color:${BRAND.ink};">${taskTitle}</strong> in <strong style="color:${BRAND.ink};">${courseName || "FJ Room"}</strong>.</p>
-      ${button("Review it", SITE_URL)}
-    `),
-  };
-}
-
-function quickCheckSubmittedEmail({ studentName, moduleTitle, courseName }) {
-  return {
-    subject: `${studentName} submitted a quick check for review`,
-    html: wrap(`
-      <h1 style="font-size:22px;margin:0 0 14px;">New submission.</h1>
-      <p style="font-size:15px;line-height:1.6;color:${BRAND.muted};margin:0 0 14px;"><strong style="color:${BRAND.ink};">${studentName}</strong> just submitted the quick check for <strong style="color:${BRAND.ink};">${moduleTitle}</strong> in <strong style="color:${BRAND.ink};">${courseName || "FJ Room"}</strong>, awaiting your review.</p>
-      ${button("Review it", SITE_URL)}
-    `),
-  };
-}
-
-function decisionEmail({ name, itemTitle, courseName, approved, loginUrl }) {
-  return {
-    subject: approved ? `You passed: ${itemTitle}` : `${itemTitle} needs another look`,
-    html: wrap(approved ? `
-      <h1 style="font-size:22px;margin:0 0 14px;">Nicely done, ${firstName(name)}.</h1>
-      <p style="font-size:15px;line-height:1.6;color:${BRAND.muted};margin:0 0 14px;"><strong style="color:${BRAND.ink};">${itemTitle}</strong> has been approved in <strong style="color:${BRAND.ink};">${courseName || "FJ Room"}</strong>.</p>
-      ${button("Continue", loginUrl || SITE_URL)}
-    ` : `
-      <h1 style="font-size:22px;margin:0 0 14px;">One more pass, ${firstName(name)}.</h1>
-      <p style="font-size:15px;line-height:1.6;color:${BRAND.muted};margin:0 0 14px;"><strong style="color:${BRAND.ink};">${itemTitle}</strong> in <strong style="color:${BRAND.ink};">${courseName || "FJ Room"}</strong> has been sent back for another look.</p>
-      ${button("Revise it", loginUrl || SITE_URL)}
-    `),
-  };
+// The structural bits every template of a given kind needs -- never part of
+// the admin's editable text (see emailDefaults.js), so rewriting the
+// message can't delete the one thing that actually shows the access code
+// or the button that actually links anywhere.
+function extra(templateKey, vars) {
+  if (templateKey === "acceptance") return accessCodeBox(vars.accessCode) + (vars.loginUrl ? button("Sign in to FJ Room", vars.loginUrl) : "");
+  if (templateKey === "task-assigned") return button("View the task", vars.loginUrl || SITE_URL);
+  if (templateKey === "task-submitted" || templateKey === "quickcheck-submitted") return button("Review it", SITE_URL);
+  if (templateKey === "task-approved" || templateKey === "quickcheck-approved") return button("Continue", vars.loginUrl || SITE_URL);
+  if (templateKey === "task-rejected" || templateKey === "quickcheck-rejected") return button("Revise it", vars.loginUrl || SITE_URL);
+  return "";
 }
 
 export default async function handler(req, res) {
@@ -121,6 +98,9 @@ export default async function handler(req, res) {
   const { kind, email, name, courseName, accessCode, loginUrl, taskTitle, moduleTitle, studentName, itemTitle, approved } = req.body || {};
   if (!kind) { res.status(400).json({ error: "Missing kind" }); return; }
 
+  const templateKey = resolveTemplateKey(kind, approved);
+  if (!templateKey) { res.status(400).json({ error: "Unknown kind: " + kind }); return; }
+
   // The two "a student did something" kinds always go to the admin, not
   // whatever the caller passed as email -- there's no student-chosen
   // address to trust here anyway, and routing both the same way means a
@@ -129,20 +109,21 @@ export default async function handler(req, res) {
   const to = notifiesAdmin ? ADMIN_EMAIL : email;
   if (!to) { res.status(400).json({ error: "Missing email" }); return; }
 
-  let content;
-  if (kind === "welcome") content = welcomeEmail({ name, courseName });
-  else if (kind === "acceptance") content = acceptanceEmail({ name, courseName, accessCode, loginUrl });
-  else if (kind === "task-assigned") content = taskAssignedEmail({ name, taskTitle, courseName, loginUrl });
-  else if (kind === "task-submitted") content = taskSubmittedEmail({ studentName, taskTitle, courseName });
-  else if (kind === "quickcheck-submitted") content = quickCheckSubmittedEmail({ studentName, moduleTitle, courseName });
-  else if (kind === "task-decided" || kind === "quickcheck-decided") content = decisionEmail({ name, itemTitle, courseName, approved, loginUrl });
-  else { res.status(400).json({ error: "Unknown kind: " + kind }); return; }
+  // task-decided/quickcheck-decided send one shared "itemTitle" field --
+  // filled into whichever of taskTitle/moduleTitle this template actually
+  // uses, so the same payload works for either outcome template.
+  const vars = { name, studentName, courseName, accessCode, loginUrl, taskTitle: taskTitle || itemTitle, moduleTitle: moduleTitle || itemTitle };
+  const defaults = EMAIL_DEFAULTS[templateKey];
+  const custom = (await fetchCustomTemplates())[templateKey];
+  const subject = custom?.subject ? fillTemplatePlain(custom.subject, vars) : defaults.subject(vars);
+  const messageHtml = custom?.body ? fillTemplate(custom.body, vars) : defaults.body(vars);
+  const html = wrap(messageHtml + extra(templateKey, vars));
 
   try {
     const r = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${RESEND_API_KEY}` },
-      body: JSON.stringify({ from: FROM, to, subject: content.subject, html: content.html }),
+      body: JSON.stringify({ from: FROM, to, subject, html }),
     });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) { console.error("Resend send failed", r.status, data); res.status(r.status).json({ error: data }); return; }
