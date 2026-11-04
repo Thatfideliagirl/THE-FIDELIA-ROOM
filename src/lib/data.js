@@ -320,12 +320,18 @@ export function genCode() { const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; let
 // list means the "next" count collides with a code that's still taken),
 // which is exactly what caused "duplicate key value violates unique
 // constraint students_student_code_key" on Accept.
+// The year comes from today's real calendar year, not a fixed number --
+// that also means numbering naturally restarts at 001 every January, since
+// no existing student's id matches a year that hasn't started yet, with
+// nothing for her to update by hand when the year turns over.
 export function nextStudentId(students) {
+  const year = new Date().getFullYear();
+  const pattern = new RegExp(`^FJ/${year}/(\\d+)$`);
   const maxNum = students.reduce((max, s) => {
-    const m = /^FJ\/2026\/(\d+)$/.exec(s.studentId || "");
+    const m = pattern.exec(s.studentId || "");
     return m ? Math.max(max, Number(m[1])) : max;
   }, 0);
-  return `FJ/2026/${String(maxNum + 1).padStart(3, "0")}`;
+  return `FJ/${year}/${String(maxNum + 1).padStart(3, "0")}`;
 }
 export function moduleStatus(course, enrollment, moduleId) {
   const ids = course.modules.map((m) => m.id);
