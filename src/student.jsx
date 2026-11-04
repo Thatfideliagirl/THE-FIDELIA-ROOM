@@ -503,7 +503,7 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
     </DashboardShell>
   );
   return (
-    <DashboardShell sidebar={sidebar} maxWidth={880}>
+    <DashboardShell sidebar={sidebar} maxWidth={1200}>
         <div className="flex justify-end mb-4"><NotifBell items={notifItems} seen={notifSeen} onMarkSeen={onMarkSeen} /></div>
 
         {tab === "path" && openModuleId === null && (
@@ -609,7 +609,7 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
                 </div>
               )}
               {myResources.length === 0 && <div className="text-[15px]" style={{ color: "#A79B84" }}>No resources here yet.</div>}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {visibleResources.map((r) => (
                   <div key={r.id} className="card rounded-xl p-4 flex flex-col gap-3">
                     <div className="flex items-center gap-3"><FileText size={18} color="var(--accent)" /><div className="text-[15px]" style={{ fontWeight: 700 }}>{r.title}</div></div>
