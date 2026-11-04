@@ -37,6 +37,11 @@ export function sendWelcomeEmail({ email, name, courseName }) {
 export function sendAcceptanceEmail({ email, name, courseName, accessCode, loginUrl }) {
   return send("acceptance", { email, name, courseName, accessCode, loginUrl });
 }
+// Payment details come from her own Branding settings, read server-side --
+// only the fee (specific to this course) travels with the request.
+export function sendApplicationReviewedEmail({ email, name, courseName, price }) {
+  return send("application-reviewed", { email, name, courseName, price });
+}
 export function sendTaskAssignedEmail({ email, name, taskTitle, courseName, loginUrl, deadlineText }) {
   return send("task-assigned", { email, name, taskTitle, courseName, loginUrl, deadlineText });
 }

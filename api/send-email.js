@@ -28,21 +28,21 @@ const SITE_URL = "https://fjroom.com";
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY;
 
-// An admin-written override replaces the default body for one template at a
-// time -- stored on the same flexible `brand` settings blob the admin's own
-// branding/ID-card/testimonial templates already live on, so no migration
-// was needed for this. Read with the public anon key, same as the brand
-// colors/logo every visitor's browser already fetches on page load.
-async function fetchCustomTemplates() {
+// An admin-written template override and her payment details both live on
+// the same flexible `brand` settings blob the admin's own branding/ID-card
+// templates already live on, so neither needed a migration. Read with the
+// public anon key, same as the brand colors/logo every visitor's browser
+// already fetches on page load.
+async function fetchBrand() {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return {};
   try {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/site_settings?id=eq.main&select=brand`, {
       headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
     });
     const rows = await r.json();
-    return rows?.[0]?.brand?.emailTemplates || {};
+    return rows?.[0]?.brand || {};
   } catch (e) {
-    console.error("fetchCustomTemplates failed", e);
+    console.error("fetchBrand failed", e);
     return {};
   }
 }
@@ -87,11 +87,27 @@ function deadlineLine(text) {
   if (!text) return "";
   return `<div style="margin:0 0 18px;font-size:13px;color:${BRAND.muted};">Closes ${text}</div>`;
 }
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+// Fee + her own typed payment details, shown as one fixed box -- same
+// reasoning as the access-code box: a real account number is exactly the
+// kind of thing that should never depend on her remembering to keep a
+// {{token}} in the prose, so it always shows regardless of what she writes
+// around it.
+function paymentBox(price, details) {
+  if (!price && !details) return "";
+  return `<div style="border:1.5px dashed #E7DEC9;border-radius:12px;padding:18px;margin:0 0 24px;">
+    ${price ? `<div style="font-size:11px;letter-spacing:.08em;color:${BRAND.muted};margin-bottom:4px;">TRAINING FEE</div><div style="font-size:20px;font-weight:700;color:${BRAND.accent};margin-bottom:14px;">${escapeHtml(price)}</div>` : ""}
+    ${details ? `<div style="font-size:11px;letter-spacing:.08em;color:${BRAND.muted};margin-bottom:4px;">PAYMENT DETAILS</div><div style="font-size:14px;line-height:1.6;color:${BRAND.ink};white-space:pre-wrap;">${escapeHtml(details)}</div>` : ""}
+  </div>`;
+}
 // The structural bits every template of a given kind needs -- never part of
 // the admin's editable text (see emailDefaults.js), so rewriting the
 // message can't delete the one thing that actually shows the access code
 // or the button that actually links anywhere.
 function extra(templateKey, vars) {
+  if (templateKey === "application-reviewed") return paymentBox(vars.price, vars.paymentDetails);
   if (templateKey === "acceptance") return accessCodeBox(vars.accessCode) + (vars.loginUrl ? button("Sign in to FJ Room", vars.loginUrl) : "");
   if (templateKey === "task-assigned") return deadlineLine(vars.deadlineText) + button("View the task", vars.loginUrl || SITE_URL);
   if (templateKey === "task-submitted" || templateKey === "quickcheck-submitted") return button("Review it", SITE_URL);
@@ -109,7 +125,7 @@ function extra(templateKey, vars) {
 // (api/send-deadline-reminders.js) can call it directly -- a plain function
 // call within the same serverless bundle, not a second HTTP round trip --
 // and so both paths share one template/customization system instead of two.
-export async function sendTemplatedEmail({ kind, email, name, courseName, accessCode, loginUrl, taskTitle, moduleTitle, studentName, itemTitle, approved, deadlineText, fromName }) {
+export async function sendTemplatedEmail({ kind, email, name, courseName, accessCode, loginUrl, taskTitle, moduleTitle, studentName, itemTitle, approved, deadlineText, fromName, price, paymentDetails }) {
   if (!RESEND_API_KEY || !FROM) return { skipped: true, reason: "Email not configured yet" };
   if (!kind) return { error: "Missing kind", status: 400 };
 
@@ -131,9 +147,10 @@ export async function sendTemplatedEmail({ kind, email, name, courseName, access
   // also calls firstName() on it (harmless on an already-short name), but a
   // custom {{name}} template has no such step of its own, so this is what
   // makes {{name}} resolve to "Amaka" rather than "Amaka Obi" either way.
-  const vars = { name: firstName(name), studentName, courseName, accessCode, loginUrl, taskTitle: taskTitle || itemTitle, moduleTitle: moduleTitle || itemTitle, deadlineText, fromName };
+  const brand = await fetchBrand();
+  const vars = { name: firstName(name), studentName, courseName, accessCode, loginUrl, taskTitle: taskTitle || itemTitle, moduleTitle: moduleTitle || itemTitle, deadlineText, fromName, price, paymentDetails: brand.paymentDetails };
   const defaults = EMAIL_DEFAULTS[templateKey];
-  const custom = (await fetchCustomTemplates())[templateKey];
+  const custom = (brand.emailTemplates || {})[templateKey];
   const subject = custom?.subject ? fillTemplatePlain(custom.subject, vars) : defaults.subject(vars);
   const messageHtml = custom?.body ? fillTemplate(custom.body, vars) : defaults.body(vars);
   const html = wrap(messageHtml + extra(templateKey, vars));

@@ -14,9 +14,35 @@ import { renderTestimonialCard } from "./lib/testimonial.js";
 import { Field, SectionHeader, NotifBell, SidebarLink, LogoMark, TextArea, SelectF, ImgField, FileField, TaskFileList, ChangePasswordCard, RichTextEditor, RichText, DashboardShell, WelcomeTour, TEAM_TOUR_STEPS } from "./components.jsx";
 import { CommunityPanel, SOCIAL_PLATFORMS } from "./student.jsx";
 import { fetchTeamMembers, addTeamMember, updateTeamMember, removeTeamMember, fetchTeamActivity, updateMyTeamProfile, markTourSeen } from "./lib/team.js";
-import { sendTaskAssignedEmail, sendTaskDecisionEmail, sendQuickCheckDecisionEmail } from "./lib/email.js";
+import { sendTaskAssignedEmail, sendTaskDecisionEmail, sendQuickCheckDecisionEmail, sendApplicationReviewedEmail } from "./lib/email.js";
 import { EMAIL_TEMPLATE_KEYS, EMAIL_STARTERS, VAR_LABELS, SAMPLE_VARS, fillTemplate, fillTemplatePlain } from "./lib/emailDefaults.js";
 
+// One applicant row, shared by the "pending" and "awaiting payment" queues
+// below -- same expand-to-see-answers shape either way, only which action
+// buttons show changes. "Mark reviewed" only appears on a first-review
+// (pending) applicant; "Accept" works from either stage, so she's never
+// forced through the payment step for a course that doesn't need it.
+function ApplicantRow({ a, course, cohorts, cohortInput, setCohortInput, open, onToggleOpen, accepting, acceptError, onAccept, onMarkReviewed, onDecline, confirmDeleteId, setConfirmDeleteId, onConfirmRemove, showMarkReviewed }) {
+  return (
+    <div className="card rounded-2xl p-6">
+      <button className="w-full flex items-center justify-between" onClick={onToggleOpen}><div className="text-left"><div className="text-[17px]" style={{ fontWeight: 700 }}>{a.name} {a.studentRef && <span className="f-code text-[10px] tint-badge px-2 py-0.5 rounded-full ml-1">EXISTING STUDENT</span>}</div><div className="text-[13px] mt-1" style={{ color: "#71675A" }}>{a.email} · applying to {course?.title}{a.createdAt && <> · applied {formatDateTime(a.createdAt)}</>}</div></div><ChevronDown size={18} color="#A79B84" style={{ transform: open ? "rotate(180deg)" : "none" }} /></button>
+      {open && <div className="mt-5 pt-5" style={{ borderTop: "1px solid #F0E7D6" }}>{(course?.applicationQuestions || []).map((q, i) => <div key={i} className="mb-3"><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>{q.toUpperCase()}</div><div className="text-[14px]">{a.answers[i]}</div></div>)}{!a.studentRef && <div className="mt-4 mb-4" style={{ maxWidth: 220 }}><SelectF label="Cohort" value={cohortInput} onChange={(e) => setCohortInput(e.target.value)} options={cohorts.map((c) => ({ value: c.id, label: c.name }))} /></div>}{accepting !== a.id && acceptError && <div className="text-[13px] mb-3" style={{ color: "#B04A3A" }}>{acceptError}</div>}
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex gap-3 flex-wrap">
+            <button disabled={accepting === a.id} onClick={() => onAccept(a)} className="btn-primary rounded-lg px-5 py-2.5 text-[14px]">{accepting === a.id ? "Accepting…" : "Accept & generate code"}</button>
+            {showMarkReviewed && <button onClick={() => onMarkReviewed(a)} className="btn-soft rounded-lg px-5 py-2.5 text-[14px]">Mark reviewed — send payment info</button>}
+            <button onClick={() => onDecline(a)} className="btn-ghost rounded-lg px-5 py-2.5 text-[14px]">Decline</button>
+          </div>
+          {confirmDeleteId === a.id ? (
+            <div className="flex items-center gap-2 text-[12px]"><span style={{ color: "#B04A3A" }}>Delete this application?</span><button onClick={onConfirmRemove} className="f-label" style={{ color: "#B04A3A", fontWeight: 700 }}>YES, DELETE</button><button onClick={() => setConfirmDeleteId(null)} style={{ color: "#A79B84" }}>Cancel</button></div>
+          ) : (
+            <button onClick={() => setConfirmDeleteId(a.id)} className="flex items-center gap-1.5 text-[12px]" style={{ color: "#B04A3A" }}><Trash2 size={14} /> Delete</button>
+          )}
+        </div>
+      </div>}
+    </div>
+  );
+}
 export function ApplicantsTab({ applicants, setApplicants, onRemove, students, setStudents, courses, cohorts, onAccept }) {
   const [openId, setOpenId] = useState(null); const [cohortInput, setCohortInput] = useState(cohorts[0]?.id);
   const [accepting, setAccepting] = useState(null);
@@ -35,28 +61,33 @@ export function ApplicantsTab({ applicants, setApplicants, onRemove, students, s
     setAccepting(null);
     if (err) setAcceptError(err);
   }
+  // A separate stage from Accept, not a replacement for it -- this tells
+  // them what to pay and sends no access code. She confirms the transfer
+  // herself (no payment gateway involved) and only then clicks Accept,
+  // same as for any other applicant.
+  function markReviewed(a) {
+    setApplicants((prev) => prev.map((x) => x.id === a.id ? { ...x, status: "reviewed" } : x));
+    sendApplicationReviewedEmail({ email: a.email, name: a.name, courseName: course(a.courseId)?.title, price: course(a.courseId)?.price });
+  }
   function decline(a) { setApplicants((prev) => prev.map((x) => x.id === a.id ? { ...x, status: "declined" } : x)); }
   function confirmRemove(id) { onRemove(id); setConfirmDeleteId(null); }
-  const pending = applicants.filter((a) => a.status === "pending"); const resolved = applicants.filter((a) => a.status !== "pending");
+  const pending = applicants.filter((a) => a.status === "pending");
+  const reviewing = applicants.filter((a) => a.status === "reviewed");
+  const resolved = applicants.filter((a) => a.status === "accepted" || a.status === "declined");
+  const rowProps = { cohorts, cohortInput, setCohortInput, accepting, acceptError, onAccept: accept, onMarkReviewed: markReviewed, onDecline: decline, confirmDeleteId, setConfirmDeleteId };
   return (
     <>
       <SectionHeader eyebrow="REVIEW QUEUE" title="Applicants" />
       {pending.length === 0 && <div className="text-[15px] mb-8" style={{ color: "#A79B84" }}>No pending applications.</div>}
       <div className="flex flex-col gap-4 mb-10">{pending.map((a) => (
-        <div key={a.id} className="card rounded-2xl p-6">
-          <button className="w-full flex items-center justify-between" onClick={() => setOpenId(openId === a.id ? null : a.id)}><div className="text-left"><div className="text-[17px]" style={{ fontWeight: 700 }}>{a.name} {a.studentRef && <span className="f-code text-[10px] tint-badge px-2 py-0.5 rounded-full ml-1">EXISTING STUDENT</span>}</div><div className="text-[13px] mt-1" style={{ color: "#71675A" }}>{a.email} · applying to {course(a.courseId)?.title}{a.createdAt && <> · applied {formatDateTime(a.createdAt)}</>}</div></div><ChevronDown size={18} color="#A79B84" style={{ transform: openId === a.id ? "rotate(180deg)" : "none" }} /></button>
-          {openId === a.id && <div className="mt-5 pt-5" style={{ borderTop: "1px solid #F0E7D6" }}>{(course(a.courseId)?.applicationQuestions || []).map((q, i) => <div key={i} className="mb-3"><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>{q.toUpperCase()}</div><div className="text-[14px]">{a.answers[i]}</div></div>)}{!a.studentRef && <div className="mt-4 mb-4" style={{ maxWidth: 220 }}><SelectF label="Cohort" value={cohortInput} onChange={(e) => setCohortInput(e.target.value)} options={cohorts.map((c) => ({ value: c.id, label: c.name }))} /></div>}{accepting !== a.id && acceptError && <div className="text-[13px] mb-3" style={{ color: "#B04A3A" }}>{acceptError}</div>}
-          <div className="flex items-center justify-between">
-            <div className="flex gap-3"><button disabled={accepting === a.id} onClick={() => accept(a)} className="btn-primary rounded-lg px-5 py-2.5 text-[14px]">{accepting === a.id ? "Accepting…" : "Accept & generate code"}</button><button onClick={() => decline(a)} className="btn-ghost rounded-lg px-5 py-2.5 text-[14px]">Decline</button></div>
-            {confirmDeleteId === a.id ? (
-              <div className="flex items-center gap-2 text-[12px]"><span style={{ color: "#B04A3A" }}>Delete this application?</span><button onClick={() => confirmRemove(a.id)} className="f-label" style={{ color: "#B04A3A", fontWeight: 700 }}>YES, DELETE</button><button onClick={() => setConfirmDeleteId(null)} style={{ color: "#A79B84" }}>Cancel</button></div>
-            ) : (
-              <button onClick={() => setConfirmDeleteId(a.id)} className="flex items-center gap-1.5 text-[12px]" style={{ color: "#B04A3A" }}><Trash2 size={14} /> Delete</button>
-            )}
-          </div>
-          </div>}
-        </div>
+        <ApplicantRow key={a.id} a={a} course={course(a.courseId)} open={openId === a.id} onToggleOpen={() => setOpenId(openId === a.id ? null : a.id)} onConfirmRemove={() => confirmRemove(a.id)} showMarkReviewed {...rowProps} />
       ))}</div>
+      {reviewing.length > 0 && <>
+        <div className="f-label text-[12px] mb-4" style={{ color: "#71675A" }}>AWAITING PAYMENT — reviewed, payment info sent</div>
+        <div className="flex flex-col gap-4 mb-10">{reviewing.map((a) => (
+          <ApplicantRow key={a.id} a={a} course={course(a.courseId)} open={openId === a.id} onToggleOpen={() => setOpenId(openId === a.id ? null : a.id)} onConfirmRemove={() => confirmRemove(a.id)} showMarkReviewed={false} {...rowProps} />
+        ))}</div>
+      </>}
       {resolved.length > 0 && <><div className="f-label text-[12px] mb-4" style={{ color: "#71675A" }}>DECIDED</div><div className="flex flex-col gap-2">{resolved.map((a) => (
         <div key={a.id} className="flex items-center justify-between px-5 py-3 rounded-lg text-[14px]" style={{ background: "#F0E7D6" }}>
           <span>{a.name} <span className="text-[12px]" style={{ color: "#A79B84" }}>· {a.email}</span></span>
@@ -333,7 +364,10 @@ export function CourseManager({ course, testimonials, setCourses, onBack }) {
   const [questions, setQuestions] = useState(course.applicationQuestions || []); const [newQ, setNewQ] = useState("");
   const [outcomes, setOutcomes] = useState(course.outcomes || []); const [newOutcome, setNewOutcome] = useState("");
   const [testimonialIds, setTestimonialIds] = useState(course.testimonialIds || []);
-  function saveDetails() { setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, title, tagline, audience, description, durationWeeks: Number(durationWeeks), level, image, testimonialIds, outcomes })); setEditingDetails(false); }
+  // Free text, not a number -- she types the fee however she wants it shown
+  // ("₦50,000", "$200"), not something this app converts or calculates.
+  const [price, setPrice] = useState(course.price || ""); const [showPrice, setShowPrice] = useState(course.showPrice ?? false);
+  function saveDetails() { setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, title, tagline, audience, description, durationWeeks: Number(durationWeeks), level, image, testimonialIds, outcomes, price, showPrice })); setEditingDetails(false); }
   function saveQuestions() { setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, applicationQuestions: questions })); setEditingQuestions(false); }
   function addModule() { if (!newModTitle) return; setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, modules: [...c.modules, { id: Date.now(), title: newModTitle, brief: "", notes: "", videoUrl: "", slideUrl: "", testType: "checklist" }] })); setNewModTitle(""); setAddingModule(false); }
   function moveModule(index, dir) {
@@ -375,6 +409,13 @@ export function CourseManager({ course, testimonials, setCourses, onBack }) {
           <Field label="Who it's for" value={audience} onChange={(e) => setAudience(e.target.value)} />
           <TextArea label="Full description" value={description} onChange={(e) => setDescription(e.target.value)} />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><SelectF label="Level" value={level} onChange={(e) => setLevel(e.target.value)} options={[{ value: "Beginner", label: "Beginner" }, { value: "Intermediate", label: "Intermediate" }, { value: "Advanced", label: "Advanced" }]} /><Field label="Duration (weeks)" type="number" value={durationWeeks} onChange={(e) => setDurationWeeks(e.target.value)} /></div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+            <Field label="Training fee (shown as typed — e.g. ₦50,000)" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="₦50,000" />
+            <label className="flex items-center gap-2.5 text-[13.5px] rounded-lg p-3 mb-0.5" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9", cursor: "pointer" }}>
+              <input type="checkbox" checked={showPrice} onChange={(e) => setShowPrice(e.target.checked)} />
+              <span>Show this fee on the public course page</span>
+            </label>
+          </div>
           <div>
             <div className="f-label text-[11px] mb-2" style={{ color: "#71675A" }}>WHAT YOU'LL LEARN (shown as bullet points on the course page)</div>
             <div className="flex flex-col gap-2">{outcomes.map((o, i) => <div key={i} className="flex items-center gap-2"><input className="input-field rounded-lg px-3.5 py-2 text-[14px]" value={o} onChange={(e) => setOutcomes((prev) => prev.map((x, idx) => idx === i ? e.target.value : x))} /><button onClick={() => setOutcomes((prev) => prev.filter((_, idx) => idx !== i))}><X size={16} color="#A79B84" /></button></div>)}</div>
@@ -1934,6 +1975,11 @@ export function BrandingTab({ brand, setBrand }) {
           <Field label="Instagram handle (no @)" value={brand.instagram} onChange={(e) => setBrand((b) => ({ ...b, instagram: e.target.value.replace(/^@/, "") }))} placeholder="yourhandle" />
           <Field label="Twitter / X handle (no @)" value={brand.twitter} onChange={(e) => setBrand((b) => ({ ...b, twitter: e.target.value.replace(/^@/, "") }))} placeholder="yourhandle" />
         </div>
+      </div>
+      <div className="card rounded-2xl p-8 max-w-[560px] mt-6">
+        <div className="f-label text-[12px] mb-1" style={{ color: "#71675A" }}>PAYMENT DETAILS</div>
+        <div className="text-[12px] mb-4" style={{ color: "#A79B84" }}>Shown to an applicant once you mark them reviewed — your account details, exactly as you type them here.</div>
+        <TextArea label="Bank name, account number, account name — whatever you want them to see" value={brand.paymentDetails || ""} onChange={(e) => setBrand((b) => ({ ...b, paymentDetails: e.target.value }))} placeholder={"GTBank\n0123456789\nFJ Room Ltd"} rows={4} />
       </div>
       <div className="card rounded-2xl p-8 max-w-[560px] mt-6">
         <div className="flex items-center justify-between flex-wrap gap-3">

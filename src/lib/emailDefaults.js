@@ -8,6 +8,7 @@ export function firstName(name) { return (name || "").trim().split(/\s+/)[0] || 
 
 export const EMAIL_TEMPLATE_KEYS = [
   { key: "welcome", label: "Application received", to: "student", vars: ["name", "courseName"] },
+  { key: "application-reviewed", label: "Application reviewed — payment required", to: "student", vars: ["name", "courseName", "price"] },
   { key: "acceptance", label: "Access code", to: "student", vars: ["name", "courseName", "accessCode"] },
   { key: "task-assigned", label: "Task assigned", to: "student", vars: ["name", "taskTitle", "courseName"] },
   { key: "task-submitted", label: "Task submitted — notifies you", to: "you", vars: ["studentName", "taskTitle", "courseName"] },
@@ -31,6 +32,7 @@ export const VAR_LABELS = {
   moduleTitle: "Module title",
   accessCode: "Access code",
   fromName: "Who tagged them",
+  price: "Training fee",
 };
 
 // Sample values the admin editor fills in so an unedited template still
@@ -38,7 +40,7 @@ export const VAR_LABELS = {
 export const SAMPLE_VARS = {
   name: "Amaka", studentName: "Amaka", courseName: "Voice Acting Mastery",
   taskTitle: "Record a demo reel", moduleTitle: "Finding Your Voice", accessCode: "FJ-7K2QR",
-  fromName: "Fidelia",
+  fromName: "Fidelia", price: "₦50,000",
 };
 
 // What the editor actually loads into an UNTOUCHED template's boxes --
@@ -54,6 +56,7 @@ export const SAMPLE_VARS = {
 // per-student personalization as never touching it at all.
 export const EMAIL_STARTERS = {
   welcome: { subject: "You're in review, {{name}} — FJ Room", body: "<h1>Thanks for applying, {{name}}.</h1><p>Your application to <strong>{{courseName}}</strong> is being reviewed by the Room.</p><p>Keep an eye on your inbox — including spam, just in case — for your access code.</p>" },
+  "application-reviewed": { subject: "Your application has been reviewed — next step", body: "<h1>Good news, {{name}}.</h1><p>Your application to <strong>{{courseName}}</strong> has been reviewed. To complete your enrollment, please pay the training fee below — once we confirm it, your access code will follow.</p>" },
   acceptance: { subject: "You're in! Your FJ Room access code", body: "<h1>You're in, {{name}}.</h1><p>Your application to <strong>{{courseName}}</strong> has been approved. Use the code below to unlock your course.</p>" },
   "task-assigned": { subject: "New task: {{taskTitle}}", body: "<h1>A new task, {{name}}.</h1><p><strong>{{taskTitle}}</strong> has just been assigned to you in <strong>{{courseName}}</strong>.</p>" },
   "task-submitted": { subject: "{{studentName}} submitted: {{taskTitle}}", body: "<h1>New submission.</h1><p><strong>{{studentName}}</strong> just submitted <strong>{{taskTitle}}</strong> in <strong>{{courseName}}</strong>.</p>" },
@@ -77,6 +80,10 @@ export const EMAIL_DEFAULTS = {
   welcome: {
     subject: (v) => `You're in review, ${firstName(v.name)} — FJ Room`,
     body: (v) => `<h1>Thanks for applying, ${firstName(v.name)}.</h1><p>Your application to <strong>${v.courseName || "FJ Room"}</strong> is being reviewed by the Room.</p><p>Keep an eye on your inbox — including spam, just in case — for your access code.</p>`,
+  },
+  "application-reviewed": {
+    subject: () => "Your application has been reviewed — next step",
+    body: (v) => `<h1>Good news, ${firstName(v.name)}.</h1><p>Your application to <strong>${v.courseName || "FJ Room"}</strong> has been reviewed. To complete your enrollment, please pay the training fee below — once we confirm it, your access code will follow.</p>`,
   },
   acceptance: {
     subject: () => "You're in! Your FJ Room access code",
