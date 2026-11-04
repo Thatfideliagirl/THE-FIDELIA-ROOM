@@ -467,7 +467,7 @@ export function LessonView({ course, enrollment, student, updateEnrollment, onBa
 // STUDENT: My Courses + per-enrollment dashboard
 // =========================================================
 const ENROLLMENT_TAB_ORDER = ["path", "meetings", "library", "tasks", "certificate", "studentId", "chat", "community", "notice"];
-export function EnrollmentDashboard({ student, setStudents, course, enrollment, cohorts, tasks, setTasks, resources, community, setCommunity, notices, setNotices, directThreads, setDirectThreads, allStudents, brand, onBack, notifItems, notifSeen, onMarkSeen }) {
+export function EnrollmentDashboard({ student, setStudents, course, enrollment, cohorts, tasks, setTasks, resources, community, setCommunity, notices, setNotices, directThreads, setDirectThreads, allStudents, brand, onBack, notifItems, notifSeen, onMarkSeen, notifCleared, onClearNotif }) {
   const [tab, setTab] = useState("path");
   const restrictedTabs = new Set(enrollment.restrictedTabs || []);
   const allowedTabs = ENROLLMENT_TAB_ORDER.filter((id) => !restrictedTabs.has(id));
@@ -516,7 +516,7 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
   );
   return (
     <DashboardShell sidebar={sidebar} maxWidth={1200}>
-        <div className="flex justify-end mb-4"><NotifBell items={notifItems} seen={notifSeen} onMarkSeen={onMarkSeen} /></div>
+        <div className="flex justify-end mb-4"><NotifBell items={notifItems} seen={notifSeen} onMarkSeen={onMarkSeen} cleared={notifCleared} onClear={onClearNotif} /></div>
 
         {tab === "path" && openModuleId === null && (
           <>
@@ -1028,7 +1028,7 @@ export function CommunityPost({ post, onLike, onComment }) {
 }
 
 const MAX_COURSES_PER_COHORT = 2;
-export function MyCourses({ student, setStudents, courses, cohorts, applicants, tasks, setTasks, resources, community, setCommunity, notices, setNotices, directThreads, setDirectThreads, allStudents, brand, onExit, onViewSite, onApplyMore, notifItems, notifSeen, onMarkSeen, onSwitchToTeamAdmin }) {
+export function MyCourses({ student, setStudents, courses, cohorts, applicants, tasks, setTasks, resources, community, setCommunity, notices, setNotices, directThreads, setDirectThreads, allStudents, brand, onExit, onViewSite, onApplyMore, notifItems, notifSeen, onMarkSeen, notifCleared, onClearNotif, onSwitchToTeamAdmin }) {
   const [tab, setTab] = useState("courses"); // "courses" | "explore" | "profile"
   const [openEnrollmentId, setOpenEnrollmentId] = useState(null);
   const [redeemEnrollmentId, setRedeemEnrollmentId] = useState(null);
@@ -1050,7 +1050,7 @@ export function MyCourses({ student, setStudents, courses, cohorts, applicants, 
     setRedeemEnrollmentId(null); setRedeemCodeInput(""); setRedeemError("");
   }
 
-  if (openEnrollment && openCourse) return <EnrollmentDashboard student={student} setStudents={setStudents} course={openCourse} enrollment={openEnrollment} cohorts={cohorts} tasks={tasks} setTasks={setTasks} resources={resources} community={community} setCommunity={setCommunity} notices={notices} setNotices={setNotices} directThreads={directThreads} setDirectThreads={setDirectThreads} allStudents={allStudents} brand={brand} onBack={() => setOpenEnrollmentId(null)} notifItems={notifItems} notifSeen={notifSeen} onMarkSeen={onMarkSeen} />;
+  if (openEnrollment && openCourse) return <EnrollmentDashboard student={student} setStudents={setStudents} course={openCourse} enrollment={openEnrollment} cohorts={cohorts} tasks={tasks} setTasks={setTasks} resources={resources} community={community} setCommunity={setCommunity} notices={notices} setNotices={setNotices} directThreads={directThreads} setDirectThreads={setDirectThreads} allStudents={allStudents} brand={brand} onBack={() => setOpenEnrollmentId(null)} notifItems={notifItems} notifSeen={notifSeen} onMarkSeen={onMarkSeen} notifCleared={notifCleared} onClearNotif={onClearNotif} />;
   if (redeemEnrollment && redeemCourse) return (
     <div className="min-h-screen flex items-center justify-center px-6 text-center">
       <div className="reveal in max-w-[400px] w-full">
@@ -1078,7 +1078,7 @@ export function MyCourses({ student, setStudents, courses, cohorts, applicants, 
     <>
       {showTour && <WelcomeTour onDone={dismissTour} />}
       <DashboardShell sidebar={sidebar} maxWidth={880}>
-        <div className="flex justify-end mb-4" data-tour="notif-bell"><NotifBell items={notifItems} seen={notifSeen} onMarkSeen={onMarkSeen} /></div>
+        <div className="flex justify-end mb-4" data-tour="notif-bell"><NotifBell items={notifItems} seen={notifSeen} onMarkSeen={onMarkSeen} cleared={notifCleared} onClear={onClearNotif} /></div>
         {tab === "courses" && (
           <>
             <div className="mb-10"><div className="f-label text-[12px] mb-2 accent-text">WELCOME BACK</div><h1 className="f-display text-[34px] mb-2" style={{ fontWeight: 800 }}>{student.name.split(" ")[0]}.</h1>{cohort && <p className="text-[16px]" style={{ color: "#71675A" }}>Your Cohort: {cohort.name}</p>}</div>

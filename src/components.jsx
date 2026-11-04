@@ -602,11 +602,16 @@ export function SidebarLink({ icon: Icon, label, active, onClick }) { return <bu
 export function ProgressBar({ pct }) { return <div className="progress-track" style={{ height: 8, width: "100%" }}><div className="progress-fill" style={{ width: `${pct}%` }} /></div>; }
 
 // ---------------- Notification bell (shared shape) ----------------
-export function NotifBell({ items, seen, onMarkSeen }) {
+export function NotifBell({ items, seen, onMarkSeen, cleared, onClear }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const btnRef = useRef(null);
-  const unseen = items.filter((n) => !seen.includes(n.id));
+  // "Seen" only ever drops the red badge -- it never removed anything from
+  // the list, which is exactly why the list only ever grew. "Cleared" is
+  // the deliberate action that actually removes one, permanently, until
+  // whatever caused it happens again under a fresh id.
+  const visible = items.filter((n) => !cleared.includes(n.id));
+  const unseen = visible.filter((n) => !seen.includes(n.id));
   const PANEL_WIDTH = 300;
 
   function toggle() {
@@ -621,8 +626,10 @@ export function NotifBell({ items, seen, onMarkSeen }) {
     // briefly incomplete; replacing the saved seen-list with that partial
     // snapshot would permanently "unsee" notifications that were already
     // read, and they'd reappear as new on the next reload.
-    if (!open && unseen.length) onMarkSeen((prev) => [...new Set([...prev, ...items.map((n) => n.id)])]);
+    if (!open && unseen.length) onMarkSeen((prev) => [...new Set([...prev, ...visible.map((n) => n.id)])]);
   }
+  function clearOne(id) { onClear((prev) => [...new Set([...prev, id])]); }
+  function clearAll() { onClear((prev) => [...new Set([...prev, ...visible.map((n) => n.id)])]); }
 
   useEffect(() => {
     if (!open) return;
@@ -639,11 +646,17 @@ export function NotifBell({ items, seen, onMarkSeen }) {
       </button>
       {open && createPortal(
         <div className="card modal-in rounded-xl p-4 fixed z-[999]" style={{ width: PANEL_WIDTH, top: pos.top, left: pos.left, maxHeight: "70vh", overflowY: "auto" }}>
-          <div className="f-label text-[11px] mb-3" style={{ color: "#71675A" }}>NOTIFICATIONS</div>
-          {items.length === 0 ? <div className="text-[13px]" style={{ color: "#A79B84" }}>Nothing new.</div> : items.slice().sort((a, b) => (b.at || 0) - (a.at || 0)).map((n, i) => (
-            <div key={n.id} className="py-2.5" style={{ borderTop: i > 0 ? "1px solid #F0E7D6" : "none" }}>
-              <div className="text-[13px]">{n.t}</div>
-              {n.at && <div className="f-code text-[10.5px] mt-1" style={{ color: "#A79B84" }}>{formatRelativeTime(n.at)}</div>}
+          <div className="flex items-center justify-between mb-3">
+            <div className="f-label text-[11px]" style={{ color: "#71675A" }}>NOTIFICATIONS</div>
+            {visible.length > 0 && <button onClick={clearAll} className="text-[11px]" style={{ color: "#A79B84" }}>Clear all</button>}
+          </div>
+          {visible.length === 0 ? <div className="text-[13px]" style={{ color: "#A79B84" }}>Nothing new.</div> : visible.slice().sort((a, b) => (b.at || 0) - (a.at || 0)).map((n, i) => (
+            <div key={n.id} className="py-2.5 flex items-start justify-between gap-2" style={{ borderTop: i > 0 ? "1px solid #F0E7D6" : "none" }}>
+              <div className="min-w-0">
+                <div className="text-[13px]">{n.t}</div>
+                {n.at && <div className="f-code text-[10.5px] mt-1" style={{ color: "#A79B84" }}>{formatRelativeTime(n.at)}</div>}
+              </div>
+              <button onClick={() => clearOne(n.id)} title="Clear" className="shrink-0 mt-0.5" style={{ color: "#C9BFAE" }}><X size={13} /></button>
             </div>
           ))}
         </div>,

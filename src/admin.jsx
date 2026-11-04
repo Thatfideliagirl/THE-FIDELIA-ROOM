@@ -2304,7 +2304,7 @@ export function TeamAccountTab({ teamAccess, onUpdate }) {
   );
 }
 
-export function AdminDashboard({ courses, setCourses, students, setStudents, onRemoveStudent, applicants, setApplicants, onRemoveApplicant, onAcceptApplicant, cohorts, setCohorts, tasks, setTasks, resources, onAddResource, onEditResource, onRemoveResource, community, setCommunity, notices, setNotices, directThreads, setDirectThreads, testimonials, setTestimonials, faqs, setFaqs, brand, setBrand, adminProfile, setAdminProfile, onExit, onViewSite, notifItems, notifSeen, onMarkSeen, teamAccess, onSwitchToStudent, onUpdateTeamAccess }) {
+export function AdminDashboard({ courses, setCourses, students, setStudents, onRemoveStudent, applicants, setApplicants, onRemoveApplicant, onAcceptApplicant, cohorts, setCohorts, tasks, setTasks, resources, onAddResource, onEditResource, onRemoveResource, community, setCommunity, notices, setNotices, directThreads, setDirectThreads, testimonials, setTestimonials, faqs, setFaqs, brand, setBrand, adminProfile, setAdminProfile, onExit, onViewSite, notifItems, notifSeen, onMarkSeen, notifCleared, onClearNotif, teamAccess, onSwitchToStudent, onUpdateTeamAccess }) {
   const allNavItems = [
     { id: "overview", icon: Sparkles, label: "Overview" }, { id: "profile", icon: UserCircle, label: "My Profile" }, { id: "applicants", icon: ClipboardCheck, label: "Applicants" },
     { id: "cohorts", icon: Layers, label: "Cohorts" }, { id: "courses", icon: BookOpen, label: "Courses" },
@@ -2329,7 +2329,7 @@ export function AdminDashboard({ courses, setCourses, students, setStudents, onR
     <>
       <div className="flex items-center justify-between mb-1 px-2"><LogoMark height={38} /><button onClick={onExit} title="Sign out"><LogOut size={16} color="#A79B84" /></button></div>
       <div className="f-label text-[11px] mb-4 px-2" style={{ color: "#A79B84" }}>{teamAccess ? teamAccess.roleLabel.toUpperCase() : "ADMIN"}</div>
-      <div className="px-2 mb-3" data-tour="notif-bell"><NotifBell items={notifItems} seen={notifSeen} onMarkSeen={onMarkSeen} /></div>
+      <div className="px-2 mb-3" data-tour="notif-bell"><NotifBell items={notifItems} seen={notifSeen} onMarkSeen={onMarkSeen} cleared={notifCleared} onClear={onClearNotif} /></div>
       <div className="flex flex-col gap-1 flex-1" data-tour="nav-sidebar">{navItems.map((n) => <div key={n.id} data-tour={n.id === "account" ? "nav-account" : undefined}><SidebarLink icon={n.icon} label={n.label} active={tab === n.id} onClick={() => setTab(n.id)} /></div>)}</div>
       {onSwitchToStudent && <button onClick={onSwitchToStudent} className="flex items-center gap-2 px-4 py-2.5 text-[14px] mt-4" style={{ color: "var(--accent)", fontWeight: 700 }}><Repeat size={16} /> Switch to student view</button>}
       <button onClick={onViewSite} className={`flex items-center gap-2 px-4 py-2.5 text-[14px] ${onSwitchToStudent ? "" : "mt-4"}`} style={{ color: "#A79B84", fontWeight: 600 }}><Home size={16} /> Home page</button>

@@ -130,16 +130,27 @@ export default function App() {
   // fetchNotifSeen/syncNotifSeen below) so it survives a refresh or
   // signing in on another device, instead of resetting every reload.
   const [notifSeen, setNotifSeen] = useState([]);
+  // Separate from notifSeen -- "seen" just removes the red dot and keeps the
+  // notification listed; "cleared" is a deliberate action that drops it from
+  // the list entirely, until whatever caused it happens again (a fresh id).
+  const [notifCleared, setNotifCleared] = useState([]);
   function syncNotifSeen(updater) {
     setNotifSeen((prev) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
-      if (currentAuthUserId) saveNotifSeen(currentAuthUserId, next).catch(reportSaveError("saveNotifSeen failed"));
+      if (currentAuthUserId) saveNotifSeen(currentAuthUserId, next, notifCleared).catch(reportSaveError("saveNotifSeen failed"));
+      return next;
+    });
+  }
+  function syncNotifCleared(updater) {
+    setNotifCleared((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      if (currentAuthUserId) saveNotifSeen(currentAuthUserId, notifSeen, next).catch(reportSaveError("saveNotifSeen failed"));
       return next;
     });
   }
   useEffect(() => {
-    if (!currentAuthUserId) { setNotifSeen([]); return; }
-    fetchNotifSeen(currentAuthUserId).then(setNotifSeen).catch((e) => console.error("fetchNotifSeen failed", e));
+    if (!currentAuthUserId) { setNotifSeen([]); setNotifCleared([]); return; }
+    fetchNotifSeen(currentAuthUserId).then(({ seenIds, clearedIds }) => { setNotifSeen(seenIds); setNotifCleared(clearedIds); }).catch((e) => console.error("fetchNotifSeen failed", e));
   }, [currentAuthUserId]);
 
   useEffect(() => { const el = document.createElement("style"); el.innerHTML = FONT_STYLE; document.head.appendChild(el); return () => document.head.removeChild(el); }, []);
@@ -729,17 +740,17 @@ export default function App() {
       {page === "studentDash" && liveStudent && pendingEnrollment && <CodeRedeemScreen student={liveStudent} enrollment={pendingEnrollment} onRedeem={() => redeemCode(pendingEnrollment.id)} onExit={handleSignOut} />}
       {page === "studentDash" && liveStudent && !pendingEnrollment && (
         <React.Suspense fallback={<LazyLoadingScreen />}>
-          <MyCourses student={liveStudent} setStudents={syncStudents} courses={courses} cohorts={cohorts} applicants={applicants} tasks={tasks} setTasks={syncTasks} resources={resources} community={community} setCommunity={syncCommunity} notices={notices.filter((n) => n.cohortId === "all" || n.cohortId === liveStudent.cohortId)} setNotices={syncNotices} directThreads={directThreads} setDirectThreads={syncDirectThreads} allStudents={students} brand={brand} onExit={handleSignOut} onViewSite={() => setPage("landing")} onApplyMore={(courseId) => { setApplyingAsExisting(liveStudent); setPresetCourseId(courseId || null); setPage("signup"); }} notifItems={studentNotifItems} notifSeen={notifSeen} onMarkSeen={syncNotifSeen} />
+          <MyCourses student={liveStudent} setStudents={syncStudents} courses={courses} cohorts={cohorts} applicants={applicants} tasks={tasks} setTasks={syncTasks} resources={resources} community={community} setCommunity={syncCommunity} notices={notices.filter((n) => n.cohortId === "all" || n.cohortId === liveStudent.cohortId)} setNotices={syncNotices} directThreads={directThreads} setDirectThreads={syncDirectThreads} allStudents={students} brand={brand} onExit={handleSignOut} onViewSite={() => setPage("landing")} onApplyMore={(courseId) => { setApplyingAsExisting(liveStudent); setPresetCourseId(courseId || null); setPage("signup"); }} notifItems={studentNotifItems} notifSeen={notifSeen} onMarkSeen={syncNotifSeen} notifCleared={notifCleared} onClearNotif={syncNotifCleared} />
         </React.Suspense>
       )}
       {page === "adminDash" && teamAccess && teamViewMode === "student" && liveStudent && (
         <React.Suspense fallback={<LazyLoadingScreen />}>
-          <MyCourses student={liveStudent} setStudents={syncStudents} courses={courses} cohorts={cohorts} applicants={applicants} tasks={tasks} setTasks={syncTasks} resources={resources} community={community} setCommunity={syncCommunity} notices={notices.filter((n) => n.cohortId === "all" || n.cohortId === liveStudent.cohortId)} setNotices={syncNotices} directThreads={directThreads} setDirectThreads={syncDirectThreads} allStudents={students} brand={brand} onExit={handleSignOut} onViewSite={() => setPage("landing")} onApplyMore={(courseId) => { setApplyingAsExisting(liveStudent); setPresetCourseId(courseId || null); setPage("signup"); }} notifItems={studentNotifItems} notifSeen={notifSeen} onMarkSeen={syncNotifSeen} onSwitchToTeamAdmin={() => setTeamViewMode("admin")} />
+          <MyCourses student={liveStudent} setStudents={syncStudents} courses={courses} cohorts={cohorts} applicants={applicants} tasks={tasks} setTasks={syncTasks} resources={resources} community={community} setCommunity={syncCommunity} notices={notices.filter((n) => n.cohortId === "all" || n.cohortId === liveStudent.cohortId)} setNotices={syncNotices} directThreads={directThreads} setDirectThreads={syncDirectThreads} allStudents={students} brand={brand} onExit={handleSignOut} onViewSite={() => setPage("landing")} onApplyMore={(courseId) => { setApplyingAsExisting(liveStudent); setPresetCourseId(courseId || null); setPage("signup"); }} notifItems={studentNotifItems} notifSeen={notifSeen} onMarkSeen={syncNotifSeen} notifCleared={notifCleared} onClearNotif={syncNotifCleared} onSwitchToTeamAdmin={() => setTeamViewMode("admin")} />
         </React.Suspense>
       )}
       {page === "adminDash" && !(teamAccess && teamViewMode === "student") && (
         <React.Suspense fallback={<LazyLoadingScreen />}>
-          <AdminDashboard courses={courses} setCourses={syncCourses} students={students} setStudents={syncStudents} onRemoveStudent={removeStudent} applicants={applicants} setApplicants={syncApplicants} onRemoveApplicant={removeApplicant} onAcceptApplicant={acceptApplicant} cohorts={cohorts} setCohorts={syncCohorts} tasks={tasks} setTasks={syncTasks} resources={resources} onAddResource={addResource} onEditResource={editResource} onRemoveResource={removeResource} community={community} setCommunity={syncCommunity} notices={notices} setNotices={syncNotices} directThreads={directThreads} setDirectThreads={syncDirectThreads} testimonials={testimonials} setTestimonials={syncTestimonials} faqs={faqs} setFaqs={syncFaqs} brand={brand} setBrand={syncBrand} adminProfile={adminProfile} setAdminProfile={syncAdminProfile} onExit={handleSignOut} onViewSite={() => setPage("landing")} notifItems={adminNotifItems} notifSeen={notifSeen} onMarkSeen={syncNotifSeen} teamAccess={teamAccess} onSwitchToStudent={teamAccess ? () => {
+          <AdminDashboard courses={courses} setCourses={syncCourses} students={students} setStudents={syncStudents} onRemoveStudent={removeStudent} applicants={applicants} setApplicants={syncApplicants} onRemoveApplicant={removeApplicant} onAcceptApplicant={acceptApplicant} cohorts={cohorts} setCohorts={syncCohorts} tasks={tasks} setTasks={syncTasks} resources={resources} onAddResource={addResource} onEditResource={editResource} onRemoveResource={removeResource} community={community} setCommunity={syncCommunity} notices={notices} setNotices={syncNotices} directThreads={directThreads} setDirectThreads={syncDirectThreads} testimonials={testimonials} setTestimonials={syncTestimonials} faqs={faqs} setFaqs={syncFaqs} brand={brand} setBrand={syncBrand} adminProfile={adminProfile} setAdminProfile={syncAdminProfile} onExit={handleSignOut} onViewSite={() => setPage("landing")} notifItems={adminNotifItems} notifSeen={notifSeen} onMarkSeen={syncNotifSeen} notifCleared={notifCleared} onClearNotif={syncNotifCleared} teamAccess={teamAccess} onSwitchToStudent={teamAccess ? () => {
             if (liveStudent) { setTeamViewMode("student"); return; }
             // Not enrolled anywhere yet -- same "apply" flow any brand-new
             // visitor uses, skipping straight to picking a course since
