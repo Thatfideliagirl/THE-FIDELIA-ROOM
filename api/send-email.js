@@ -7,7 +7,7 @@
 // Both env vars are read fresh on every request, so setting them in
 // Vercel just needs a redeploy (any new push, or "Redeploy" in the
 // Vercel dashboard) to take effect -- no code change required here.
-import { EMAIL_DEFAULTS, fillTemplate, fillTemplatePlain } from "../src/lib/emailDefaults.js";
+import { EMAIL_DEFAULTS, fillTemplate, fillTemplatePlain, firstName } from "../src/lib/emailDefaults.js";
 
 const FROM = process.env.RESEND_FROM; // e.g. "FJ Room <hello@fjroom.com>" -- must match a verified Resend domain
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
@@ -124,7 +124,11 @@ export default async function handler(req, res) {
   // task-decided/quickcheck-decided send one shared "itemTitle" field --
   // filled into whichever of taskTitle/moduleTitle this template actually
   // uses, so the same payload works for either outcome template.
-  const vars = { name, studentName, courseName, accessCode, loginUrl, taskTitle: taskTitle || itemTitle, moduleTitle: moduleTitle || itemTitle, deadlineText, fromName };
+  // "name" is shortened to a first name once, here -- EMAIL_DEFAULTS below
+  // also calls firstName() on it (harmless on an already-short name), but a
+  // custom {{name}} template has no such step of its own, so this is what
+  // makes {{name}} resolve to "Amaka" rather than "Amaka Obi" either way.
+  const vars = { name: firstName(name), studentName, courseName, accessCode, loginUrl, taskTitle: taskTitle || itemTitle, moduleTitle: moduleTitle || itemTitle, deadlineText, fromName };
   const defaults = EMAIL_DEFAULTS[templateKey];
   const custom = (await fetchCustomTemplates())[templateKey];
   const subject = custom?.subject ? fillTemplatePlain(custom.subject, vars) : defaults.subject(vars);

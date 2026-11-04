@@ -4,7 +4,7 @@
 // as its placeholder legend. Kept in one place so the two never drift --
 // editing a default here changes both the unedited-template fallback and
 // the editor's own example text.
-function firstName(name) { return (name || "").trim().split(/\s+/)[0] || "there"; }
+export function firstName(name) { return (name || "").trim().split(/\s+/)[0] || "there"; }
 
 export const EMAIL_TEMPLATE_KEYS = [
   { key: "welcome", label: "Application received", to: "student", vars: ["name", "courseName"] },
@@ -38,6 +38,32 @@ export const SAMPLE_VARS = {
   name: "Amaka", studentName: "Amaka", courseName: "Voice Acting Mastery",
   taskTitle: "Record a demo reel", moduleTitle: "Finding Your Voice", accessCode: "FJ-7K2QR",
   fromName: "Fidelia",
+};
+
+// What the editor actually loads into an UNTOUCHED template's boxes --
+// written with real {{tokens}} in it, not rendered sample text. This is the
+// fix for the real bug it caused: EMAIL_DEFAULTS below bakes a real name
+// and course straight into the HTML (correct for the server's own
+// never-customized fallback, since it's given real values at send time),
+// but handing that same rendered text to the editor meant opening a
+// template and just clicking Save would permanently lock in whatever
+// example name happened to be shown -- "Amaka" ends up in every student's
+// email, forever, because the literal word was saved, not a placeholder.
+// Starting the editor from these instead means Save reproduces the same
+// per-student personalization as never touching it at all.
+export const EMAIL_STARTERS = {
+  welcome: { subject: "You're in review, {{name}} — FJ Room", body: "<h1>Thanks for applying, {{name}}.</h1><p>Your application to <strong>{{courseName}}</strong> is being reviewed by the Room.</p><p>Keep an eye on your inbox — including spam, just in case — for your access code.</p>" },
+  acceptance: { subject: "You're in! Your FJ Room access code", body: "<h1>You're in, {{name}}.</h1><p>Your application to <strong>{{courseName}}</strong> has been approved. Use the code below to unlock your course.</p>" },
+  "task-assigned": { subject: "New task: {{taskTitle}}", body: "<h1>A new task, {{name}}.</h1><p><strong>{{taskTitle}}</strong> has just been assigned to you in <strong>{{courseName}}</strong>.</p>" },
+  "task-submitted": { subject: "{{studentName}} submitted: {{taskTitle}}", body: "<h1>New submission.</h1><p><strong>{{studentName}}</strong> just submitted <strong>{{taskTitle}}</strong> in <strong>{{courseName}}</strong>.</p>" },
+  "quickcheck-submitted": { subject: "{{studentName}} submitted a quick check for review", body: "<h1>New submission.</h1><p><strong>{{studentName}}</strong> just submitted the quick check for <strong>{{moduleTitle}}</strong> in <strong>{{courseName}}</strong>, awaiting your review.</p>" },
+  "task-approved": { subject: "You passed: {{taskTitle}}", body: "<h1>Nicely done, {{name}}.</h1><p><strong>{{taskTitle}}</strong> has been approved in <strong>{{courseName}}</strong>.</p>" },
+  "task-rejected": { subject: "{{taskTitle}} needs another look", body: "<h1>One more pass, {{name}}.</h1><p><strong>{{taskTitle}}</strong> in <strong>{{courseName}}</strong> has been sent back for another look.</p>" },
+  "quickcheck-approved": { subject: "You passed: {{moduleTitle}}", body: "<h1>Nicely done, {{name}}.</h1><p><strong>{{moduleTitle}}</strong> has been approved in <strong>{{courseName}}</strong>.</p>" },
+  "quickcheck-rejected": { subject: "{{moduleTitle}} needs another look", body: "<h1>One more pass, {{name}}.</h1><p><strong>{{moduleTitle}}</strong> in <strong>{{courseName}}</strong> has been sent back for another look.</p>" },
+  "message-to-admin": { subject: "New message from {{studentName}}", body: "<h1>New message.</h1><p><strong>{{studentName}}</strong> sent you a message on FJ Room.</p>" },
+  "message-to-student": { subject: "You have a new message on FJ Room", body: "<h1>New message, {{name}}.</h1><p>You've got a new message waiting for you on FJ Room.</p>" },
+  "community-tagged": { subject: "{{fromName}} tagged you on FJ Room", body: "<h1>You were tagged, {{name}}.</h1><p><strong>{{fromName}}</strong> tagged you in the community on FJ Room.</p>" },
 };
 
 // Every default body is just the headline + message -- the access-code box

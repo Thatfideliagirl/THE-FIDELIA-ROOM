@@ -15,7 +15,7 @@ import { Field, SectionHeader, NotifBell, SidebarLink, LogoMark, TextArea, Selec
 import { CommunityPanel, SOCIAL_PLATFORMS } from "./student.jsx";
 import { fetchTeamMembers, addTeamMember, updateTeamMember, removeTeamMember, fetchTeamActivity, updateMyTeamProfile, markTourSeen } from "./lib/team.js";
 import { sendTaskAssignedEmail, sendTaskDecisionEmail, sendQuickCheckDecisionEmail } from "./lib/email.js";
-import { EMAIL_TEMPLATE_KEYS, EMAIL_DEFAULTS, VAR_LABELS, SAMPLE_VARS } from "./lib/emailDefaults.js";
+import { EMAIL_TEMPLATE_KEYS, EMAIL_STARTERS, VAR_LABELS, SAMPLE_VARS, fillTemplate, fillTemplatePlain } from "./lib/emailDefaults.js";
 
 export function ApplicantsTab({ applicants, setApplicants, onRemove, students, setStudents, courses, cohorts, onAccept }) {
   const [openId, setOpenId] = useState(null); const [cohortInput, setCohortInput] = useState(cohorts[0]?.id);
@@ -1813,9 +1813,14 @@ export function AdminNoticeTab({ notices, setNotices, cohorts, students }) {
 // actually shows the code or actually links anywhere.
 function EmailTemplateRow({ def, custom, onSave, onReset }) {
   const [editing, setEditing] = useState(false);
-  const defaults = EMAIL_DEFAULTS[def.key];
-  const [subject, setSubject] = useState(custom?.subject || defaults.subject(SAMPLE_VARS));
-  const [body, setBody] = useState(custom?.body || defaults.body(SAMPLE_VARS));
+  const starter = EMAIL_STARTERS[def.key];
+  // Starts from the token version ("{{name}}"), never a rendered example --
+  // loading rendered sample text here was the actual bug: hitting Save on
+  // an untouched template would have permanently baked in whichever sample
+  // name/course happened to be shown, instead of a placeholder that fills
+  // in correctly for every real student afterward.
+  const [subject, setSubject] = useState(custom?.subject || starter.subject);
+  const [body, setBody] = useState(custom?.body || starter.body);
   const editorRef = useRef(null);
   // Inserts right where the cursor was, not just at the end -- so a token
   // can be dropped into the middle of a sentence she's already written.
@@ -1825,7 +1830,7 @@ function EmailTemplateRow({ def, custom, onSave, onReset }) {
     editorRef.current.chain().focus().insertContent(tag).run();
   }
   function save() { onSave(def.key, { subject, body }); setEditing(false); }
-  function reset() { onReset(def.key); setSubject(defaults.subject(SAMPLE_VARS)); setBody(defaults.body(SAMPLE_VARS)); setEditing(false); }
+  function reset() { onReset(def.key); setSubject(starter.subject); setBody(starter.body); setEditing(false); }
   return (
     <div className="rounded-lg px-4 py-3" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -1845,6 +1850,13 @@ function EmailTemplateRow({ def, custom, onSave, onReset }) {
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-[11px]" style={{ color: "#A79B84" }}>Click to insert:</span>
             {def.vars.map((v) => <button key={v} onClick={() => insertToken(v)} className="f-code text-[11px] px-2.5 py-1 rounded-full" style={{ background: "#F0E7D6", color: "#71675A" }}>{VAR_LABELS[v] || v}</button>)}
+          </div>
+          <div>
+            <div className="f-label text-[11px] mb-1.5" style={{ color: "#71675A" }}>PREVIEW — what a real student would see (using an example)</div>
+            <div className="rounded-lg px-3.5 py-3" style={{ background: "#fff", border: "1px solid #E7DEC9" }}>
+              <div className="text-[13px] mb-2" style={{ color: "#71675A" }}><strong style={{ color: "#262019" }}>Subject:</strong> {fillTemplatePlain(subject, SAMPLE_VARS)}</div>
+              <RichText html={fillTemplate(body, SAMPLE_VARS)} className="rich-content text-[14px]" />
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <button onClick={save} className="btn-primary rounded-lg px-4 py-2 text-[13px]">Save</button>
