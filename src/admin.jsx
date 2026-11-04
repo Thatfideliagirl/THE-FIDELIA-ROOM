@@ -523,6 +523,20 @@ export function AdminMeetingsTab({ courses, setCourses, cohorts, students }) {
     const course = courses.find((c) => c.id === newCourseId);
     setDraft((d) => d.map((mt) => mt.id !== id ? mt : { ...mt, courseId: newCourseId, moduleId: course?.modules[0]?.id }));
   }
+  // Picking a cohort first, then a course within it, is what actually
+  // scopes who sees the meeting -- "" means not cohort-specific (visible
+  // to everyone enrolled, the same as every meeting before this existed),
+  // which stays an option for something like a general orientation call
+  // that isn't really tied to one cohort's own schedule.
+  function updateMeetingCohort(id, newCohortId) {
+    const cohort = cohorts.find((c) => c.id === newCohortId);
+    const firstCourse = cohort ? courses.find((c) => cohort.courseIds.includes(c.id) && c.modules.length > 0) : null;
+    setDraft((d) => d.map((mt) => {
+      if (mt.id !== id) return mt;
+      if (!firstCourse) return { ...mt, cohortId: newCohortId };
+      return { ...mt, cohortId: newCohortId, courseId: firstCourse.id, moduleId: firstCourse.modules[0]?.id };
+    }));
+  }
   function updateMeetingDatePart(id, part, value) {
     setDraft((d) => d.map((mt) => {
       if (mt.id !== id) return mt;
@@ -535,7 +549,10 @@ export function AdminMeetingsTab({ courses, setCourses, cohorts, students }) {
     const defaultCourse = (courseFilterId !== "all" ? courses.find((c) => c.id === courseFilterId) : filterCourses[0]) || coursesWithModules[0];
     if (!defaultCourse) return;
     const newId = "mt" + Date.now();
-    setDraft((d) => [...d, { id: newId, label: `Class ${d.length + 1}`, date: "", link: "", recordingLink: "", recordingFile: null, assignedStudentIds: [], createdAt: Date.now(), courseId: defaultCourse.id, moduleId: defaultCourse.modules[0]?.id }]);
+    // Starts scoped to whichever cohort is already picked in the filter bar
+    // above, if any -- the common case is adding a meeting while already
+    // looking at one cohort's courses.
+    setDraft((d) => [...d, { id: newId, label: `Class ${d.length + 1}`, date: "", link: "", recordingLink: "", recordingFile: null, assignedStudentIds: [], createdAt: Date.now(), cohortId: cohortId !== "all" ? cohortId : "", courseId: defaultCourse.id, moduleId: defaultCourse.modules[0]?.id }]);
     setExpandedId(newId);
   }
   // Delete is immediate — it drops the meeting from wherever it currently lives, no separate save needed.
@@ -618,6 +635,7 @@ export function AdminMeetingsTab({ courses, setCourses, cohorts, students }) {
                   <div className="text-[14px]" style={{ fontWeight: 700 }}>{mt.label || "Untitled meeting"}</div>
                   <div className="text-[12px] mt-0.5" style={{ color: "#71675A" }}>
                     {course?.title || "No course yet"}
+                    {mt.cohortId ? ` · ${cohorts.find((c) => c.id === mt.cohortId)?.name || "Unknown cohort"}` : " · All cohorts"}
                     {mt.date ? ` · ${new Date(mt.date).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : " · Date to be confirmed"}
                   </div>
                 </div>
@@ -625,8 +643,9 @@ export function AdminMeetingsTab({ courses, setCourses, cohorts, students }) {
               </button>
               {expanded && (
                 <div className="px-5 pb-5 flex flex-col gap-3" style={{ borderTop: "1px dashed #E7DEC9" }}>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3">
-                    <SelectF label="Course" value={mt.courseId} onChange={(e) => updateMeetingCourse(mt.id, e.target.value)} options={coursesWithModules.map((c) => ({ value: c.id, label: c.title }))} />
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3">
+                    <SelectF label="Cohort" value={mt.cohortId || ""} onChange={(e) => updateMeetingCohort(mt.id, e.target.value)} options={[{ value: "", label: "All cohorts" }, ...cohorts.map((c) => ({ value: c.id, label: c.name }))]} />
+                    <SelectF label="Course" value={mt.courseId} onChange={(e) => updateMeetingCourse(mt.id, e.target.value)} options={(mt.cohortId ? coursesWithModules.filter((c) => cohorts.find((co) => co.id === mt.cohortId)?.courseIds.includes(c.id)) : coursesWithModules).map((c) => ({ value: c.id, label: c.title }))} />
                     <SelectF label="Which module is this?" value={mt.moduleId} onChange={(e) => updateMeeting(mt.id, "moduleId", e.target.value === "other" ? "other" : Number(e.target.value))} options={[...(course?.modules || []).map((m, i) => ({ value: m.id, label: `Module ${i + 1} — ${m.title}` })), { value: "other", label: "Other — not part of a module" }]} />
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-[1fr_0.85fr_0.75fr_1.5fr_auto] gap-3 items-end">
@@ -641,21 +660,22 @@ export function AdminMeetingsTab({ courses, setCourses, cohorts, students }) {
                     )}
                   </div>
                   {mt.moduleId === "other" && (() => {
-                    // Scoped to whichever cohort is picked in the filter bar above --
-                    // "All cohorts" shows everyone enrolled in the course, same as
-                    // before; picking one cohort narrows the tag list to just its
-                    // students, so a typo-prone list of 80 names doesn't have to be
-                    // scrolled through to tag two people in one cohort.
-                    const taggable = students.filter((s) => s.enrollments.some((e) => e.courseId === mt.courseId) && (cohortId === "all" || s.cohortId === cohortId));
+                    // Scoped to this meeting's own cohort now, not the admin's
+                    // transient filter above -- "All cohorts" shows everyone
+                    // enrolled in the course; picking one in the Cohort field
+                    // above narrows the tag list to just its students, so a
+                    // typo-prone list of 80 names doesn't have to be scrolled
+                    // through to tag two people in one cohort.
+                    const taggable = students.filter((s) => s.enrollments.some((e) => e.courseId === mt.courseId) && (!mt.cohortId || s.cohortId === mt.cohortId));
                     return (
                       <div className="pt-3" style={{ borderTop: "1px dashed #E7DEC9" }}>
-                        <div className="f-label text-[10px] mb-2" style={{ color: "#A79B84" }}>TAG PEOPLE (they'll be notified and see this under their own Virtual Meetings){cohortId !== "all" && ` — showing ${cohorts.find((c) => c.id === cohortId)?.name || "this cohort"} only`}</div>
+                        <div className="f-label text-[10px] mb-2" style={{ color: "#A79B84" }}>TAG PEOPLE (they'll be notified and see this under their own Virtual Meetings){mt.cohortId && ` — showing ${cohorts.find((c) => c.id === mt.cohortId)?.name || "this cohort"} only`}</div>
                         <div className="flex flex-wrap gap-2">
                           {taggable.map((s) => {
                             const tagged = (mt.assignedStudentIds || []).includes(s.id);
                             return <button key={s.id} type="button" onClick={() => updateMeeting(mt.id, "assignedStudentIds", tagged ? (mt.assignedStudentIds || []).filter((x) => x !== s.id) : [...(mt.assignedStudentIds || []), s.id])} className="f-code text-[11px] px-3 py-1.5 rounded-full" style={{ background: tagged ? "var(--accent)" : "#F0E7D6", color: tagged ? "#FAF6EC" : "#71675A", fontWeight: 700 }}>{s.name}</button>;
                           })}
-                          {taggable.length === 0 && <span className="text-[13px]" style={{ color: "#A79B84" }}>No students enrolled in this course {cohortId !== "all" ? "in this cohort " : ""}yet.</span>}
+                          {taggable.length === 0 && <span className="text-[13px]" style={{ color: "#A79B84" }}>No students enrolled in this course {mt.cohortId ? "in this cohort " : ""}yet.</span>}
                         </div>
                       </div>
                     );

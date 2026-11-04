@@ -384,8 +384,18 @@ export function LessonView({ course, enrollment, student, updateEnrollment, onBa
       {view === "meetings" && (
         <div className="card rounded-2xl p-5 md:p-8">
           <div className="f-display text-[19px] mb-5" style={{ fontWeight: 700 }}>Virtual meetings for this module</div>
-          {(!module.meetings || module.meetings.length === 0) && <div className="text-[14px]" style={{ color: "#A79B84" }}>No classes scheduled yet — check back soon.</div>}
-          <div className="flex flex-col gap-2">{(module.meetings || []).map((mt) => (
+          {(() => {
+            // A meeting with no cohort set is old data from before cohort
+            // scoping existed -- treated as visible to everyone, same as it
+            // always was, so this never hides anything that used to show.
+            // A meeting that does have one only shows to that same cohort,
+            // which is the actual fix: a module stays shared across every
+            // cohort that takes the course, but a specific class session
+            // scheduled inside it is only ever really for one of them.
+            const myMeetings = (module.meetings || []).filter((mt) => !mt.cohortId || mt.cohortId === student.cohortId);
+            return <>
+              {myMeetings.length === 0 && <div className="text-[14px]" style={{ color: "#A79B84" }}>No classes scheduled yet — check back soon.</div>}
+              <div className="flex flex-col gap-2">{myMeetings.map((mt) => (
             <div key={mt.id} className="rounded-lg px-4 py-3.5" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
               <div className="flex items-center justify-between">
                 <div><div className="text-[14px]" style={{ fontWeight: 700 }}>{mt.label}</div><div className="text-[12px] flex items-center gap-1.5 mt-0.5" style={{ color: "#71675A" }}><Clock size={12} /> {mt.date ? new Date(mt.date).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "Date to be confirmed"}</div></div>
@@ -400,6 +410,8 @@ export function LessonView({ course, enrollment, student, updateEnrollment, onBa
               )}
             </div>
           ))}</div>
+            </>;
+          })()}
         </div>
       )}
 
@@ -540,10 +552,16 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
           const now = Date.now();
           const inWindow = (mt) => meetingsFilter === "past" ? (mt.date && new Date(mt.date).getTime() < now) : !mt.date || new Date(mt.date).getTime() >= now;
           const generalMeetings = (course.generalMeetings || []).filter((mt) => (mt.assignedStudentIds || []).includes(student.id) && inWindow(mt));
+          // Same cohort check as the per-module tab -- a meeting with no
+          // cohort set is old data and stays visible to everyone, same as
+          // it always was; one that does have a cohort only shows to that
+          // cohort, so a module shared across cohorts doesn't leak a class
+          // session meant for a different one.
+          const myCohortMeeting = (mt) => !mt.cohortId || mt.cohortId === student.cohortId;
           const grouped = course.modules.map((m, i) => ({
             module: m,
             index: i,
-            meetings: (m.meetings || []).filter(inWindow),
+            meetings: (m.meetings || []).filter((mt) => inWindow(mt) && myCohortMeeting(mt)),
           })).filter((g) => g.meetings.length > 0);
           function renderMeetingCard(mt) {
             const expanded = expandedMeetingId === mt.id;
