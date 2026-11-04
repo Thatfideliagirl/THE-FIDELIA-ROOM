@@ -1231,7 +1231,11 @@ export function TaskDetail({ task, setTasks, students, courses, cohorts, onClose
   function save(data) {
     const course = courses.find((c) => c.id === data.courseId);
     const newlyAssigned = (data.assigned || []).filter((sid) => !task.assigned.includes(sid));
-    setTasks((prev) => applyCapstoneExclusivity(prev, task.id, data.courseId, data.isCapstone).map((t) => t.id !== task.id ? t : { ...t, ...data }));
+    // Moving the deadline makes every previous reminder stale -- without
+    // this, someone already reminded for the old date never gets reminded
+    // again even once the new date re-enters the reminder window.
+    const deadlineMoved = data.deadlineAt !== task.deadlineAt;
+    setTasks((prev) => applyCapstoneExclusivity(prev, task.id, data.courseId, data.isCapstone).map((t) => t.id !== task.id ? t : { ...t, ...data, remindedIds: deadlineMoved ? [] : t.remindedIds }));
     setEditing(false);
     newlyAssigned.forEach((sid) => {
       const s = students.find((x) => x.id === sid);
