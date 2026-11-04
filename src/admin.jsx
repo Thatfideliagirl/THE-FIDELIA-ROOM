@@ -1107,6 +1107,17 @@ export function SubmissionDetail({ sid, student, sub, task, onGrade, onGradeLink
 // course un-ticks whichever task held that spot before, same way a radio
 // button works, instead of letting eligibility silently depend on whichever
 // capstone task happens to come first in the list.
+// A one-line "closes <date>" (or "due in N days" for a task with no fixed
+// deadline) for the task-assigned email -- deliberately not the task's full
+// instructions, which stay in the app for them to open, not in their inbox.
+function formatTaskDeadline(data) {
+  if (data.deadlineAt) {
+    const d = new Date(data.deadlineAt);
+    if (!isNaN(d)) return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  }
+  if (data.dueInDays) return `in ${data.dueInDays} day${Number(data.dueInDays) === 1 ? "" : "s"}`;
+  return null;
+}
 function applyCapstoneExclusivity(prev, taskId, courseId, isCapstone) {
   if (!isCapstone) return prev;
   return prev.map((t) => (t.id !== taskId && t.courseId === courseId && t.isCapstone) ? { ...t, isCapstone: false } : t);
@@ -1163,7 +1174,7 @@ export function TaskDetail({ task, setTasks, students, courses, cohorts, onClose
     setEditing(false);
     newlyAssigned.forEach((sid) => {
       const s = students.find((x) => x.id === sid);
-      if (s) sendTaskAssignedEmail({ email: s.email, name: s.name, taskTitle: data.title, courseName: course?.title, taskDescription: data.description });
+      if (s) sendTaskAssignedEmail({ email: s.email, name: s.name, taskTitle: data.title, courseName: course?.title, deadlineText: formatTaskDeadline(data) });
     });
   }
   if (editing) return <TaskForm students={students} courses={courses} cohorts={cohorts} initial={task} onSave={save} onClose={() => setEditing(false)} />;
@@ -1204,7 +1215,7 @@ export function TasksTab({ tasks, setTasks, students, courses, cohorts }) {
     setShowAdd(false);
     (data.assigned || []).forEach((sid) => {
       const s = students.find((x) => x.id === sid);
-      if (s) sendTaskAssignedEmail({ email: s.email, name: s.name, taskTitle: data.title, courseName: course?.title, taskDescription: data.description });
+      if (s) sendTaskAssignedEmail({ email: s.email, name: s.name, taskTitle: data.title, courseName: course?.title, deadlineText: formatTaskDeadline(data) });
     });
   }
   function deleteTask(id) { setTasks((prev) => prev.filter((t) => t.id !== id)); setSelected(null); }

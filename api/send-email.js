@@ -78,22 +78,14 @@ function accessCodeBox(code) {
     <div style="font-size:22px;font-weight:700;color:${BRAND.accent};letter-spacing:.04em;">${code}</div>
   </div>`;
 }
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-}
-// The task's own instructions, shown under "a new task was assigned" --
-// already-sanitized rich HTML (the same admin rich-text editor that saves
-// it), so it's embedded as-is rather than escaped.
-function taskDescriptionBlock(html) {
-  if (!html) return "";
-  return `<div style="margin:0 0 20px;padding:14px 16px;background:${BRAND.bg};border-radius:10px;font-size:14px;line-height:1.6;color:${BRAND.ink};">${html}</div>`;
-}
-// What a student actually typed/pasted -- always plain text by the time it
-// gets here (the client strips any rich-text formatting first), so this
-// escapes it and only preserves line breaks.
-function submissionBlock(text) {
+// A one-line "closes <date>" note -- deliberately NOT the task's full
+// instructions or a student's full submission text. These notification
+// emails are meant to be a quick nudge back into the app, not a substitute
+// for actually opening it: she still wants to click through to review and
+// grade a submission, not read the whole thing from her inbox.
+function deadlineLine(text) {
   if (!text) return "";
-  return `<div style="margin:0 0 20px;padding:14px 16px;background:${BRAND.bg};border-radius:10px;font-size:14px;line-height:1.6;color:${BRAND.ink};white-space:pre-wrap;">${escapeHtml(text)}</div>`;
+  return `<div style="margin:0 0 18px;font-size:13px;color:${BRAND.muted};">Closes ${text}</div>`;
 }
 // The structural bits every template of a given kind needs -- never part of
 // the admin's editable text (see emailDefaults.js), so rewriting the
@@ -101,10 +93,13 @@ function submissionBlock(text) {
 // or the button that actually links anywhere.
 function extra(templateKey, vars) {
   if (templateKey === "acceptance") return accessCodeBox(vars.accessCode) + (vars.loginUrl ? button("Sign in to FJ Room", vars.loginUrl) : "");
-  if (templateKey === "task-assigned") return taskDescriptionBlock(vars.taskDescription) + button("View the task", vars.loginUrl || SITE_URL);
-  if (templateKey === "task-submitted" || templateKey === "quickcheck-submitted") return submissionBlock(vars.submissionSummary) + button("Review it", SITE_URL);
+  if (templateKey === "task-assigned") return deadlineLine(vars.deadlineText) + button("View the task", vars.loginUrl || SITE_URL);
+  if (templateKey === "task-submitted" || templateKey === "quickcheck-submitted") return button("Review it", SITE_URL);
   if (templateKey === "task-approved" || templateKey === "quickcheck-approved") return button("Continue", vars.loginUrl || SITE_URL);
   if (templateKey === "task-rejected" || templateKey === "quickcheck-rejected") return button("Revise it", vars.loginUrl || SITE_URL);
+  if (templateKey === "message-to-admin") return button("Open chat", SITE_URL);
+  if (templateKey === "message-to-student") return button("View message", vars.loginUrl || SITE_URL);
+  if (templateKey === "community-tagged") return button("View it", vars.loginUrl || SITE_URL);
   return "";
 }
 
@@ -112,24 +107,24 @@ export default async function handler(req, res) {
   if (req.method !== "POST") { res.status(405).json({ error: "Method not allowed" }); return; }
   if (!RESEND_API_KEY || !FROM) { res.status(200).json({ skipped: true, reason: "Email not configured yet" }); return; }
 
-  const { kind, email, name, courseName, accessCode, loginUrl, taskTitle, moduleTitle, studentName, itemTitle, approved, taskDescription, submissionSummary } = req.body || {};
+  const { kind, email, name, courseName, accessCode, loginUrl, taskTitle, moduleTitle, studentName, itemTitle, approved, deadlineText, fromName } = req.body || {};
   if (!kind) { res.status(400).json({ error: "Missing kind" }); return; }
 
   const templateKey = resolveTemplateKey(kind, approved);
   if (!templateKey) { res.status(400).json({ error: "Unknown kind: " + kind }); return; }
 
-  // The two "a student did something" kinds always go to the admin, not
-  // whatever the caller passed as email -- there's no student-chosen
-  // address to trust here anyway, and routing both the same way means a
-  // caller can never accidentally send an admin alert to a student.
-  const notifiesAdmin = kind === "task-submitted" || kind === "quickcheck-submitted";
+  // These kinds always go to the admin, not whatever the caller passed as
+  // email -- there's no student-chosen address to trust here anyway, and
+  // routing them this way means a caller can never accidentally send an
+  // admin alert to a student.
+  const notifiesAdmin = kind === "task-submitted" || kind === "quickcheck-submitted" || kind === "message-to-admin";
   const to = notifiesAdmin ? ADMIN_EMAIL : email;
   if (!to) { res.status(400).json({ error: "Missing email" }); return; }
 
   // task-decided/quickcheck-decided send one shared "itemTitle" field --
   // filled into whichever of taskTitle/moduleTitle this template actually
   // uses, so the same payload works for either outcome template.
-  const vars = { name, studentName, courseName, accessCode, loginUrl, taskTitle: taskTitle || itemTitle, moduleTitle: moduleTitle || itemTitle, taskDescription, submissionSummary };
+  const vars = { name, studentName, courseName, accessCode, loginUrl, taskTitle: taskTitle || itemTitle, moduleTitle: moduleTitle || itemTitle, deadlineText, fromName };
   const defaults = EMAIL_DEFAULTS[templateKey];
   const custom = (await fetchCustomTemplates())[templateKey];
   const subject = custom?.subject ? fillTemplatePlain(custom.subject, vars) : defaults.subject(vars);

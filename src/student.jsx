@@ -11,7 +11,7 @@ import { pairKey, moduleStatus, scoreSubmission, scoreQuestions, normalizeQuesti
 import { renderCertificate, formatIssueDate } from "./lib/certificate.js";
 import { renderIdCard } from "./lib/idcard.js";
 import { uploadFile } from "./lib/storage.js";
-import { notifyAdminTaskSubmitted, notifyAdminQuickCheckSubmitted } from "./lib/email.js";
+import { notifyAdminTaskSubmitted, notifyAdminQuickCheckSubmitted, sendCommunityTaggedEmail } from "./lib/email.js";
 import { SectionHeader, NotifBell, WelcomeTour, SidebarLink, LogoMark, Spine, TextArea, ProgressBar, ResourceDetail, Field, ChangePasswordCard, RichText, RichTextEditor, DashboardShell, TaskFileList } from "./components.jsx";
 
 // List markers (•, ‣, etc.) are sometimes present as literal characters
@@ -244,15 +244,6 @@ export function LessonView({ course, enrollment, student, updateEnrollment, onBa
   const linkType = isLinkProof ? (LINK_TYPES.find((t) => t.key === module.linkType) || LINK_TYPES.find((t) => t.key === "other")) : null;
   const linkValids = checkQuestions.map((_, i) => isLinkProof && linkType?.test((proofs[i] || "").trim()));
   const allFilled = checkQuestions.every((_, i) => (proofs[i] || "").trim());
-  // Plain text either way for the admin-notify email -- a "written" answer
-  // is rich HTML in the app itself, but stripped down to text here so the
-  // email shows a quick, readable preview rather than raw formatting.
-  function buildProofSummary() {
-    return checkQuestions.map((q, i) => {
-      const text = stripHtml(proofs[i] || "");
-      return checkQuestions.length > 1 ? `Q${i + 1}: ${text}` : text;
-    }).join("\n\n");
-  }
   function submitForReview() {
     if (!allFilled) return;
     // A link already gets checked for shape as it's typed (see linkValids) --
@@ -261,7 +252,7 @@ export function LessonView({ course, enrollment, student, updateEnrollment, onBa
     // an auto-approve on an unrelated keyword overlap with the URL itself.
     if (isLinkProof) {
       updateEnrollment({ pendingReview: { moduleId: module.id, proofs, submittedAt: Date.now() } });
-      notifyAdminQuickCheckSubmitted({ studentName: student.name, moduleTitle: module.title, courseName: course.title, submissionSummary: buildProofSummary() });
+      notifyAdminQuickCheckSubmitted({ studentName: student.name, moduleTitle: module.title, courseName: course.title });
       return;
     }
     const pct = scoreQuestions(proofs, checkQuestions);
@@ -269,7 +260,7 @@ export function LessonView({ course, enrollment, student, updateEnrollment, onBa
     if (pct >= AUTO_APPROVE_THRESHOLD) completeModule();
     else {
       updateEnrollment({ pendingReview: { moduleId: module.id, proofs, submittedAt: Date.now(), autoScore: pct } });
-      notifyAdminQuickCheckSubmitted({ studentName: student.name, moduleTitle: module.title, courseName: course.title, submissionSummary: buildProofSummary() });
+      notifyAdminQuickCheckSubmitted({ studentName: student.name, moduleTitle: module.title, courseName: course.title });
     }
   }
   if (justPassed) return (
@@ -848,17 +839,14 @@ export function TaskDetailStudent({ task, student, allStudents, setTasks, onBack
   const isPastDeadline = task.deadlineAt ? Date.now() > new Date(task.deadlineAt).getTime() : false;
   function submit() {
     if (isPastDeadline) return;
-    let submissionSummary;
     if (hasLinks) {
       const linksObj = {}; links.forEach((v, i) => { linksObj[i] = v; });
       setTasks((prev) => prev.map((t) => t.id !== task.id ? t : { ...t, submissions: { ...t.submissions, [student.id]: { status: "needs review", links: linksObj, linkGrades: {}, note: "", score: null, round: 0, submittedAt: Date.now(), lastActivityAt: Date.now() } } }));
-      submissionSummary = task.requiredLinks.map((r, i) => `${r.label || r.type}: ${links[i]}`).join("\n");
     } else {
       if (!note.trim()) return;
       setTasks((prev) => prev.map((t) => t.id !== task.id ? t : { ...t, submissions: { ...t.submissions, [student.id]: { status: "in review", note, score: null, submittedAt: Date.now(), lastActivityAt: Date.now() } } }));
-      submissionSummary = note;
     }
-    notifyAdminTaskSubmitted({ studentName: student.name, taskTitle: task.title, courseName, submissionSummary });
+    notifyAdminTaskSubmitted({ studentName: student.name, taskTitle: task.title, courseName });
   }
   // Resubmitting one flagged link only reopens that link -- every other
   // link keeps whatever the admin already decided, so nothing already
@@ -973,7 +961,19 @@ export function CommunityPanel({ community, setCommunity, authorName, authorId =
   // hand without using the picker. Only picks made through this menu
   // ever notify anyone.
   const [mentionedIds, setMentionedIds] = useState([]);
-  function post() { if (!text.trim()) return; setCommunity((p) => [...p, { id: Date.now(), author: authorName, authorId, text, image: null, likes: 0, liked: false, comments: [], cohortId, mentionedIds }]); setText(""); setMentionedIds([]); }
+  // A nudge only -- no post content in the email, same reasoning as the
+  // task/quick-check notifications: it should pull them back into the
+  // community, not let them read the whole thing from their inbox.
+  function post() {
+    if (!text.trim()) return;
+    setCommunity((p) => [...p, { id: Date.now(), author: authorName, authorId, text, image: null, likes: 0, liked: false, comments: [], cohortId, mentionedIds }]);
+    mentionedIds.forEach((id) => {
+      if (id === authorId || id === "admin") return;
+      const s = allStudents.find((x) => x.id === id);
+      if (s) sendCommunityTaggedEmail({ email: s.email, name: s.name, fromName: authorName });
+    });
+    setText(""); setMentionedIds([]);
+  }
   function toggleLike(id) { setCommunity((p) => p.map((post) => post.id === id ? { ...post, liked: !post.liked, likes: post.likes + (post.liked ? -1 : 1) } : post)); }
   function addComment(id, ctext) { if (!ctext.trim()) return; setCommunity((p) => p.map((post) => post.id === id ? { ...post, comments: [...post.comments, { author: authorName, text: ctext }] } : post)); }
   const names = [{ id: "admin", name: "Fidelia" }, ...allStudents.map((s) => ({ id: s.id, name: s.name }))];

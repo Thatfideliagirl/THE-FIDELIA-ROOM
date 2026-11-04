@@ -14,7 +14,7 @@ const AdminDashboard = React.lazy(() => import("./admin.jsx").then((m) => ({ def
 import { supabase } from "./lib/supabaseClient.js";
 import { signIn, signOut, signUpApplicant, sendPasswordReset, isAdminEmail } from "./lib/auth.js";
 import { fetchApplicants, insertApplicant, updateApplicant, deleteApplicant, fetchStudents, insertStudent, updateStudent, deleteStudent, fetchResources, insertResource, updateResource, deleteResource, fetchCourses, upsertCourse, deleteCourse, fetchCohorts, upsertCohort, deleteCohort, fetchSettings, updateSettings, fetchTestimonials, upsertTestimonial, deleteTestimonial, fetchFaqs, upsertFaq, deleteFaq, fetchNotices, upsertNotice, fetchTasks, upsertTask, deleteTask, fetchCommunityPosts, upsertCommunityPost, fetchDirectMessages, insertDirectMessage, fetchNotifSeen, saveNotifSeen } from "./lib/db.js";
-import { sendWelcomeEmail, sendAcceptanceEmail, logSignupBranch } from "./lib/email.js";
+import { sendWelcomeEmail, sendAcceptanceEmail, logSignupBranch, notifyAdminMessageReceived, sendMessageReceivedEmail } from "./lib/email.js";
 import { checkTeamInvite, signUpTeamMember, getMyTeamAccess, logActivity } from "./lib/team.js";
 
 // Captured the instant this module evaluates -- before Supabase's own client
@@ -273,7 +273,20 @@ export default function App() {
       const next = typeof updater === "function" ? updater(prev) : updater;
       Object.keys(next).forEach((key) => {
         const newMsgs = (next[key] || []).slice((prev[key] || []).length);
-        newMsgs.forEach((m) => insertDirectMessage({ threadKey: key, from: m.from, text: m.text }).catch(reportSaveError("Message send failed")));
+        newMsgs.forEach((m) => {
+          insertDirectMessage({ threadKey: key, from: m.from, text: m.text }).catch(reportSaveError("Message send failed"));
+          // The recipient is whichever half of the pair isn't the sender --
+          // a thread is either admin<->student or two students messaging
+          // each other, so this covers all three directions the same way.
+          const otherId = key.split("__").find((id) => id !== m.from);
+          if (otherId === "admin") {
+            const sender = students.find((x) => x.id === m.from);
+            if (sender) notifyAdminMessageReceived({ studentName: sender.name });
+          } else {
+            const recipient = students.find((x) => x.id === otherId);
+            if (recipient) sendMessageReceivedEmail({ email: recipient.email, name: recipient.name });
+          }
+        });
       });
       return next;
     });

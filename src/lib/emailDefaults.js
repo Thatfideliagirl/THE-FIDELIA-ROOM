@@ -16,6 +16,9 @@ export const EMAIL_TEMPLATE_KEYS = [
   { key: "task-rejected", label: "Task sent back", to: "student", vars: ["name", "taskTitle", "courseName"] },
   { key: "quickcheck-approved", label: "Quick check approved", to: "student", vars: ["name", "moduleTitle", "courseName"] },
   { key: "quickcheck-rejected", label: "Quick check sent back", to: "student", vars: ["name", "moduleTitle", "courseName"] },
+  { key: "message-to-admin", label: "Message received — notifies you", to: "you", vars: ["studentName"] },
+  { key: "message-to-student", label: "Message received", to: "student", vars: ["name"] },
+  { key: "community-tagged", label: "Tagged in community", to: "student", vars: ["name", "fromName"] },
 ];
 
 // Shown next to each token button in the editor.
@@ -26,6 +29,7 @@ export const VAR_LABELS = {
   taskTitle: "Task title",
   moduleTitle: "Module title",
   accessCode: "Access code",
+  fromName: "Who tagged them",
 };
 
 // Sample values the admin editor fills in so an unedited template still
@@ -33,6 +37,7 @@ export const VAR_LABELS = {
 export const SAMPLE_VARS = {
   name: "Amaka", studentName: "Amaka", courseName: "Voice Acting Mastery",
   taskTitle: "Record a demo reel", moduleTitle: "Finding Your Voice", accessCode: "FJ-7K2QR",
+  fromName: "Fidelia",
 };
 
 // Every default body is just the headline + message -- the access-code box
@@ -76,6 +81,18 @@ export const EMAIL_DEFAULTS = {
   "quickcheck-rejected": {
     subject: (v) => `${v.moduleTitle} needs another look`,
     body: (v) => `<h1>One more pass, ${firstName(v.name)}.</h1><p><strong>${v.moduleTitle}</strong> in <strong>${v.courseName || "FJ Room"}</strong> has been sent back for another look.</p>`,
+  },
+  "message-to-admin": {
+    subject: (v) => `New message from ${v.studentName}`,
+    body: (v) => `<h1>New message.</h1><p><strong>${v.studentName}</strong> sent you a message on FJ Room.</p>`,
+  },
+  "message-to-student": {
+    subject: () => "You have a new message on FJ Room",
+    body: (v) => `<h1>New message, ${firstName(v.name)}.</h1><p>You've got a new message waiting for you on FJ Room.</p>`,
+  },
+  "community-tagged": {
+    subject: (v) => `${v.fromName} tagged you on FJ Room`,
+    body: (v) => `<h1>You were tagged, ${firstName(v.name)}.</h1><p><strong>${v.fromName}</strong> tagged you in the community on FJ Room.</p>`,
   },
 };
 
