@@ -606,6 +606,7 @@ export function NotifBell({ items, seen, onMarkSeen, cleared, onClear }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const btnRef = useRef(null);
+  const panelRef = useRef(null);
   // "Seen" only ever drops the red badge -- it never removed anything from
   // the list, which is exactly why the list only ever grew. "Cleared" is
   // the deliberate action that actually removes one, permanently, until
@@ -633,7 +634,15 @@ export function NotifBell({ items, seen, onMarkSeen, cleared, onClear }) {
 
   useEffect(() => {
     if (!open) return;
-    function onDocClick(e) { if (btnRef.current && !btnRef.current.contains(e.target)) setOpen(false); }
+    // The panel is portaled onto document.body, outside btnRef's own DOM
+    // subtree -- without also checking panelRef, every click inside the
+    // panel (Clear all, a per-item x) reads as "outside" and closes it on
+    // mousedown before the click (and its onClear) ever fires.
+    function onDocClick(e) {
+      if (btnRef.current?.contains(e.target)) return;
+      if (panelRef.current?.contains(e.target)) return;
+      setOpen(false);
+    }
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [open]);
@@ -645,7 +654,7 @@ export function NotifBell({ items, seen, onMarkSeen, cleared, onClear }) {
         {unseen.length > 0 && <span className="f-code rounded-full absolute flex items-center justify-center" style={{ width: 17, height: 17, background: "#B04A3A", color: "#fff", fontSize: 9, top: 3, right: 3 }}>{unseen.length}</span>}
       </button>
       {open && createPortal(
-        <div className="card modal-in rounded-xl p-4 fixed z-[999]" style={{ width: PANEL_WIDTH, top: pos.top, left: pos.left, maxHeight: "70vh", overflowY: "auto" }}>
+        <div ref={panelRef} className="card modal-in rounded-xl p-4 fixed z-[999]" style={{ width: PANEL_WIDTH, top: pos.top, left: pos.left, maxHeight: "70vh", overflowY: "auto" }}>
           <div className="flex items-center justify-between mb-3">
             <div className="f-label text-[11px]" style={{ color: "#71675A" }}>NOTIFICATIONS</div>
             {visible.length > 0 && <button onClick={clearAll} className="text-[11px]" style={{ color: "#A79B84" }}>Clear all</button>}
