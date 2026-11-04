@@ -559,6 +559,13 @@ export default function App() {
   ];
   const studentNotifItems = liveStudent ? [
     ...tasks.filter((t) => t.assigned.includes(liveStudent.id) && !t.submissions[liveStudent.id]).map((t) => ({ id: `assigned-${t.id}`, t: `You've been assigned a new task: "${t.title}"` })),
+    // Computed fresh on every load from the task's own deadline, not a
+    // stored notification -- so there's nothing to clean up, and it simply
+    // stops appearing the moment they submit or the deadline passes.
+    ...tasks.filter((t) => t.assigned.includes(liveStudent.id) && !t.submissions[liveStudent.id] && t.deadlineAt).flatMap((t) => {
+      const daysLeft = (new Date(t.deadlineAt).getTime() - Date.now()) / 86400000;
+      return daysLeft > 0 && daysLeft <= 2 ? [{ id: `deadline-${t.id}`, t: `"${t.title}" closes ${daysLeft < 1 ? "today" : "soon"} — you haven't submitted it yet` }] : [];
+    }),
     ...community.filter((p) => p.mentionedIds?.includes(liveStudent.id)).map((p) => ({ id: `mention-${p.id}`, t: `${p.author} tagged you in the community`, at: p.id })),
     ...Object.entries(directThreads).flatMap(([key, msgs]) => {
       const [a, b] = key.split("__");

@@ -100,18 +100,21 @@ function extra(templateKey, vars) {
   if (templateKey === "message-to-admin") return button("Open chat", SITE_URL);
   if (templateKey === "message-to-student") return button("View message", vars.loginUrl || SITE_URL);
   if (templateKey === "community-tagged") return button("View it", vars.loginUrl || SITE_URL);
+  if (templateKey === "task-deadline-reminder") return deadlineLine(vars.deadlineText) + button("View the task", vars.loginUrl || SITE_URL);
   return "";
 }
 
-export default async function handler(req, res) {
-  if (req.method !== "POST") { res.status(405).json({ error: "Method not allowed" }); return; }
-  if (!RESEND_API_KEY || !FROM) { res.status(200).json({ skipped: true, reason: "Email not configured yet" }); return; }
-
-  const { kind, email, name, courseName, accessCode, loginUrl, taskTitle, moduleTitle, studentName, itemTitle, approved, deadlineText, fromName } = req.body || {};
-  if (!kind) { res.status(400).json({ error: "Missing kind" }); return; }
+// The actual "build one email and send it through Resend" logic, pulled
+// out of the HTTP handler below so the scheduled deadline-reminder job
+// (api/send-deadline-reminders.js) can call it directly -- a plain function
+// call within the same serverless bundle, not a second HTTP round trip --
+// and so both paths share one template/customization system instead of two.
+export async function sendTemplatedEmail({ kind, email, name, courseName, accessCode, loginUrl, taskTitle, moduleTitle, studentName, itemTitle, approved, deadlineText, fromName }) {
+  if (!RESEND_API_KEY || !FROM) return { skipped: true, reason: "Email not configured yet" };
+  if (!kind) return { error: "Missing kind", status: 400 };
 
   const templateKey = resolveTemplateKey(kind, approved);
-  if (!templateKey) { res.status(400).json({ error: "Unknown kind: " + kind }); return; }
+  if (!templateKey) return { error: "Unknown kind: " + kind, status: 400 };
 
   // These kinds always go to the admin, not whatever the caller passed as
   // email -- there's no student-chosen address to trust here anyway, and
@@ -119,7 +122,7 @@ export default async function handler(req, res) {
   // admin alert to a student.
   const notifiesAdmin = kind === "task-submitted" || kind === "quickcheck-submitted" || kind === "message-to-admin";
   const to = notifiesAdmin ? ADMIN_EMAIL : email;
-  if (!to) { res.status(400).json({ error: "Missing email" }); return; }
+  if (!to) return { error: "Missing email", status: 400 };
 
   // task-decided/quickcheck-decided send one shared "itemTitle" field --
   // filled into whichever of taskTitle/moduleTitle this template actually
@@ -135,17 +138,30 @@ export default async function handler(req, res) {
   const messageHtml = custom?.body ? fillTemplate(custom.body, vars) : defaults.body(vars);
   const html = wrap(messageHtml + extra(templateKey, vars));
 
+  // She wants a quiet copy of her own when an application comes in, same as
+  // the old EmailJS setup used to send her -- a BCC, not a second email, so
+  // it never shows the applicant another recipient.
+  const bcc = kind === "welcome" ? [ADMIN_EMAIL] : undefined;
+
   try {
     const r = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${RESEND_API_KEY}` },
-      body: JSON.stringify({ from: FROM, to, subject, html }),
+      body: JSON.stringify({ from: FROM, to, ...(bcc && { bcc }), subject, html }),
     });
     const data = await r.json().catch(() => ({}));
-    if (!r.ok) { console.error("Resend send failed", r.status, data); res.status(r.status).json({ error: data }); return; }
-    res.status(200).json({ ok: true, id: data.id });
+    if (!r.ok) { console.error("Resend send failed", r.status, data); return { error: data, status: r.status }; }
+    return { ok: true, id: data.id };
   } catch (e) {
     console.error("Resend send error", e);
-    res.status(500).json({ error: String(e) });
+    return { error: String(e), status: 500 };
   }
+}
+
+export default async function handler(req, res) {
+  if (req.method !== "POST") { res.status(405).json({ error: "Method not allowed" }); return; }
+  const result = await sendTemplatedEmail(req.body || {});
+  if (result.skipped) { res.status(200).json(result); return; }
+  if (result.error) { res.status(result.status || 400).json({ error: result.error }); return; }
+  res.status(200).json(result);
 }

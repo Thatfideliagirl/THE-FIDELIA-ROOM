@@ -19,6 +19,7 @@ export const EMAIL_TEMPLATE_KEYS = [
   { key: "message-to-admin", label: "Message received — notifies you", to: "you", vars: ["studentName"] },
   { key: "message-to-student", label: "Message received", to: "student", vars: ["name"] },
   { key: "community-tagged", label: "Tagged in community", to: "student", vars: ["name", "fromName"] },
+  { key: "task-deadline-reminder", label: "Task deadline reminder", to: "student", vars: ["name", "taskTitle", "courseName"] },
 ];
 
 // Shown next to each token button in the editor.
@@ -64,6 +65,7 @@ export const EMAIL_STARTERS = {
   "message-to-admin": { subject: "New message from {{studentName}}", body: "<h1>New message.</h1><p><strong>{{studentName}}</strong> sent you a message on FJ Room.</p>" },
   "message-to-student": { subject: "You have a new message on FJ Room", body: "<h1>New message, {{name}}.</h1><p>You've got a new message waiting for you on FJ Room.</p>" },
   "community-tagged": { subject: "{{fromName}} tagged you on FJ Room", body: "<h1>You were tagged, {{name}}.</h1><p><strong>{{fromName}}</strong> tagged you in the community on FJ Room.</p>" },
+  "task-deadline-reminder": { subject: "Reminder: {{taskTitle}} closes soon", body: "<h1>Don't forget, {{name}}.</h1><p><strong>{{taskTitle}}</strong> in <strong>{{courseName}}</strong> closes soon — you haven't submitted it yet.</p>" },
 };
 
 // Every default body is just the headline + message -- the access-code box
@@ -119,6 +121,10 @@ export const EMAIL_DEFAULTS = {
   "community-tagged": {
     subject: (v) => `${v.fromName} tagged you on FJ Room`,
     body: (v) => `<h1>You were tagged, ${firstName(v.name)}.</h1><p><strong>${v.fromName}</strong> tagged you in the community on FJ Room.</p>`,
+  },
+  "task-deadline-reminder": {
+    subject: (v) => `Reminder: ${v.taskTitle} closes soon`,
+    body: (v) => `<h1>Don't forget, ${firstName(v.name)}.</h1><p><strong>${v.taskTitle}</strong> in <strong>${v.courseName || "FJ Room"}</strong> closes soon — you haven't submitted it yet.</p>`,
   },
 };
 
