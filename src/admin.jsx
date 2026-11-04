@@ -1863,6 +1863,7 @@ function EmailTemplateEditor({ def, custom, onSave, onReset, onBack }) {
   // in correctly for every real student afterward.
   const [subject, setSubject] = useState(custom?.subject || starter.subject);
   const [body, setBody] = useState(custom?.body || starter.body);
+  const [muted, setMuted] = useState(!!custom?.muted);
   const editorRef = useRef(null);
   const subjectRef = useRef(null);
   // Which box last had the cursor -- a token has to land wherever she was
@@ -1886,13 +1887,29 @@ function EmailTemplateEditor({ def, custom, onSave, onReset, onBack }) {
     if (!editorRef.current) { setBody((b) => b + tag); return; }
     editorRef.current.chain().focus().insertContent(tag).run();
   }
-  function save() { onSave(def.key, { subject, body }); onBack(); }
+  function save() { onSave(def.key, { subject, body, muted }); onBack(); }
   function reset() { onReset(def.key); setSubject(starter.subject); setBody(starter.body); }
+  // Takes effect immediately, separate from Save -- pausing shouldn't
+  // accidentally also commit whatever she's mid-typing in the boxes, and
+  // she shouldn't have to remember to click Save just to pause something.
+  // It writes back whatever wording is already saved (or the default, if
+  // she's never customized this one), untouched.
+  function toggleMute() {
+    const next = !muted;
+    setMuted(next);
+    onSave(def.key, { subject: custom?.subject || starter.subject, body: custom?.body || starter.body, muted: next });
+  }
   return (
     <div className="card rounded-2xl p-8 max-w-[640px]">
       <button onClick={onBack} className="flex items-center gap-1.5 text-[13px] mb-5" style={{ color: "#71675A" }}><ArrowLeft size={14} /> Back to all templates</button>
       <div className="f-display text-[19px] mb-1" style={{ fontWeight: 800 }}>{def.label}</div>
-      <div className="f-code text-[10px] mb-5" style={{ color: "#A79B84" }}>TO {def.to.toUpperCase()} · {custom ? "CUSTOM WORDING" : "DEFAULT WORDING"}</div>
+      <div className="f-code text-[10px] mb-5" style={{ color: "#A79B84" }}>TO {def.to.toUpperCase()} · {custom?.subject ? "CUSTOM WORDING" : "DEFAULT WORDING"}{muted ? " · PAUSED" : ""}</div>
+      <div className="flex items-center justify-between rounded-lg px-4 py-3 mb-4" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
+        <div><div className="text-[13.5px]" style={{ fontWeight: 700 }}>{muted ? "Paused — this email won't send" : "Active — sends normally"}</div><div className="text-[12px]" style={{ color: "#71675A" }}>Turn off anytime without losing your wording. Turn back on and it works exactly as before.</div></div>
+        <button onClick={toggleMute} className="rounded-full shrink-0" style={{ width: 40, height: 23, background: !muted ? "#4E7D5C" : "#E7DEC9", position: "relative", transition: "background .15s" }}>
+          <span style={{ position: "absolute", top: 2, left: !muted ? 19 : 2, width: 19, height: 19, borderRadius: "50%", background: "#fff", transition: "left .15s" }} />
+        </button>
+      </div>
       <div className="flex flex-col gap-3">
         <label className="block">
           <div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Subject line</div>
@@ -1917,7 +1934,7 @@ function EmailTemplateEditor({ def, custom, onSave, onReset, onBack }) {
         </div>
         <div className="flex items-center gap-3 mt-1">
           <button onClick={save} className="btn-primary rounded-lg px-5 py-2.5 text-[13px]">Save</button>
-          {custom && <button onClick={reset} className="text-[13px]" style={{ color: "#B04A3A" }}>Reset to default wording</button>}
+          {custom?.subject && <button onClick={reset} className="text-[13px]" style={{ color: "#B04A3A" }}>Reset to default wording</button>}
         </div>
       </div>
     </div>
@@ -1933,8 +1950,8 @@ function EmailTemplatesSection({ brand, onEditKey }) {
         {EMAIL_TEMPLATE_KEYS.map((def) => (
           <div key={def.key} className="rounded-lg px-4 py-3 flex items-center justify-between gap-3 flex-wrap" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
             <div>
-              <div className="text-[13.5px]" style={{ fontWeight: 700 }}>{def.label}</div>
-              <div className="f-code text-[10px]" style={{ color: "#A79B84" }}>TO {def.to.toUpperCase()} · {templates[def.key] ? "CUSTOM WORDING" : "DEFAULT WORDING"}</div>
+              <div className="flex items-center gap-2"><div className="text-[13.5px]" style={{ fontWeight: 700 }}>{def.label}</div>{templates[def.key]?.muted && <span className="f-code text-[9px] px-2 py-0.5 rounded-full" style={{ background: "#FBEAE7", color: "#B04A3A", fontWeight: 700 }}>PAUSED</span>}</div>
+              <div className="f-code text-[10px]" style={{ color: "#A79B84" }}>TO {def.to.toUpperCase()} · {templates[def.key]?.subject ? "CUSTOM WORDING" : "DEFAULT WORDING"}</div>
             </div>
             <button onClick={() => onEditKey(def.key)} className="f-label text-[11px] accent-text" style={{ fontWeight: 700 }}>EDIT</button>
           </div>
@@ -1958,7 +1975,15 @@ export function BrandingTab({ brand, setBrand }) {
         def={def}
         custom={(brand.emailTemplates || {})[editingEmailKey]}
         onSave={(key, t) => setBrand((b) => ({ ...b, emailTemplates: { ...b.emailTemplates, [key]: t } }))}
-        onReset={(key) => setBrand((b) => { const next = { ...b.emailTemplates }; delete next[key]; return { ...b, emailTemplates: next }; })}
+        onReset={(key) => setBrand((b) => {
+          // Clears only the wording -- whether it's paused is a separate
+          // choice and resetting the words shouldn't silently also
+          // unpause it.
+          const existing = b.emailTemplates?.[key];
+          const next = { ...b.emailTemplates, [key]: existing?.muted ? { muted: true } : undefined };
+          if (!next[key]) delete next[key];
+          return { ...b, emailTemplates: next };
+        })}
         onBack={() => setEditingEmailKey(null)}
       />
     );

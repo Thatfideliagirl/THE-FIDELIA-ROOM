@@ -148,9 +148,14 @@ export async function sendTemplatedEmail({ kind, email, name, courseName, access
   // custom {{name}} template has no such step of its own, so this is what
   // makes {{name}} resolve to "Amaka" rather than "Amaka Obi" either way.
   const brand = await fetchBrand();
+  const custom = (brand.emailTemplates || {})[templateKey];
+  // A paused template is a deliberate, reversible no-send -- not an error,
+  // so this returns cleanly rather than failing the caller (a student
+  // submitting a task doesn't need to know or care that her admin-notify
+  // email happens to be paused right now).
+  if (custom?.muted) return { ok: true, skipped: true, reason: "This email is currently paused" };
   const vars = { name: firstName(name), studentName, courseName, accessCode, loginUrl, taskTitle: taskTitle || itemTitle, moduleTitle: moduleTitle || itemTitle, deadlineText, fromName, price, paymentDetails: brand.paymentDetails };
   const defaults = EMAIL_DEFAULTS[templateKey];
-  const custom = (brand.emailTemplates || {})[templateKey];
   const subject = custom?.subject ? fillTemplatePlain(custom.subject, vars) : defaults.subject(vars);
   const messageHtml = custom?.body ? fillTemplate(custom.body, vars) : defaults.body(vars);
   const html = wrap(messageHtml + extra(templateKey, vars));
