@@ -560,7 +560,14 @@ export default function App() {
     // each time, so a resubmission can't get silently swallowed by the
     // "seen" flag the first submission already earned.
     ...tasks.flatMap((t) => Object.entries(t.submissions).filter(([, v]) => v.status === "in review" || v.status === "needs review").map(([sid, v]) => ({ id: `sub-${t.id}-${sid}-${v.round || 0}`, t: `New submission for "${t.title}"`, at: v.lastActivityAt }))),
-    ...students.flatMap((s) => s.enrollments.filter((e) => e.pendingReview).map((e) => ({ id: `mod-${e.id}`, t: `${s.name} submitted a module quick check for review`, at: e.pendingReview.submittedAt }))),
+    // Same reasoning as the task "round" above -- an enrollment covers the
+    // whole course, so a bare `mod-${e.id}` reused the same id for every
+    // module's review request and every resubmission in that enrollment.
+    // The moment the first one was seen, every later one -- a different
+    // module, or a "send back" resubmission of the same one -- silently
+    // inherited that same seen flag and never raised the badge again.
+    // moduleId + submittedAt makes each actual review request its own id.
+    ...students.flatMap((s) => s.enrollments.filter((e) => e.pendingReview).map((e) => ({ id: `mod-${e.id}-${e.pendingReview.moduleId}-${e.pendingReview.submittedAt}`, t: `${s.name} submitted a module quick check for review`, at: e.pendingReview.submittedAt }))),
     ...community.filter((p) => p.mentionedIds?.includes("admin")).map((p) => ({ id: `mention-${p.id}`, t: `${p.author} tagged you in the community`, at: p.id })),
     // Messages have no id or seen-flag of their own -- the key + its index
     // in that thread is stable and unique, so it doubles as the notif id
