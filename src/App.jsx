@@ -218,6 +218,13 @@ export default function App() {
       .on("postgres_changes", { event: "*", schema: "public", table: "students" }, () => { fetchStudents().then(setStudents).catch((e) => console.error("realtime fetchStudents failed", e)); })
       .on("postgres_changes", { event: "*", schema: "public", table: "applicants" }, () => { fetchApplicants().then(setApplicants).catch((e) => console.error("realtime fetchApplicants failed", e)); })
       .on("postgres_changes", { event: "*", schema: "public", table: "resources" }, () => { fetchResources().then(setResources).catch((e) => console.error("realtime fetchResources failed", e)); })
+      // Submissions, community mentions, and messages all feed the same
+      // notification bell as students/applicants above, but were never
+      // wired into live sync -- a tab left open from before one of these
+      // happened never found out until it was manually reloaded.
+      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => { fetchTasks().then(setTasks).catch((e) => console.error("realtime fetchTasks failed", e)); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "community_posts" }, () => { fetchCommunityPosts().then(setCommunity).catch((e) => console.error("realtime fetchCommunityPosts failed", e)); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "direct_messages" }, () => { fetchDirectMessages().then(setDirectThreads).catch((e) => console.error("realtime fetchDirectMessages failed", e)); })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, []);
