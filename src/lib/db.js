@@ -257,13 +257,21 @@ export async function fetchSettings() {
   if (!data) return null;
   return { brand: data.brand, adminProfile: data.admin_profile };
 }
-// Pass only the half that changed: an upsert writes just the columns given,
-// so saving branding can never put back an older copy of the admin profile
-// (photo, bio) that this tab happened to be holding, and vice versa.
+// Pass only the half that changed, so saving branding can never put back an
+// older copy of the admin profile (photo, bio) that this tab happened to be
+// holding, and vice versa. It has to be an UPDATE of the existing row, not
+// an upsert: both columns are NOT NULL, and an upsert checks that on the
+// would-be new row before it ever notices the row exists.
 export async function updateSettings({ brand, adminProfile }) {
-  const row = { id: "main", updated_at: new Date().toISOString() };
-  if (brand !== undefined) row.brand = brand;
-  if (adminProfile !== undefined) row.admin_profile = adminProfile;
-  const { error } = await supabase.from("site_settings").upsert(row);
+  const patch = { updated_at: new Date().toISOString() };
+  if (brand !== undefined) patch.brand = brand;
+  if (adminProfile !== undefined) patch.admin_profile = adminProfile;
+  const { data, error } = await supabase.from("site_settings").update(patch).eq("id", "main").select("id");
   if (error) throw error;
+  if (data?.length) return;
+  // No row yet (a brand-new project): create it with both halves filled in.
+  const { error: insertError } = await supabase.from("site_settings").insert({
+    id: "main", brand: brand ?? {}, admin_profile: adminProfile ?? { name: "Fidelia Joseph", photo: null, bio: "" }, updated_at: patch.updated_at,
+  });
+  if (insertError) throw insertError;
 }
