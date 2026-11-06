@@ -12,6 +12,7 @@ import { LOGO_SRC, HERO_SRC, CREATOR_SRC, HOWITWORKS_01ACCOUNT_SRC, HOWITWORKS_0
 import { moduleStatus, formatRelativeTime } from "./lib/data.js";
 import { changePassword } from "./lib/auth.js";
 import { uploadFile } from "./lib/storage.js";
+import { compressImage } from "./lib/imageCompress.js";
 import { renderTestimonialCard } from "./lib/testimonial.js";
 import { useEditor, EditorContent, NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
 import { Node as TiptapNode, Extension as TiptapExtension } from "@tiptap/core";
@@ -297,7 +298,7 @@ export function RichTextEditor({ value, onChange, minRows = 8, onEditorReady }) 
     if (!file) return;
     setImageUploading(true); setImageError("");
     try {
-      const url = await uploadFile(file);
+      const url = await uploadFile(await compressImage(file, { maxDim: 1600 }));
       editor.chain().focus().insertContent({ type: "imageFigure", attrs: { src: url, alt: "", caption: "" } }).run();
     } catch (err) {
       console.error("image upload failed", err);
@@ -554,7 +555,7 @@ export function ImgField({ label, value, onChange }) {
     const f = e.target.files?.[0]; if (!f) return;
     setUploading(true); setError("");
     try {
-      const url = await uploadFile(f);
+      const url = await uploadFile(await compressImage(f, { maxDim: 1600 }));
       onChange(url);
     } catch (err) {
       console.error("image upload failed", err);

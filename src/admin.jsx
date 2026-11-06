@@ -16,6 +16,7 @@ import { CommunityPanel, SOCIAL_PLATFORMS } from "./student.jsx";
 import { fetchTeamMembers, addTeamMember, updateTeamMember, removeTeamMember, fetchTeamActivity, updateMyTeamProfile, markTourSeen } from "./lib/team.js";
 import { sendTaskAssignedEmail, sendTaskDecisionEmail, sendQuickCheckDecisionEmail, sendApplicationReviewedEmail } from "./lib/email.js";
 import { EMAIL_TEMPLATE_KEYS, EMAIL_STARTERS, VAR_LABELS, SAMPLE_VARS, fillTemplate, fillTemplatePlain } from "./lib/emailDefaults.js";
+import { prepareImage } from "./lib/imageCompress.js";
 
 // One applicant row, shared by the "pending" and "awaiting payment" queues
 // below -- same expand-to-see-answers shape either way, only which action
@@ -714,7 +715,7 @@ function IdCardTemplateEditor({ template, onSave, onClose }) {
   const boxRef = useRef(null);
   const draggingRef = useRef(null);
   const setters = { photo: setPhotoBox, name: setNamePos, id: setIdPos, programme: setProgrammePos, cohort: setCohortPos };
-  function onFilePick(e) { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = () => setFile({ name: f.name, dataUrl: r.result }); r.readAsDataURL(f); }
+  async function onFilePick(e) { const f = e.target.files?.[0]; if (!f) return; setFile({ name: f.name, dataUrl: await prepareImage(f, { maxDim: 2100, quality: 0.9 }) }); }
   function posFromEvent(e) {
     const rect = boxRef.current.getBoundingClientRect();
     return { xPct: Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100)), yPct: Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100)) };
@@ -1460,7 +1461,7 @@ function CertificateTemplateEditor({ course, onSave, onClose }) {
   // anywhere over the preview, cleared on release -- so dragging the
   // name never accidentally grabs the date tag sitting near it.
   const draggingRef = useRef(null);
-  function onFilePick(e) { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = () => setFile({ name: f.name, dataUrl: r.result }); r.readAsDataURL(f); }
+  async function onFilePick(e) { const f = e.target.files?.[0]; if (!f) return; setFile({ name: f.name, dataUrl: await prepareImage(f, { maxDim: 2100, quality: 0.9 }) }); }
   function posFromEvent(e) {
     const rect = boxRef.current.getBoundingClientRect();
     return { xPct: Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100)), yPct: Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100)) };
@@ -1578,7 +1579,7 @@ function TestimonialTemplateEditor({ template, onSave, onClose }) {
   const boxRef = useRef(null);
   const draggingRef = useRef(null);
   const setters = { photo: setPhotoBox, name: setNamePos, id: setIdPos, quote: setQuoteBox };
-  function onFilePick(e) { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = () => setFile({ name: f.name, dataUrl: r.result }); r.readAsDataURL(f); }
+  async function onFilePick(e) { const f = e.target.files?.[0]; if (!f) return; setFile({ name: f.name, dataUrl: await prepareImage(f, { maxDim: 2100, quality: 0.9 }) }); }
   function posFromEvent(e) {
     const rect = boxRef.current.getBoundingClientRect();
     return { xPct: Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100)), yPct: Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100)) };
@@ -1695,7 +1696,7 @@ function TestimonialForm({ students, cohorts, courses, template, initial, onSave
     const course = courses.find((c) => s.enrollments.some((e) => e.courseId === c.id));
     setProgramme(course?.title || "");
   }
-  function onPhotoPick(e) { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = () => { setPhoto({ name: f.name, dataUrl: r.result }); setPhotoZoom(1); }; r.readAsDataURL(f); }
+  async function onPhotoPick(e) { const f = e.target.files?.[0]; if (!f) return; setPhoto({ name: f.name, dataUrl: await prepareImage(f, { maxDim: 1000 }) }); setPhotoZoom(1); }
   // A live preview of the real composited card, right here in the form --
   // so dragging the zoom slider shows exactly what the saved card will
   // look like instead of the admin having to save first to find out.
@@ -2045,8 +2046,15 @@ export function AdminProfileTab({ adminProfile, setAdminProfile }) {
   const [name, setName] = useState(adminProfile.name); const [photo, setPhoto] = useState(adminProfile.photo); const [bio, setBio] = useState(adminProfile.bio || "");
   const [saved, setSaved] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
-  function onPhotoPick(e) { const f = e.target.files?.[0]; if (f) { const r = new FileReader(); r.onload = () => setPhoto(r.result); r.readAsDataURL(f); } }
-  function save() { setAdminProfile((p) => ({ ...p, name, photo, bio })); setSaved(true); setTimeout(() => setSaved(false), 2000); }
+  const [photoBusy, setPhotoBusy] = useState(false);
+  // Opening this tab before the saved profile finished loading used to
+  // freeze the empty defaults into these fields -- one Save from there
+  // wiped the real photo and bio. Follow the loaded profile until she
+  // actually starts editing.
+  const dirty = useRef(false);
+  useEffect(() => { if (dirty.current) return; setName(adminProfile.name); setPhoto(adminProfile.photo); setBio(adminProfile.bio || ""); }, [adminProfile]);
+  async function onPhotoPick(e) { const f = e.target.files?.[0]; if (!f) return; dirty.current = true; setPhotoBusy(true); try { setPhoto(await prepareImage(f, { maxDim: 800 })); } finally { setPhotoBusy(false); } }
+  function save() { setAdminProfile((p) => ({ ...p, name, photo, bio })); dirty.current = false; setSaved(true); setTimeout(() => setSaved(false), 2000); }
   function copySignupLink() {
     navigator.clipboard?.writeText(window.location.origin).then(() => { setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2000); });
   }
@@ -2063,9 +2071,9 @@ export function AdminProfileTab({ adminProfile, setAdminProfile }) {
       </div>
       <div className="card rounded-2xl p-8 max-w-[520px]">
         <div className="flex items-center gap-5 mb-6"><div className="rounded-full overflow-hidden flex items-center justify-center shrink-0" style={{ width: 76, height: 76, background: "color-mix(in srgb, var(--accent) 14%, white)" }}>{photo ? <img src={photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <UserCircle size={34} color="var(--accent)" />}</div><label className="btn-soft rounded-full px-4 py-2 text-[13px] cursor-pointer" style={{ fontWeight: 600 }}>Change photo<input type="file" accept="image/*" onChange={onPhotoPick} style={{ display: "none" }} /></label></div>
-        <Field label="Name" value={name} onChange={(e) => setName(e.target.value)} />
-        <div className="mt-4"><TextArea label="Bio (shown on your landing page)" value={bio} onChange={(e) => setBio(e.target.value)} /></div>
-        <div className="flex items-center gap-3 mt-4"><button onClick={save} className="btn-primary rounded-lg px-6 py-2.5 text-[14px]">Save profile</button>{saved && <span className="text-[13px] accent-text" style={{ fontWeight: 700 }}>Saved.</span>}</div>
+        <Field label="Name" value={name} onChange={(e) => { dirty.current = true; setName(e.target.value); }} />
+        <div className="mt-4"><TextArea label="Bio (shown on your landing page)" value={bio} onChange={(e) => { dirty.current = true; setBio(e.target.value); }} /></div>
+        <div className="flex items-center gap-3 mt-4"><button onClick={save} disabled={photoBusy} className="btn-primary rounded-lg px-6 py-2.5 text-[14px]">{photoBusy ? "Uploading photo…" : "Save profile"}</button>{saved && <span className="text-[13px] accent-text" style={{ fontWeight: 700 }}>Saved.</span>}</div>
       </div>
       <div className="max-w-[520px]"><ChangePasswordCard email={ADMIN_EMAIL} /></div>
     </>
@@ -2284,7 +2292,7 @@ export function TeamTab() {
 export function TeamAccountTab({ teamAccess, onUpdate }) {
   const [photo, setPhoto] = useState(teamAccess.photo); const [bio, setBio] = useState(teamAccess.bio || "");
   const [saving, setSaving] = useState(false); const [saved, setSaved] = useState(false);
-  function onPhotoPick(e) { const f = e.target.files?.[0]; if (f) { const r = new FileReader(); r.onload = () => setPhoto(r.result); r.readAsDataURL(f); } }
+  async function onPhotoPick(e) { const f = e.target.files?.[0]; if (!f) return; setSaving(true); try { setPhoto(await prepareImage(f, { maxDim: 800 })); } finally { setSaving(false); } }
   async function save() {
     setSaving(true);
     try {

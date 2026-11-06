@@ -93,16 +93,22 @@ export async function insertStudent(student) {
   if (error) throw error;
   return studentOut(data);
 }
-// Writes back the student's whole current shape -- simpler than tracking
-// sparse patches, and fine for a single-admin app with no concurrent editors.
-// name/email/student_code ride along here too (not just admin-safe fields)
-// because the database's own protect_student_identity trigger is what
-// actually decides whether those take effect, based on who's signed in --
-// not this list. A student's own save (profile edits) just echoes their
-// existing name/email back unchanged either way.
-export async function updateStudent(id, student) {
-  const { name, email, studentId, cohortId, accountStatus, seenTour, photo, bio, socialLinks, enrollments } = student;
-  const dbPatch = { name, email, student_code: studentId, cohort_id: cohortId || null, account_status: accountStatus, seen_tour: !!seenTour, photo_url: photo?.dataUrl || null, bio: bio || "", social_links: socialLinks || [], enrollments: enrollments || [] };
+function studentColumns(s) {
+  return { name: s.name, email: s.email, student_code: s.studentId, cohort_id: s.cohortId || null, account_status: s.accountStatus, seen_tour: !!s.seenTour, photo_url: s.photo?.dataUrl || null, bio: s.bio || "", social_links: s.socialLinks || [], enrollments: s.enrollments || [] };
+}
+// Only the columns that actually differ from `before` are written. Writing
+// the whole row meant whoever saved held an older copy of everything else --
+// the admin approving a quick check would quietly put back the photo/bio the
+// student had just replaced, and vice versa. name/email/student_code are
+// still gated by the database's protect_student_identity trigger.
+export async function updateStudent(id, student, before) {
+  const next = studentColumns(student);
+  let dbPatch = next;
+  if (before) {
+    const prev = studentColumns(before);
+    dbPatch = Object.fromEntries(Object.entries(next).filter(([k, v]) => JSON.stringify(v) !== JSON.stringify(prev[k])));
+    if (Object.keys(dbPatch).length === 0) return student;
+  }
   const { data, error } = await supabase.from("students").update(dbPatch).eq("id", id).select().single();
   if (error) throw error;
   return studentOut(data);
@@ -251,7 +257,13 @@ export async function fetchSettings() {
   if (!data) return null;
   return { brand: data.brand, adminProfile: data.admin_profile };
 }
+// Pass only the half that changed: an upsert writes just the columns given,
+// so saving branding can never put back an older copy of the admin profile
+// (photo, bio) that this tab happened to be holding, and vice versa.
 export async function updateSettings({ brand, adminProfile }) {
-  const { error } = await supabase.from("site_settings").upsert({ id: "main", brand, admin_profile: adminProfile, updated_at: new Date().toISOString() });
+  const row = { id: "main", updated_at: new Date().toISOString() };
+  if (brand !== undefined) row.brand = brand;
+  if (adminProfile !== undefined) row.admin_profile = adminProfile;
+  const { error } = await supabase.from("site_settings").upsert(row);
   if (error) throw error;
 }

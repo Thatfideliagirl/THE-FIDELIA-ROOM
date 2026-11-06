@@ -11,6 +11,7 @@ import { pairKey, moduleStatus, scoreSubmission, scoreQuestions, normalizeQuesti
 import { renderCertificate, formatIssueDate } from "./lib/certificate.js";
 import { renderIdCard } from "./lib/idcard.js";
 import { uploadFile } from "./lib/storage.js";
+import { compressImage } from "./lib/imageCompress.js";
 import { notifyAdminTaskSubmitted, notifyAdminQuickCheckSubmitted, sendCommunityTaggedEmail } from "./lib/email.js";
 import { SectionHeader, NotifBell, WelcomeTour, SidebarLink, LogoMark, Spine, TextArea, ProgressBar, ResourceDetail, Field, ChangePasswordCard, RichText, RichTextEditor, DashboardShell, TaskFileList } from "./components.jsx";
 
@@ -794,7 +795,7 @@ function StudentIdTab({ course, cohort, student, setStudents, template }) {
     if (!f) return;
     setPhotoUploading(true); setError("");
     try {
-      const url = await uploadFile(f);
+      const url = await uploadFile(await compressImage(f, { maxDim: 800 }));
       setStudents((prev) => prev.map((s) => s.id === student.id ? { ...s, photo: { name: f.name, dataUrl: url } } : s));
     } catch (err) {
       console.error("photo upload failed", err);
@@ -1155,7 +1156,7 @@ export function ProfilePage({ student, setStudents, cohort }) {
     if (!f) return;
     setPhotoUploading(true); setPhotoError("");
     try {
-      const url = await uploadFile(f);
+      const url = await uploadFile(await compressImage(f, { maxDim: 800 }));
       setPhoto({ name: f.name, dataUrl: url });
     } catch (err) {
       console.error("photo upload failed", err);

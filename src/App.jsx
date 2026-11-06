@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { moveDataUrlToStorage } from "./lib/imageCompress.js";
 import { FONT_STYLE, genCode, nextStudentId } from "./lib/data.js";
 import {
   Landing, CoursesIndex, CourseDetail, ResourcesPage, TestimonialsPage, ApplicationForm,
@@ -176,7 +177,7 @@ export default function App() {
   function syncStudents(updater) {
     setStudents((prev) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
-      next.forEach((item) => { const before = prev.find((x) => x.id === item.id); if (before && before !== item) updateStudent(item.id, item).catch(reportSaveError("updateStudent failed")); });
+      next.forEach((item) => { const before = prev.find((x) => x.id === item.id); if (before && before !== item) updateStudent(item.id, item, before).catch(reportSaveError("updateStudent failed")); });
       return next;
     });
   }
@@ -237,7 +238,8 @@ export default function App() {
   // setCourses call site in admin.jsx keeps working unchanged. Anything
   // present in prev but missing from next (CourseManager's delete) gets
   // deleted in the background too, same as syncCohorts below.
-  useEffect(() => { fetchCourses().then(setCourses).catch((e) => console.error("fetchCourses failed", e)); }, []);
+  const [coursesLoaded, setCoursesLoaded] = useState(false);
+  useEffect(() => { fetchCourses().then((c) => { setCourses(c); setCoursesLoaded(true); }).catch((e) => console.error("fetchCourses failed", e)); }, []);
   function syncCourses(updater) {
     setCourses((prev) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
@@ -271,7 +273,8 @@ export default function App() {
       });
     };
   }
-  useEffect(() => { fetchTestimonials().then(setTestimonials).catch((e) => console.error("fetchTestimonials failed", e)); }, []);
+  const [testimonialsLoaded, setTestimonialsLoaded] = useState(false);
+  useEffect(() => { fetchTestimonials().then((t) => { setTestimonials(t); setTestimonialsLoaded(true); }).catch((e) => console.error("fetchTestimonials failed", e)); }, []);
   const syncTestimonials = makeBlobSync(setTestimonials, upsertTestimonial, deleteTestimonial, "Testimonial");
   useEffect(() => { fetchFaqs().then(setFaqs).catch((e) => console.error("fetchFaqs failed", e)); }, []);
   const syncFaqs = makeBlobSync(setFaqs, upsertFaq, deleteFaq, "FAQ");
@@ -309,13 +312,56 @@ export default function App() {
       return next;
     });
   }
-  useEffect(() => { fetchSettings().then((s) => { if (s) { setBrand(s.brand); setAdminProfile(s.adminProfile); cacheBrand(s.brand); } }).catch((e) => console.error("fetchSettings failed", e)); }, []);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  useEffect(() => { fetchSettings().then((s) => { if (s) { setBrand(s.brand); if (s.adminProfile) setAdminProfile(s.adminProfile); cacheBrand(s.brand); } setSettingsLoaded(true); }).catch((e) => console.error("fetchSettings failed", e)); }, []);
   function syncBrand(updater) {
-    setBrand((prev) => { const next = typeof updater === "function" ? updater(prev) : updater; updateSettings({ brand: next, adminProfile }).catch(reportSaveError("updateSettings failed")); cacheBrand(next); return next; });
+    setBrand((prev) => { const next = typeof updater === "function" ? updater(prev) : updater; updateSettings({ brand: next }).catch(reportSaveError("updateSettings failed")); cacheBrand(next); return next; });
   }
   function syncAdminProfile(updater) {
-    setAdminProfile((prev) => { const next = typeof updater === "function" ? updater(prev) : updater; updateSettings({ brand, adminProfile: next }).catch(reportSaveError("updateSettings failed")); return next; });
+    setAdminProfile((prev) => { const next = typeof updater === "function" ? updater(prev) : updater; updateSettings({ adminProfile: next }).catch(reportSaveError("updateSettings failed")); return next; });
   }
+  // Images saved before uploads were shrunk and sent to Storage sit in the
+  // database as inline base64 -- the testimonial/ID-card templates alone were
+  // ~4 MB that every visitor downloaded before a single card could draw. The
+  // first time an admin opens the dashboard, each oversized one is shrunk,
+  // uploaded, and swapped for its link, but only if it's still unchanged.
+  const imagesMovedRef = useRef(false);
+  useEffect(() => {
+    if (page !== "adminDash" || !settingsLoaded || !testimonialsLoaded || !coursesLoaded || imagesMovedRef.current) return;
+    imagesMovedRef.current = true;
+    const heavy = (u) => typeof u === "string" && u.startsWith("data:image") && u.length > 200000;
+    (async () => {
+      for (const key of ["testimonialTemplate", "idCardTemplate"]) {
+        const old = brand[key]?.file?.dataUrl;
+        if (!heavy(old)) continue;
+        try {
+          const url = await moveDataUrlToStorage(old, `${key}.png`, { maxDim: 2100, quality: 0.9 });
+          syncBrand((b) => b[key]?.file?.dataUrl !== old ? b : { ...b, [key]: { ...b[key], file: { ...b[key].file, dataUrl: url } } });
+        } catch (e) { console.error("moving image to storage failed", key, e); }
+      }
+      for (const t of testimonials) {
+        const old = t.photo?.dataUrl;
+        if (!heavy(old)) continue;
+        try {
+          const url = await moveDataUrlToStorage(old, `testimonial-${t.id}.jpg`, { maxDim: 1000 });
+          syncTestimonials((prev) => prev.map((x) => x.id === t.id && x.photo?.dataUrl === old ? { ...x, photo: { ...x.photo, dataUrl: url } } : x));
+        } catch (e) { console.error("moving image to storage failed", t.id, e); }
+      }
+      for (const c of courses) {
+        const oldImage = c.image, oldCert = c.certificateTemplate?.file?.dataUrl;
+        try {
+          if (heavy(oldImage)) {
+            const url = await moveDataUrlToStorage(oldImage, `course-${c.id}.jpg`, { maxDim: 1600 });
+            syncCourses((prev) => prev.map((x) => x.id === c.id && x.image === oldImage ? { ...x, image: url } : x));
+          }
+          if (heavy(oldCert)) {
+            const url = await moveDataUrlToStorage(oldCert, `certificate-${c.id}.png`, { maxDim: 2400, quality: 0.92 });
+            syncCourses((prev) => prev.map((x) => x.id === c.id && x.certificateTemplate?.file?.dataUrl === oldCert ? { ...x, certificateTemplate: { ...x.certificateTemplate, file: { ...x.certificateTemplate.file, dataUrl: url } } } : x));
+          }
+        } catch (e) { console.error("moving image to storage failed", c.id, e); }
+      }
+    })();
+  }, [page, settingsLoaded, testimonialsLoaded, coursesLoaded]);
   async function addResource(data) {
     try { const saved = await insertResource(data); setResources((prev) => [...prev, saved]); if (teamAccess) logActivity(`Added a resource to the Library: "${data.title}"`); return null; }
     catch (e) { console.error("insertResource failed", e); return "Couldn't save this resource — check your connection and try again."; }
@@ -519,7 +565,7 @@ export default function App() {
       const code = genCode();
       if (applicant.studentRef) {
         const student = students.find((s) => s.id === applicant.studentRef);
-        const updated = await updateStudent(student.id, { ...student, enrollments: [...student.enrollments, { id: "e" + Date.now(), courseId: applicant.courseId, code, status: "awaiting-code", completedModuleIds: [], certificateReady: false, certificateFile: null }] });
+        const updated = await updateStudent(student.id, { ...student, enrollments: [...student.enrollments, { id: "e" + Date.now(), courseId: applicant.courseId, code, status: "awaiting-code", completedModuleIds: [], certificateReady: false, certificateFile: null }] }, student);
         setStudents((prev) => prev.map((s) => s.id === updated.id ? updated : s));
       } else {
         const studentId = nextStudentId(students);

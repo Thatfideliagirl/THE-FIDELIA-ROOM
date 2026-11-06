@@ -1,4 +1,5 @@
 import { loadImage, drawPhotoIntoBox, fitLine, supersampledSize } from "./idcard.js";
+import { hasTransparency } from "./imageCompress.js";
 
 // Wraps text onto lines no wider than maxWidth, breaking on spaces.
 function wrapLines(ctx, text, maxWidth) {
@@ -103,10 +104,13 @@ export async function renderTestimonialCard(templateDataUrl, photoDataUrl, { nam
     lines.forEach((line, i) => ctx.fillText(line, bx, by + lineHeight * (i + 0.85)));
   }
 
+  // A lossless PNG of a full-size card was ~3 MB each and slow to encode;
+  // these are only ever shown on screen, so JPEG is far smaller.
+  const type = hasTransparency(ctx, canvas.width, canvas.height) ? "image/png" : "image/jpeg";
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
       if (!blob) { reject(new Error("Couldn't finish building the testimonial card image.")); return; }
       resolve(URL.createObjectURL(blob));
-    }, "image/png");
+    }, type, 0.9);
   });
 }
