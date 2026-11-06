@@ -1818,15 +1818,27 @@ export function FaqTab({ faqs, setFaqs }) {
   );
 }
 
-export function AdminChatTab({ students, directThreads, setDirectThreads }) {
+export function AdminChatTab({ students, directThreads, setDirectThreads, notifSeen = [], onMarkSeen }) {
   const [activeId, setActiveId] = useState(null); const [msg, setMsg] = useState("");
   const key = activeId ? pairKey("admin", activeId) : null; const thread = key ? (directThreads[key] || []) : [];
+  // Same ids the notification bell uses for each message, so a message
+  // counts as read once it's been seen in either place -- and the "read"
+  // state survives a reload because it rides on the existing seen list.
+  const chatIds = (threadKey) => (directThreads[threadKey] || []).flatMap((m, i) => m.from !== "admin" ? [`chat-${threadKey}-${i}`] : []);
+  const unreadFor = (sid) => chatIds(pairKey("admin", sid)).filter((id) => !notifSeen.includes(id)).length;
+  // Opening a conversation (or a new message landing while it's open)
+  // marks it read.
+  useEffect(() => {
+    if (!key || !onMarkSeen) return;
+    const ids = chatIds(key).filter((id) => !notifSeen.includes(id));
+    if (ids.length) onMarkSeen((prev) => [...new Set([...prev, ...ids])]);
+  }, [key, thread.length]);
   function send() { if (!msg.trim() || !key) return; setDirectThreads((p) => ({ ...p, [key]: [...(p[key] || []), { from: "admin", text: msg, at: Date.now() }] })); setMsg(""); }
   return (
     <>
       <SectionHeader eyebrow="TALK TO STUDENTS" title="Chat" />
       <div className="card rounded-2xl flex" style={{ height: 480 }}>
-        <div className="w-[140px] sm:w-[220px] shrink-0 overflow-y-auto" style={{ borderRight: "1px solid #E7DEC9" }}>{students.map((s) => { const unread = (directThreads[pairKey("admin", s.id)] || []).filter((m) => m.from !== "admin").length; return <button key={s.id} onClick={() => setActiveId(s.id)} className="w-full text-left px-5 py-3.5 text-[14px] flex items-center justify-between" style={{ background: activeId === s.id ? "color-mix(in srgb, var(--accent) 14%, white)" : "transparent", fontWeight: activeId === s.id ? 700 : 500 }}>{s.name}{unread > 0 && <span className="f-code text-[9px] rounded-full px-1.5 py-0.5" style={{ background: "var(--accent)", color: "#FAF6EC" }}>{unread}</span>}</button>; })}</div>
+        <div className="w-[140px] sm:w-[220px] shrink-0 overflow-y-auto" style={{ borderRight: "1px solid #E7DEC9" }}>{students.map((s) => { const unread = activeId === s.id ? 0 : unreadFor(s.id); return <button key={s.id} onClick={() => setActiveId(s.id)} className="w-full text-left px-5 py-3.5 text-[14px] flex items-center justify-between" style={{ background: activeId === s.id ? "color-mix(in srgb, var(--accent) 14%, white)" : "transparent", fontWeight: activeId === s.id ? 700 : 500 }}>{s.name}{unread > 0 && <span className="f-code text-[9px] rounded-full px-1.5 py-0.5" style={{ background: "var(--accent)", color: "#FAF6EC" }}>{unread}</span>}</button>; })}</div>
         <div className="flex-1 flex flex-col min-w-0">{!activeId ? <div className="flex-1 flex items-center justify-center text-[14px]" style={{ color: "#A79B84" }}>Select a conversation to open it.</div> : <><div className="flex-1 overflow-y-auto p-6 flex flex-col gap-3">{thread.map((m, i) => <div key={i} className="max-w-[75%] px-4 py-2.5 rounded-xl text-[14px]" style={{ alignSelf: m.from === "admin" ? "flex-end" : "flex-start", background: m.from === "admin" ? "var(--accent)" : "#F0E7D6", color: m.from === "admin" ? "#FAF6EC" : "#262019" }}>{m.text}</div>)}</div><div className="flex items-center gap-2 p-4" style={{ borderTop: "1px solid #E7DEC9" }}><input className="input-field rounded-full px-4 py-2.5 flex-1 min-w-0" placeholder="Reply…" value={msg} onChange={(e) => setMsg(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} /><button onClick={send} className="btn-primary rounded-full p-2.5 shrink-0"><Send size={16} /></button></div></>}</div>
       </div>
     </>
@@ -2369,7 +2381,7 @@ export function AdminDashboard({ courses, setCourses, students, setStudents, onR
         {tab === "certificates" && <CertificatesTab students={students} setStudents={setStudents} courses={courses} setCourses={setCourses} tasks={tasks} />}
         {tab === "testimonials" && <TestimonialsTab testimonials={testimonials} setTestimonials={setTestimonials} students={students} cohorts={cohorts} courses={courses} brand={brand} setBrand={setBrand} />}
         {tab === "faq" && <FaqTab faqs={faqs} setFaqs={setFaqs} />}
-        {tab === "chat" && <AdminChatTab students={students} directThreads={directThreads} setDirectThreads={setDirectThreads} />}
+        {tab === "chat" && <AdminChatTab students={students} directThreads={directThreads} setDirectThreads={setDirectThreads} notifSeen={notifSeen} onMarkSeen={onMarkSeen} />}
         {tab === "community" && <AdminCommunityTab community={community} setCommunity={setCommunity} students={students} cohorts={cohorts} />}
         {tab === "notice" && <AdminNoticeTab notices={notices} setNotices={setNotices} cohorts={cohorts} students={students} />}
         {tab === "branding" && <BrandingTab brand={brand} setBrand={setBrand} />}
