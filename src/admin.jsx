@@ -832,7 +832,7 @@ function buildSubmissionItems(student, tasks, courses) {
     if (!sub) return;
     const status = deriveSubmissionStatus(t, sub);
     const folder = status === "approved" ? "approved" : status === "waiting on student" ? "rework" : "awaiting";
-    items.push({ id: `task-${t.id}-${student.id}`, kind: "task", student, title: t.title, course: courses.find((c) => c.id === t.courseId)?.title, at: sub.lastActivityAt || sub.submittedAt || 0, status, label: status, score: sub.score, folder, task: t, sub });
+    items.push({ id: `task-${t.id}-${student.id}`, kind: "task", student, title: t.title, courseId: t.courseId, course: courses.find((c) => c.id === t.courseId)?.title, at: sub.lastActivityAt || sub.submittedAt || 0, status, label: status, score: sub.score, folder, task: t, sub });
   });
   student.enrollments.forEach((e) => {
     const course = courses.find((c) => c.id === e.courseId);
@@ -846,7 +846,7 @@ function buildSubmissionItems(student, tasks, courses) {
       const mod = course?.modules.find((m) => m.id === q.moduleId);
       const isLatest = latest[q.moduleId] === q;
       const folder = !isLatest ? null : q.outcome === "pending" ? "awaiting" : q.outcome === "sent back" ? "rework" : q.outcome === "not passed" ? null : "approved";
-      items.push({ id: `qc-${e.id}-${q.id}`, kind: "quick", student, title: mod?.title || "Quick check", course: course?.title, at: q.decidedAt || q.submittedAt, status: q.outcome, label: q.outcome === "sent back" ? "sent back" : q.outcome, score: q.score, folder, mod, q, enrollmentId: e.id, awaiting: q.outcome === "pending" && e.pendingReview && e.pendingReview.moduleId === q.moduleId && e.pendingReview.submittedAt === q.submittedAt });
+      items.push({ id: `qc-${e.id}-${q.id}`, kind: "quick", student, title: mod?.title || "Quick check", courseId: e.courseId, course: course?.title, at: q.decidedAt || q.submittedAt, status: q.outcome, label: q.outcome === "sent back" ? "sent back" : q.outcome, score: q.score, folder, mod, q, enrollmentId: e.id, awaiting: q.outcome === "pending" && e.pendingReview && e.pendingReview.moduleId === q.moduleId && e.pendingReview.submittedAt === q.submittedAt });
     });
   });
   return items.sort((a, b) => b.at - a.at);
@@ -922,11 +922,24 @@ function StudentSubmissions({ student, tasks, courses }) {
 // where they stand. Nothing here is stored -- the folder is worked out from
 // the submission's status each time, so grading or a resubmission moves a row
 // from one folder to another on its own.
-export function SubmissionsTab({ students, setStudents, tasks, courses, onOpenTask }) {
+export function SubmissionsTab({ students, setStudents, tasks, courses, cohorts = [], onOpenTask }) {
   const [folder, setFolder] = useState("awaiting");
   const [openId, setOpenId] = useState(null);
   const [q, setQ] = useState("");
-  const all = students.flatMap((s) => buildSubmissionItems(s, tasks, courses)).sort((a, b) => b.at - a.at);
+  // "all" = everyone, "none" = students who aren't in any cohort, else a cohort id.
+  const [cohortId, setCohortId] = useState("all");
+  const [courseId, setCourseId] = useState("all");
+  // A cohort only offers its own courses; anyone in no cohort could be in
+  // any course, so "no cohort" and "all" list them all.
+  const activeCohort = cohorts.find((c) => c.id === cohortId);
+  const courseOptions = activeCohort ? courses.filter((c) => (activeCohort.courseIds || []).includes(c.id)) : courses;
+  const courseValid = courseId === "all" || courseOptions.some((c) => c.id === courseId);
+  const effectiveCourse = courseValid ? courseId : "all";
+  const all = students
+    .filter((s) => cohortId === "all" || (cohortId === "none" ? !s.cohortId : s.cohortId === cohortId))
+    .flatMap((s) => buildSubmissionItems(s, tasks, courses))
+    .filter((i) => effectiveCourse === "all" || i.courseId === effectiveCourse)
+    .sort((a, b) => b.at - a.at);
   const inFolder = (f) => all.filter((i) => f === "all" || i.folder === f);
   const folders = [{ key: "awaiting", label: "Awaiting review" }, { key: "rework", label: "Needs rework" }, { key: "approved", label: "Approved" }, { key: "all", label: "All" }];
   const needle = q.trim().toLowerCase();
@@ -935,6 +948,11 @@ export function SubmissionsTab({ students, setStudents, tasks, courses, onOpenTa
   return (
     <>
       <SectionHeader eyebrow="REVIEW" title="Submissions" />
+      <div className="flex items-center gap-2 flex-wrap mb-3">
+        <span className="f-label text-[11px]" style={{ color: "#A79B84" }}>SHOW</span>
+        <SelectF value={cohortId} onChange={(e) => { setCohortId(e.target.value); setCourseId("all"); }} options={[{ value: "all", label: "All cohorts" }, ...cohorts.map((c) => ({ value: c.id, label: c.name })), { value: "none", label: "No cohort" }]} />
+        <SelectF value={effectiveCourse} onChange={(e) => setCourseId(e.target.value)} options={[{ value: "all", label: "All courses" }, ...courseOptions.map((c) => ({ value: c.id, label: c.title }))]} />
+      </div>
       <div className="flex items-center gap-2 flex-wrap mb-5">
         {folders.map((f) => { const n = inFolder(f.key).length; const on = folder === f.key; return <button key={f.key} onClick={() => setFolder(f.key)} className="f-label text-[12px] px-4 py-2 rounded-full flex items-center gap-2" style={{ background: on ? "var(--accent)" : "#F0E7D6", color: on ? "#FAF6EC" : "#71675A", fontWeight: 700 }}>{f.label}<span className="f-code text-[10px] rounded-full px-1.5" style={{ background: on ? "rgba(250,246,236,.25)" : "#E7DEC9" }}>{n}</span></button>; })}
         <input className="input-field rounded-full px-4 py-2 text-[13px] ml-auto" style={{ width: 200, maxWidth: "100%" }} placeholder="Search student or title" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -2526,7 +2544,7 @@ export function AdminDashboard({ courses, setCourses, students, setStudents, onR
         {tab === "meetings" && <AdminMeetingsTab courses={courses} setCourses={setCourses} cohorts={cohorts} students={students} />}
         {tab === "students" && <StudentsTab students={students} setStudents={setStudents} onRemove={onRemoveStudent} applicants={applicants} courses={courses} cohorts={cohorts} tasks={tasks} />}
         {tab === "gradebook" && <GradebookTab students={students} courses={courses} cohorts={cohorts} tasks={tasks} />}
-        {tab === "submissions" && <SubmissionsTab students={students} setStudents={setStudents} tasks={tasks} courses={courses} onOpenTask={(id) => { setOpenTaskId(id); setTab("tasks"); }} />}
+        {tab === "submissions" && <SubmissionsTab students={students} setStudents={setStudents} tasks={tasks} courses={courses} cohorts={cohorts} onOpenTask={(id) => { setOpenTaskId(id); setTab("tasks"); }} />}
         {tab === "tasks" && <TasksTab tasks={tasks} setTasks={setTasks} students={students} courses={courses} cohorts={cohorts} openTaskId={openTaskId} />}
         {tab === "library" && <LibraryTab resources={resources} onAdd={onAddResource} onEdit={onEditResource} onRemove={onRemoveResource} courses={courses} cohorts={cohorts} />}
         {tab === "certificates" && <CertificatesTab students={students} setStudents={setStudents} courses={courses} setCourses={setCourses} tasks={tasks} />}
