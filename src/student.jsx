@@ -245,22 +245,33 @@ export function LessonView({ course, enrollment, student, updateEnrollment, onBa
   const linkType = isLinkProof ? (LINK_TYPES.find((t) => t.key === module.linkType) || LINK_TYPES.find((t) => t.key === "other")) : null;
   const linkValids = checkQuestions.map((_, i) => isLinkProof && linkType?.test((proofs[i] || "").trim()));
   const allFilled = checkQuestions.every((_, i) => (proofs[i] || "").trim());
+  // Every quick check attempt is kept as its own record (the answers
+  // included). pendingReview is wiped the moment a decision is made, so
+  // without this the answers vanished for good once they were marked.
+  function quickCheckLog(at, extra) { return { quickChecks: [...(enrollment.quickChecks || []), { id: "qc" + at, moduleId: module.id, proofs, submittedAt: at, ...extra }] }; }
   function submitForReview() {
     if (!allFilled) return;
+    const at = Date.now();
     // A link already gets checked for shape as it's typed (see linkValids) --
     // there's nothing left to keyword-match against a marking guide, so
     // every link submission just goes straight to review instead of risking
     // an auto-approve on an unrelated keyword overlap with the URL itself.
     if (isLinkProof) {
-      updateEnrollment({ pendingReview: { moduleId: module.id, proofs, submittedAt: Date.now() } });
+      updateEnrollment({ pendingReview: { moduleId: module.id, proofs, submittedAt: at }, ...quickCheckLog(at, { outcome: "pending" }) });
       notifyAdminQuickCheckSubmitted({ studentName: student.name, moduleTitle: module.title, courseName: course.title });
       return;
     }
     const pct = scoreQuestions(proofs, checkQuestions);
-    if (module.autoGradeOnly) { setResult(pct); if (pct >= (module.passPct || 70)) completeModule(); return; }
-    if (pct >= AUTO_APPROVE_THRESHOLD) completeModule();
+    if (module.autoGradeOnly) {
+      const passed = pct >= (module.passPct || 70);
+      setResult(pct);
+      updateEnrollment(quickCheckLog(at, { outcome: passed ? "passed" : "not passed", score: pct, decidedAt: at }));
+      if (passed) completeModule();
+      return;
+    }
+    if (pct >= AUTO_APPROVE_THRESHOLD) { updateEnrollment(quickCheckLog(at, { outcome: "passed", score: pct, decidedAt: at })); completeModule(); }
     else {
-      updateEnrollment({ pendingReview: { moduleId: module.id, proofs, submittedAt: Date.now(), autoScore: pct } });
+      updateEnrollment({ pendingReview: { moduleId: module.id, proofs, submittedAt: at, autoScore: pct }, ...quickCheckLog(at, { outcome: "pending", score: pct }) });
       notifyAdminQuickCheckSubmitted({ studentName: student.name, moduleTitle: module.title, courseName: course.title });
     }
   }

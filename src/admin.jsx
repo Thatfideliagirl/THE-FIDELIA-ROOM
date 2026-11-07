@@ -790,6 +790,83 @@ export function CoursesTab({ courses, setCourses, testimonials }) {
   );
 }
 
+
+// A read-only history of everything one student has handed in -- tasks and
+// quick checks together, newest first, each labelled. Grading itself stays
+// where it always was (Tasks tab / "Awaiting your review"); this is for
+// looking back at the answer and the score afterwards.
+function StudentSubmissions({ student, tasks, courses }) {
+  const [filter, setFilter] = useState("all");
+  const [openId, setOpenId] = useState(null);
+  const items = [];
+  (tasks || []).forEach((t) => {
+    const sub = t.submissions?.[student.id];
+    if (!sub) return;
+    items.push({ id: `task-${t.id}`, kind: "task", title: t.title, course: courses.find((c) => c.id === t.courseId)?.title, at: sub.submittedAt || sub.lastActivityAt || 0, status: sub.status, score: sub.score, task: t, sub });
+  });
+  student.enrollments.forEach((e) => {
+    const course = courses.find((c) => c.id === e.courseId);
+    (e.quickChecks || []).forEach((q) => {
+      const mod = course?.modules.find((m) => m.id === q.moduleId);
+      items.push({ id: `qc-${e.id}-${q.id}`, kind: "quick", title: mod?.title || "Quick check", course: course?.title, at: q.submittedAt, status: q.outcome, score: q.score, mod, q });
+    });
+  });
+  items.sort((a, b) => b.at - a.at);
+  const shown = items.filter((i) => filter === "all" || i.kind === filter);
+  const chip = (key, label) => <button key={key} onClick={() => setFilter(key)} className="f-label text-[11px] px-3 py-1.5 rounded-full" style={{ background: filter === key ? "var(--accent)" : "#F0E7D6", color: filter === key ? "#FAF6EC" : "#71675A", fontWeight: 700 }}>{label}</button>;
+  const statusColor = (st) => st === "approved" || st === "passed" ? "#2F7D4F" : st === "sent back" || st === "not passed" || st === "waiting on student" ? "#B2572B" : "#71675A";
+  return (
+    <div className="pt-5 mb-5" style={{ borderTop: "1px solid #F0E7D6" }}>
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+        <div className="f-label text-[11px]" style={{ color: "#71675A" }}>SUBMISSIONS · {items.length}</div>
+        <div className="flex gap-2">{chip("all", "All")}{chip("task", "Tasks")}{chip("quick", "Quick checks")}</div>
+      </div>
+      {shown.length === 0 && <div className="text-[13px]" style={{ color: "#A79B84" }}>Nothing submitted yet.</div>}
+      <div className="flex flex-col gap-2">{shown.map((it) => (
+        <div key={it.id} className="rounded-lg" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
+          <button onClick={() => setOpenId(openId === it.id ? null : it.id)} className="w-full text-left px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap"><span className="f-code text-[9px] px-2 py-0.5 rounded-full tint-badge" style={{ fontWeight: 700 }}>{it.kind === "task" ? "TASK" : "QUICK CHECK"}</span><span className="text-[14px]" style={{ fontWeight: 700 }}>{it.title}</span></div>
+              <div className="text-[11.5px] mt-0.5" style={{ color: "#A79B84" }}>{it.course}{it.at ? ` · ${formatDateTime(it.at)}` : ""}</div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="f-code text-[10px]" style={{ color: statusColor(it.status), fontWeight: 700 }}>{(it.status || "").toUpperCase()}</span>
+              {it.score != null && <span className="f-code text-[11px]" style={{ fontWeight: 700 }}>{it.score}%</span>}
+              <ChevronDown size={15} color="#A79B84" style={{ transform: openId === it.id ? "rotate(180deg)" : "none" }} />
+            </div>
+          </button>
+          {openId === it.id && (
+            <div className="px-4 pb-4 pt-1 flex flex-col gap-3" style={{ borderTop: "1px dashed #E7DEC9" }}>
+              {it.kind === "quick" ? (
+                it.mod ? normalizeQuestions(it.mod).map((qn, qi) => (
+                  <div key={qn.id || qi}>
+                    {qn.prompt && <RichText html={qn.prompt} className="rich-content text-[12px] mb-1.5" style={{ color: "#71675A" }} />}
+                    <RichText html={(it.q.proofs || [])[qi] || ""} className="rich-content text-[14px] rounded-lg px-3 py-2.5" style={{ background: "#fff", border: "1px solid #E7DEC9" }} />
+                  </div>
+                )) : <div className="text-[13px]" style={{ color: "#A79B84" }}>This module no longer exists, so the questions can't be shown.</div>
+              ) : (
+                <>
+                  {it.task.requiredLinks?.length > 0 ? it.task.requiredLinks.map((r, i) => {
+                    const url = it.sub.links?.[i], g = it.sub.linkGrades?.[i];
+                    return (
+                      <div key={i} className="rounded-lg px-3 py-2.5" style={{ background: "#fff", border: "1px solid #E7DEC9" }}>
+                        <div className="text-[13px]" style={{ fontWeight: 700 }}>{r.label || r.type}</div>
+                        {url ? <a href={url} target="_blank" rel="noreferrer" className="text-[12.5px] accent-text break-all">{url} ↗</a> : <span className="text-[12.5px]" style={{ color: "#A79B84" }}>Not submitted</span>}
+                        {g?.decision && <div className="text-[12px] mt-1" style={{ color: statusColor(g.decision === "approved" ? "approved" : "sent back") }}>{g.decision === "approved" ? `Approved${g.score != null ? ` · ${g.score}%` : ""}` : "Sent back for resubmission"}{g.feedback ? ` — ${g.feedback}` : ""}</div>}
+                      </div>
+                    );
+                  }) : <div className="text-[14px] rounded-lg px-3 py-2.5 whitespace-pre-wrap" style={{ background: "#fff", border: "1px solid #E7DEC9" }}>{it.sub.note || "No written answer."}</div>}
+                  {it.sub.comment && <div className="text-[13px]" style={{ color: "#4A4237" }}><strong>Your comment:</strong> {it.sub.comment}</div>}
+                  <div className="text-[11.5px]" style={{ color: "#A79B84" }}>To change a grade, open this task from the Tasks tab.</div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      ))}</div>
+    </div>
+  );
+}
 export function StudentDetail({ student, applicant, setStudents, courses, cohorts, tasks, onClose, onDelete }) {
   const [status, setStatus] = useState(student.accountStatus); const [cohortId, setCohortId] = useState(student.cohortId);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -825,8 +902,18 @@ export function StudentDetail({ student, applicant, setStudents, courses, cohort
       enrollments: s.enrollments.map((e) => {
         if (e.id !== enrollmentId || !e.pendingReview) return e;
         const moduleId = e.pendingReview.moduleId;
+        const pr = e.pendingReview, outcome = approve ? "approved" : "sent back", decidedAt = Date.now();
+        // Keep the answers: mark this attempt's record decided (or create
+        // it, for one submitted before records were kept) rather than
+        // letting clearing pendingReview erase them.
+        const log = e.quickChecks || [];
+        const found = log.some((q) => q.moduleId === moduleId && q.submittedAt === pr.submittedAt);
+        const quickChecks = found
+          ? log.map((q) => q.moduleId === moduleId && q.submittedAt === pr.submittedAt ? { ...q, outcome, decidedAt } : q)
+          : [...log, { id: "qc" + pr.submittedAt, moduleId, proofs: pr.proofs || [pr.proof], submittedAt: pr.submittedAt, score: pr.autoScore, outcome, decidedAt }];
         return {
           ...e,
+          quickChecks,
           pendingReview: null,
           completedModuleIds: approve ? [...new Set([...e.completedModuleIds, moduleId])] : e.completedModuleIds,
         };
@@ -943,6 +1030,7 @@ export function StudentDetail({ student, applicant, setStudents, courses, cohort
           </div>
         );
       })}</div>
+      <StudentSubmissions student={student} tasks={tasks} courses={courses} />
       {applicant && <div className="pt-5" style={{ borderTop: "1px solid #F0E7D6" }}><div className="f-label text-[11px] mb-3" style={{ color: "#71675A" }}>LATEST APPLICATION ANSWERS</div>{applicant.answers.map((ans, i) => <div key={i} className="mb-2 text-[13px]">{ans}</div>)}</div>}
       </div>
     </div>
