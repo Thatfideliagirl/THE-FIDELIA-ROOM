@@ -46,7 +46,7 @@ export function SubmissionBody({ it, viewer = "admin" }) {
     return it.mod ? <>{normalizeQuestions(it.mod).map((qn, qi) => (
       <div key={qn.id || qi}>
         {qn.prompt && <RichText html={qn.prompt} className="rich-content text-[12px] mb-1.5" style={{ color: "#71675A" }} />}
-        <RichText html={(it.q.proofs || [])[qi] || ""} className="rich-content text-[14px] rounded-lg px-3 py-2.5" style={{ background: "#fff", border: "1px solid #E7DEC9" }} />
+        <RichText html={(it.q.proofs || [])[qi] || ""} className="rich-content text-[14px] rounded-lg px-3 py-2.5" style={{ background: "#fff", border: "1px solid #E7DEC9", overflowWrap: "anywhere" }} />
       </div>
     ))}</> : <div className="text-[13px]" style={{ color: "#A79B84" }}>This module no longer exists, so the questions can't be shown.</div>;
   }
@@ -62,8 +62,8 @@ export function SubmissionBody({ it, viewer = "admin" }) {
           </div>
         );
       }) : <>
-        {(it.sub.history || []).map((h, i) => <div key={i} className="text-[13px] rounded-lg px-3 py-2.5 whitespace-pre-wrap" style={{ background: "#F0E7D6", color: "#71675A" }}><div className="f-label text-[10px] mb-1">EARLIER ANSWER</div>{h.note}{h.feedback && <div className="mt-1.5" style={{ color: "#B2572B" }}>{viewer === "student" ? "Fidelia said" : "You said"}: {h.feedback}</div>}</div>)}
-        <div className="text-[14px] rounded-lg px-3 py-2.5 whitespace-pre-wrap" style={{ background: "#fff", border: "1px solid #E7DEC9" }}>{it.sub.note || "No written answer."}</div>
+        {(it.sub.history || []).map((h, i) => <div key={i} className="text-[13px] rounded-lg px-3 py-2.5 whitespace-pre-wrap" style={{ overflowWrap: "anywhere", background: "#F0E7D6", color: "#71675A" }}><div className="f-label text-[10px] mb-1">EARLIER ANSWER</div>{h.note}{h.feedback && <div className="mt-1.5" style={{ color: "#B2572B" }}>{viewer === "student" ? "Fidelia said" : "You said"}: {h.feedback}</div>}</div>)}
+        <div className="text-[14px] rounded-lg px-3 py-2.5 whitespace-pre-wrap" style={{ overflowWrap: "anywhere", background: "#fff", border: "1px solid #E7DEC9" }}>{it.sub.note || "No written answer."}</div>
       </>}
       {it.sub.comment && <div className="text-[13px]" style={{ color: "#4A4237" }}><strong>{viewer === "student" ? "Fidelia's comment" : "Your comment"}:</strong> {it.sub.comment}</div>}
     </>

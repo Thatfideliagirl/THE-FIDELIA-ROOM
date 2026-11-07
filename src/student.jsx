@@ -14,7 +14,7 @@ import { renderIdCard } from "./lib/idcard.js";
 import { uploadFile } from "./lib/storage.js";
 import { compressImage } from "./lib/imageCompress.js";
 import { notifyAdminTaskSubmitted, notifyAdminQuickCheckSubmitted, sendCommunityTaggedEmail } from "./lib/email.js";
-import { SectionHeader, NotifBell, WelcomeTour, SidebarLink, LogoMark, Spine, TextArea, ProgressBar, ResourceDetail, Field, ChangePasswordCard, RichText, RichTextEditor, DashboardShell, TaskFileList } from "./components.jsx";
+import { SectionHeader, NotifBell, ChatLayout, WelcomeTour, SidebarLink, LogoMark, Spine, TextArea, ProgressBar, ResourceDetail, Field, ChangePasswordCard, RichText, RichTextEditor, DashboardShell, TaskFileList } from "./components.jsx";
 
 // List markers (•, ‣, etc.) are sometimes present as literal characters
 // in the text itself, not just a CSS bullet -- left in, the speech engine
@@ -488,6 +488,7 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
   const [openModuleId, setOpenModuleId] = useState(null);
   const [openTaskId, setOpenTaskId] = useState(null);
   const [activePeer, setActivePeer] = useState("admin");
+  const [chatOpen, setChatOpen] = useState(false);
   const [msg, setMsg] = useState(""); const [communityMsg, setCommunityMsg] = useState("");
   const [viewingResourceId, setViewingResourceId] = useState(null);
   const [meetingsFilter, setMeetingsFilter] = useState("upcoming"); // "upcoming" | "past"
@@ -666,10 +667,12 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
         {tab === "chat" && (
           <>
             <SectionHeader eyebrow="TALK TO YOUR TUTOR" title="Chat" />
-            <div className="card rounded-2xl flex" style={{ height: 480 }}>
-              <div className="w-[140px] sm:w-[220px] shrink-0 overflow-y-auto" style={{ borderRight: "1px solid #E7DEC9" }}><button onClick={() => setActivePeer("admin")} className="w-full text-left px-5 py-3.5 text-[14px]" style={{ background: activePeer === "admin" ? "color-mix(in srgb, var(--accent) 14%, white)" : "transparent", fontWeight: 700 }}>Fidelia (Tutor)</button>{peers.map((p) => <button key={p.id} onClick={() => setActivePeer(p.id)} className="w-full text-left px-5 py-3.5 text-[14px]" style={{ background: activePeer === p.id ? "color-mix(in srgb, var(--accent) 14%, white)" : "transparent", fontWeight: 600 }}>{p.name}</button>)}</div>
-              <div className="flex-1 flex flex-col min-w-0"><div className="flex-1 overflow-y-auto p-6 flex flex-col gap-3">{thread.length === 0 && <div className="text-[14px]" style={{ color: "#A79B84" }}>No messages yet — say hello.</div>}{thread.map((m, i) => <div key={i} className="max-w-[75%] px-4 py-2.5 rounded-xl text-[14px]" style={{ alignSelf: m.from === student.id ? "flex-end" : "flex-start", background: m.from === student.id ? "var(--accent)" : "#F0E7D6", color: m.from === student.id ? "#FAF6EC" : "#262019" }}>{m.text}</div>)}</div><div className="flex items-center gap-2 p-4" style={{ borderTop: "1px solid #E7DEC9" }}><input className="input-field rounded-full px-4 py-2.5 flex-1 min-w-0" placeholder="Write a message…" value={msg} onChange={(e) => setMsg(e.target.value)} onKeyDown={(e) => e.key === "Enter" && sendMsg()} /><button onClick={sendMsg} className="btn-primary rounded-full p-2.5 shrink-0"><Send size={16} /></button></div></div>
-            </div>
+            <ChatLayout
+              people={[{ id: "admin", name: "Fidelia (Tutor)", strong: true }, ...peers.map((p) => ({ id: p.id, name: p.name }))]}
+              activeId={activePeer} mobileOpen={chatOpen} onSelect={(id) => { setActivePeer(id); setChatOpen(true); }} onBack={() => setChatOpen(false)}
+              messages={thread.map((m) => ({ mine: m.from === student.id, text: m.text }))}
+              msg={msg} setMsg={setMsg} onSend={sendMsg}
+            />
           </>
         )}
         {tab === "community" && <CommunityPanel community={community} setCommunity={setCommunity} authorName={student.name} authorId={student.id} allStudents={peers} cohortId={student.cohortId} />}
@@ -1016,7 +1019,7 @@ export function TaskDetailStudent({ task, student, allStudents, setTasks, onBack
               })}</div>
             ) : (
               <div className="mt-3">
-                <div className="text-[14px] whitespace-pre-wrap" style={{ color: "#4A4237" }}>{sub.note}</div>
+                <div className="text-[14px] whitespace-pre-wrap" style={{ overflowWrap: "anywhere", color: "#4A4237" }}>{sub.note}</div>
                 {sub.comment && <div className="text-[13px] mt-3 rounded-lg px-3 py-2.5" style={{ background: sub.status === "waiting on student" ? "#FBEAE0" : "#FFFFFF", color: "#4A4237" }}><strong>Note from Fidelia:</strong> "{sub.comment}"</div>}
                 {sub.status === "waiting on student" && (
                   <div className="mt-3">

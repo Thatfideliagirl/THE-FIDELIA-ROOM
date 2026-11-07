@@ -11,7 +11,7 @@ import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from 
 import { genCode, pairKey, ADMIN_EMAIL, TEAM_PERMISSION_TABS, LINK_TYPES, STUDENT_ACCESS_TABS, linkShare, deriveSubmissionStatus, sumLinkScores, capstoneStatus, courseEligibility, formatDateTime, formatRelativeTime, AUTO_APPROVE_THRESHOLD, normalizeQuestions } from "./lib/data.js";
 import { renderCertificate, formatIssueDate } from "./lib/certificate.js";
 import { renderTestimonialCard } from "./lib/testimonial.js";
-import { Field, SectionHeader, NotifBell, SidebarLink, LogoMark, TextArea, SelectF, ImgField, FileField, TaskFileList, ChangePasswordCard, RichTextEditor, RichText, DashboardShell, WelcomeTour, TEAM_TOUR_STEPS } from "./components.jsx";
+import { Field, SectionHeader, NotifBell, ChatLayout, SidebarLink, LogoMark, TextArea, SelectF, ImgField, FileField, TaskFileList, ChangePasswordCard, RichTextEditor, RichText, DashboardShell, WelcomeTour, TEAM_TOUR_STEPS } from "./components.jsx";
 import { CommunityPanel, SOCIAL_PLATFORMS } from "./student.jsx";
 import { fetchTeamMembers, addTeamMember, updateTeamMember, removeTeamMember, fetchTeamActivity, updateMyTeamProfile, markTourSeen } from "./lib/team.js";
 import { sendTaskAssignedEmail, sendTaskDecisionEmail, sendQuickCheckDecisionEmail, sendApplicationReviewedEmail } from "./lib/email.js";
@@ -828,7 +828,8 @@ function SubmissionRow({ it, open, onToggle, onOpen, showStudent }) {
   const head = (
     <>
       <div className="min-w-0">
-        <div className="flex items-center gap-2 flex-wrap"><SubmissionBadges it={it} />{showStudent && <span className="text-[14px]" style={{ fontWeight: 700 }}>{it.student.name}</span>}<span className="text-[14px]" style={{ fontWeight: showStudent ? 500 : 700, color: showStudent ? "#4A4237" : undefined }}>{showStudent ? `· ${it.title}` : it.title}</span></div>
+        <div className="flex items-center gap-2 flex-wrap"><SubmissionBadges it={it} />{showStudent && <span className="text-[14px]" style={{ fontWeight: 700 }}>{it.student.name}</span>}{!showStudent && <span className="text-[14px]" style={{ fontWeight: 700 }}>{it.title}</span>}</div>
+        {showStudent && <div className="text-[13.5px] mt-1" style={{ color: "#4A4237" }}>{it.title}</div>}
         <div className="text-[11.5px] mt-0.5" style={{ color: "#A79B84" }}>{it.course}{it.at ? ` · ${formatDateTime(it.at)}` : ""}{it.folder == null && it.kind === "quick" ? " · earlier attempt" : ""}</div>
       </div>
       <div className="flex items-center gap-2 shrink-0">
@@ -1019,7 +1020,7 @@ export function StudentDetail({ student, applicant, setStudents, courses, cohort
                 {module && normalizeQuestions(module).map((q, qi) => (
                   <div key={q.id || qi} className="mb-3">
                     {q.prompt && <RichText html={q.prompt} className="rich-content text-[12px] mb-1.5" style={{ color: "#71675A" }} />}
-                    <RichText html={(e.pendingReview.proofs || [e.pendingReview.proof])[qi] || ""} className="rich-content text-[14px] rounded-lg px-3 py-2.5" style={{ background: "#fff", border: "1px solid #E7DEC9" }} />
+                    <RichText html={(e.pendingReview.proofs || [e.pendingReview.proof])[qi] || ""} className="rich-content text-[14px] rounded-lg px-3 py-2.5" style={{ background: "#fff", border: "1px solid #E7DEC9", overflowWrap: "anywhere" }} />
                   </div>
                 ))}
                 <div className="flex items-center gap-2"><button onClick={() => decideReview(e.id, true)} className="btn-primary rounded-lg px-4 py-2 text-[12px]">Approve — unlock next module</button><button onClick={() => decideReview(e.id, false)} className="text-[12px]" style={{ color: "#B04A3A" }}>Send back</button></div>
@@ -1294,8 +1295,8 @@ export function SubmissionDetail({ sid, student, sub, task, onGrade, onGradeLink
       </div>
     ) : (
       <>
-        {(sub.history || []).map((h, i) => <div key={i} className="rounded-lg px-3 py-2.5 mb-2 text-[13px]" style={{ background: "#F0E7D6", color: "#71675A" }}><div className="f-label text-[10px] mb-1">EARLIER ANSWER</div>{h.note}{h.feedback && <div className="mt-1.5" style={{ color: "#B2572B" }}>You said: {h.feedback}</div>}</div>)}
-        <div className="text-[14px] mb-4 whitespace-pre-wrap" style={{ color: "#4A4237" }}>{sub.note}</div>
+        {(sub.history || []).map((h, i) => <div key={i} className="rounded-lg px-3 py-2.5 mb-2 text-[13px]" style={{ background: "#F0E7D6", color: "#71675A", overflowWrap: "anywhere" }}><div className="f-label text-[10px] mb-1">EARLIER ANSWER</div>{h.note}{h.feedback && <div className="mt-1.5" style={{ color: "#B2572B" }}>You said: {h.feedback}</div>}</div>)}
+        <div className="text-[14px] mb-4 whitespace-pre-wrap" style={{ overflowWrap: "anywhere", color: "#4A4237" }}>{sub.note}</div>
         <label className="block mb-3"><div className="f-label text-[11px] mb-1.5" style={{ color: "#71675A" }}>Note to {student?.name?.split(" ")[0]} (optional when approving; say what to fix when sending back)</div><textarea className="input-field rounded-lg px-3 py-2 text-[13px] w-full" rows={2} value={noteFeedback} onChange={(e) => setNoteFeedback(e.target.value)} /></label>
         <div className="flex items-end gap-3 flex-wrap"><Field label="Score (%)" type="number" value={score} onChange={(e) => setScore(e.target.value)} /><button onClick={() => onGrade(sid, "approved", Number(score), noteFeedback)} className="btn-primary rounded-lg px-5 py-2.5 text-[13px] shrink-0 mb-[2px]">Mark reviewed</button><button onClick={() => onGrade(sid, "waiting on student", null, noteFeedback)} className="rounded-lg px-5 py-2.5 text-[13px] shrink-0 mb-[2px]" style={{ color: "#B2572B", border: "1px solid #E7C9B8", fontWeight: 600 }}>Send back</button></div>
       </>
@@ -1981,10 +1982,13 @@ export function AdminChatTab({ students, directThreads, setDirectThreads, notifS
   return (
     <>
       <SectionHeader eyebrow="TALK TO STUDENTS" title="Chat" />
-      <div className="card rounded-2xl flex" style={{ height: 480 }}>
-        <div className="w-[140px] sm:w-[220px] shrink-0 overflow-y-auto" style={{ borderRight: "1px solid #E7DEC9" }}>{students.map((s) => { const unread = activeId === s.id ? 0 : unreadFor(s.id); return <button key={s.id} onClick={() => setActiveId(s.id)} className="w-full text-left px-5 py-3.5 text-[14px] flex items-center justify-between" style={{ background: activeId === s.id ? "color-mix(in srgb, var(--accent) 14%, white)" : "transparent", fontWeight: activeId === s.id ? 700 : 500 }}>{s.name}{unread > 0 && <span className="f-code text-[9px] rounded-full px-1.5 py-0.5" style={{ background: "var(--accent)", color: "#FAF6EC" }}>{unread}</span>}</button>; })}</div>
-        <div className="flex-1 flex flex-col min-w-0">{!activeId ? <div className="flex-1 flex items-center justify-center text-[14px]" style={{ color: "#A79B84" }}>Select a conversation to open it.</div> : <><div className="flex-1 overflow-y-auto p-6 flex flex-col gap-3">{thread.map((m, i) => <div key={i} className="max-w-[75%] px-4 py-2.5 rounded-xl text-[14px]" style={{ alignSelf: m.from === "admin" ? "flex-end" : "flex-start", background: m.from === "admin" ? "var(--accent)" : "#F0E7D6", color: m.from === "admin" ? "#FAF6EC" : "#262019" }}>{m.text}</div>)}</div><div className="flex items-center gap-2 p-4" style={{ borderTop: "1px solid #E7DEC9" }}><input className="input-field rounded-full px-4 py-2.5 flex-1 min-w-0" placeholder="Reply…" value={msg} onChange={(e) => setMsg(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} /><button onClick={send} className="btn-primary rounded-full p-2.5 shrink-0"><Send size={16} /></button></div></>}</div>
-      </div>
+      <ChatLayout
+        people={students.map((s) => ({ id: s.id, name: s.name, unread: activeId === s.id ? 0 : unreadFor(s.id) }))}
+        activeId={activeId} mobileOpen={!!activeId} onSelect={setActiveId} onBack={() => setActiveId(null)}
+        messages={thread.map((m) => ({ mine: m.from === "admin", text: m.text }))}
+        msg={msg} setMsg={setMsg} onSend={send} placeholder="Reply…"
+        noMessagesText="No messages yet." pickText="Select a conversation to open it."
+      />
     </>
   );
 }
@@ -2256,7 +2260,13 @@ export function GradebookTab({ students, courses, cohorts, tasks }) {
         <SelectF value={courseFilter} onChange={(e) => setCourseFilter(e.target.value)} options={[{ value: "all", label: "All courses" }, ...courses.map((c) => ({ value: c.id, label: c.title }))]} />
       </div>
       <div className="card rounded-2xl overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="md:hidden">{rows.map((r, i) => (
+          <div key={i} className="px-5 py-4" style={{ borderTop: i ? "1px solid #F0E7D6" : "none" }}>
+            <div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="text-[15px]" style={{ fontWeight: 700 }}>{r.student}</div><div className="text-[13px]" style={{ color: "#71675A" }}>{r.course}</div></div>{r.eligible ? <span className="f-code text-[10px] px-2.5 py-1 rounded-full shrink-0" style={{ background: "#E4F3E9", color: "#2F7D4F", fontWeight: 700 }}>ELIGIBLE</span> : <span className="f-code text-[10px] px-2.5 py-1 rounded-full shrink-0" style={{ background: "#FBEAE7", color: "#B04A3A", fontWeight: 700 }}>INELIGIBLE</span>}</div>
+            <div className="flex gap-6 mt-3 text-[13px]"><div><div className="f-label text-[10px]" style={{ color: "#A79B84" }}>COURSE PROGRESS</div><div style={{ fontWeight: 600 }}>{r.coursePct}%</div></div><div><div className="f-label text-[10px]" style={{ color: "#A79B84" }}>CAPSTONE</div><div style={{ fontWeight: 600 }}>{r.capstone.label}</div></div></div>
+          </div>
+        ))}</div>
+        <div className="hidden md:block overflow-x-auto">
           <div className="min-w-[760px]">
             <div className="grid grid-cols-5 px-6 py-3 f-label text-[11px]" style={{ background: "#F0E7D6", color: "#71675A" }}><div>STUDENT</div><div>COURSE</div><div>COURSE PROGRESS</div><div>CAPSTONE</div><div>ELIGIBILITY</div></div>
             {rows.map((r, i) => <div key={i} className="grid grid-cols-5 px-6 py-4 items-center text-[14px]" style={{ borderTop: "1px solid #F0E7D6" }}><div style={{ fontWeight: 700 }}>{r.student}</div><div>{r.course}</div><div>{r.coursePct}%</div><div>{r.capstone.label}</div><div>{r.eligible ? <span className="f-code text-[10px] px-2.5 py-1 rounded-full" style={{ background: "#E4F3E9", color: "#2F7D4F", fontWeight: 700 }}>ELIGIBLE</span> : <span className="f-code text-[10px] px-2.5 py-1 rounded-full" style={{ background: "#FBEAE7", color: "#B04A3A", fontWeight: 700 }}>INELIGIBLE</span>}</div></div>)}
