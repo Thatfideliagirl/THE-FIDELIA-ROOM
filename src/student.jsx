@@ -436,7 +436,7 @@ export function LessonView({ course, enrollment, student, updateEnrollment, onBa
             <>
               <div className="f-display text-[19px] mb-5" style={{ fontWeight: 700 }}>Quick check — {module.passPct}% to pass</div>
               {module.quiz.map((q, qi) => <div key={qi} className="mb-6"><div className="text-[15px] mb-3" style={{ fontWeight: 600 }}>{q.q}</div><div className="flex flex-col gap-2">{q.options.map((o, oi) => <label key={oi} className="flex items-center gap-2.5 text-[14px] rounded-lg px-4 py-2.5" style={{ background: answers[qi] === oi ? "color-mix(in srgb, var(--accent) 10%, white)" : "#FAF6EC", border: answers[qi] === oi ? "1.5px solid var(--accent)" : "1px solid #E7DEC9" }}><input type="radio" name={`q${qi}`} checked={answers[qi] === oi} onChange={() => setAnswers((a) => ({ ...a, [qi]: oi }))} /> {o}</label>)}</div></div>)}
-              {result != null && result < (module.passPct || 70) && <div className="text-[14px] mb-4" style={{ color: "#B04A3A", fontWeight: 700 }}>Scored {result}% — try again to unlock the next module.</div>}
+              {result != null && result < (module.passPct || 70) && <div className="text-[14px] mb-4" style={{ color: "#B04A3A", fontWeight: 700 }}>Not quite there yet — look back over the lesson and try again to unlock the next module.</div>}
               <button onClick={submitQuiz} className="btn-primary rounded-lg px-6 py-3 text-[14px]">Submit answers</button>
             </>
           )}
@@ -466,7 +466,7 @@ export function LessonView({ course, enrollment, student, updateEnrollment, onBa
                   </div>
                 ))}
               </div>
-              {module.autoGradeOnly && result != null && result < (module.passPct || 70) && <div className="text-[14px] mt-3" style={{ color: "#B04A3A", fontWeight: 700 }}>Scored {result}% — revise your answer{checkQuestions.length > 1 ? "s" : ""} and try again to unlock the next module.</div>}
+              {module.autoGradeOnly && result != null && result < (module.passPct || 70) && <div className="text-[14px] mt-3" style={{ color: "#B04A3A", fontWeight: 700 }}>Not quite there yet — revise your answer{checkQuestions.length > 1 ? "s" : ""} and try again to unlock the next module.</div>}
               <button onClick={submitForReview} disabled={isLinkProof ? !linkValids.every(Boolean) : !allFilled} className="btn-primary rounded-lg px-6 py-3 text-[14px] mt-4">{module.autoGradeOnly ? "Submit answer" : "Submit for review"}</button>
             </>
           )}
