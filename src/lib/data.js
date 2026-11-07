@@ -42,6 +42,7 @@ export const TEAM_PERMISSION_TABS = [
     { id: "applicants", label: "Applicants" },
     { id: "students", label: "Students" },
     { id: "gradebook", label: "Gradebook" },
+    { id: "submissions", label: "Submissions" },
     { id: "tasks", label: "Tasks" },
   ] },
   { group: "Community", items: [

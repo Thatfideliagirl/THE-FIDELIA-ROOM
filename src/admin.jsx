@@ -5,7 +5,7 @@ import {
   ChevronDown, Sparkles, Plus, Check, Send, X, Heart, MessageSquare,
   FileText, Download, GraduationCap, Mail, Phone, Award,
   UserCircle, FolderPlus, Folder, UploadCloud, ClipboardCheck, HelpCircle as HelpIcon,
-  Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Home, UserCog, Repeat, RotateCcw, IdCard
+  Clock, Inbox, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Home, UserCog, Repeat, RotateCcw, IdCard
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from "recharts";
 import { genCode, pairKey, ADMIN_EMAIL, TEAM_PERMISSION_TABS, LINK_TYPES, STUDENT_ACCESS_TABS, linkShare, deriveSubmissionStatus, sumLinkScores, capstoneStatus, courseEligibility, formatDateTime, formatRelativeTime, AUTO_APPROVE_THRESHOLD, normalizeQuestions } from "./lib/data.js";
@@ -791,30 +791,122 @@ export function CoursesTab({ courses, setCourses, testimonials }) {
 }
 
 
-// A read-only history of everything one student has handed in -- tasks and
-// quick checks together, newest first, each labelled. Grading itself stays
-// where it always was (Tasks tab / "Awaiting your review"); this is for
-// looking back at the answer and the score afterwards.
-function StudentSubmissions({ student, tasks, courses }) {
-  const [filter, setFilter] = useState("all");
-  const [openId, setOpenId] = useState(null);
+function decideQuickCheck({ student, enrollmentId, approve, courses, setStudents }) {
+  const enrollment = student.enrollments.find((e) => e.id === enrollmentId);
+  const course = courses.find((c) => c.id === enrollment?.courseId);
+  const module = course?.modules.find((m) => m.id === enrollment?.pendingReview?.moduleId);
+  setStudents((prev) => prev.map((s) => s.id !== student.id ? s : {
+    ...s,
+    enrollments: s.enrollments.map((e) => {
+      if (e.id !== enrollmentId || !e.pendingReview) return e;
+      const moduleId = e.pendingReview.moduleId;
+      const pr = e.pendingReview, outcome = approve ? "approved" : "sent back", decidedAt = Date.now();
+      // Keep the answers: mark this attempt's record decided (or create
+      // it, for one submitted before records were kept) rather than
+      // letting clearing pendingReview erase them.
+      const log = e.quickChecks || [];
+      const found = log.some((q) => q.moduleId === moduleId && q.submittedAt === pr.submittedAt);
+      const quickChecks = found
+        ? log.map((q) => q.moduleId === moduleId && q.submittedAt === pr.submittedAt ? { ...q, outcome, decidedAt } : q)
+        : [...log, { id: "qc" + pr.submittedAt, moduleId, proofs: pr.proofs || [pr.proof], submittedAt: pr.submittedAt, score: pr.autoScore, outcome, decidedAt }];
+      return {
+        ...e,
+        quickChecks,
+        pendingReview: null,
+        completedModuleIds: approve ? [...new Set([...e.completedModuleIds, moduleId])] : e.completedModuleIds,
+      };
+    }),
+  }));
+  if (module) sendQuickCheckDecisionEmail({ email: student.email, name: student.name, moduleTitle: module.title, courseName: course?.title, approved: approve });
+}
+
+// Every submission one student has handed in, as plain items: tasks and
+// quick checks alike, each with the folder it belongs in right now.
+// A quick check that was sent back and then redone has an older attempt that
+// no longer needs anything from her -- only the latest attempt per module
+// counts toward the folders (older ones still show under "All").
+function buildSubmissionItems(student, tasks, courses) {
   const items = [];
   (tasks || []).forEach((t) => {
     const sub = t.submissions?.[student.id];
     if (!sub) return;
-    items.push({ id: `task-${t.id}`, kind: "task", title: t.title, course: courses.find((c) => c.id === t.courseId)?.title, at: sub.submittedAt || sub.lastActivityAt || 0, status: sub.status, score: sub.score, task: t, sub });
+    const status = deriveSubmissionStatus(t, sub);
+    const folder = status === "approved" ? "approved" : status === "waiting on student" ? "rework" : "awaiting";
+    items.push({ id: `task-${t.id}-${student.id}`, kind: "task", student, title: t.title, course: courses.find((c) => c.id === t.courseId)?.title, at: sub.lastActivityAt || sub.submittedAt || 0, status, label: status, score: sub.score, folder, task: t, sub });
   });
   student.enrollments.forEach((e) => {
     const course = courses.find((c) => c.id === e.courseId);
-    (e.quickChecks || []).forEach((q) => {
+    const log = [...(e.quickChecks || [])];
+    // Submitted before attempts were recorded: it's only in pendingReview.
+    const pr = e.pendingReview;
+    if (pr && !log.some((q) => q.moduleId === pr.moduleId && q.submittedAt === pr.submittedAt)) log.push({ id: "qc" + pr.submittedAt, moduleId: pr.moduleId, proofs: pr.proofs || [pr.proof], submittedAt: pr.submittedAt, score: pr.autoScore, outcome: "pending" });
+    const latest = {};
+    log.forEach((q) => { if (!latest[q.moduleId] || q.submittedAt > latest[q.moduleId].submittedAt) latest[q.moduleId] = q; });
+    log.forEach((q) => {
       const mod = course?.modules.find((m) => m.id === q.moduleId);
-      items.push({ id: `qc-${e.id}-${q.id}`, kind: "quick", title: mod?.title || "Quick check", course: course?.title, at: q.submittedAt, status: q.outcome, score: q.score, mod, q });
+      const isLatest = latest[q.moduleId] === q;
+      const folder = !isLatest ? null : q.outcome === "pending" ? "awaiting" : q.outcome === "sent back" ? "rework" : q.outcome === "not passed" ? null : "approved";
+      items.push({ id: `qc-${e.id}-${q.id}`, kind: "quick", student, title: mod?.title || "Quick check", course: course?.title, at: q.decidedAt || q.submittedAt, status: q.outcome, label: q.outcome === "sent back" ? "sent back" : q.outcome, score: q.score, folder, mod, q, enrollmentId: e.id, awaiting: q.outcome === "pending" && e.pendingReview && e.pendingReview.moduleId === q.moduleId && e.pendingReview.submittedAt === q.submittedAt });
     });
   });
-  items.sort((a, b) => b.at - a.at);
+  return items.sort((a, b) => b.at - a.at);
+}
+const submissionStatusColor = (st) => st === "approved" || st === "passed" ? "#2F7D4F" : st === "sent back" || st === "not passed" || st === "waiting on student" ? "#B2572B" : "#71675A";
+// One expandable row. `actions` is whatever the screen wants to offer next to
+// the answer (Approve / Send back, Open task...); showStudent is for the
+// all-students inbox, where the name matters.
+function SubmissionRow({ it, open, onToggle, showStudent, actions }) {
+  return (
+    <div className="rounded-lg" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
+      <button onClick={onToggle} className="w-full text-left px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap"><span className="f-code text-[9px] px-2 py-0.5 rounded-full tint-badge" style={{ fontWeight: 700 }}>{it.kind === "task" ? "TASK" : "QUICK CHECK"}</span>{showStudent && <span className="text-[14px]" style={{ fontWeight: 700 }}>{it.student.name}</span>}<span className="text-[14px]" style={{ fontWeight: showStudent ? 500 : 700, color: showStudent ? "#4A4237" : undefined }}>{showStudent ? `· ${it.title}` : it.title}</span></div>
+          <div className="text-[11.5px] mt-0.5" style={{ color: "#A79B84" }}>{it.course}{it.at ? ` · ${formatDateTime(it.at)}` : ""}{it.folder == null && it.kind === "quick" ? " · earlier attempt" : ""}</div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="f-code text-[10px]" style={{ color: submissionStatusColor(it.status), fontWeight: 700 }}>{(it.label || "").toUpperCase()}</span>
+          {it.score != null && <span className="f-code text-[11px]" style={{ fontWeight: 700 }}>{it.score}%</span>}
+          <ChevronDown size={15} color="#A79B84" style={{ transform: open ? "rotate(180deg)" : "none" }} />
+        </div>
+      </button>
+      {open && (
+        <div className="px-4 pb-4 pt-3 flex flex-col gap-3" style={{ borderTop: "1px dashed #E7DEC9" }}>
+          {it.kind === "quick" ? (
+            it.mod ? normalizeQuestions(it.mod).map((qn, qi) => (
+              <div key={qn.id || qi}>
+                {qn.prompt && <RichText html={qn.prompt} className="rich-content text-[12px] mb-1.5" style={{ color: "#71675A" }} />}
+                <RichText html={(it.q.proofs || [])[qi] || ""} className="rich-content text-[14px] rounded-lg px-3 py-2.5" style={{ background: "#fff", border: "1px solid #E7DEC9" }} />
+              </div>
+            )) : <div className="text-[13px]" style={{ color: "#A79B84" }}>This module no longer exists, so the questions can't be shown.</div>
+          ) : (
+            <>
+              {it.task.requiredLinks?.length > 0 ? it.task.requiredLinks.map((r, i) => {
+                const url = it.sub.links?.[i], g = it.sub.linkGrades?.[i];
+                return (
+                  <div key={i} className="rounded-lg px-3 py-2.5" style={{ background: "#fff", border: "1px solid #E7DEC9" }}>
+                    <div className="text-[13px]" style={{ fontWeight: 700 }}>{r.label || r.type}</div>
+                    {url ? <a href={url} target="_blank" rel="noreferrer" className="text-[12.5px] accent-text break-all">{url} ↗</a> : <span className="text-[12.5px]" style={{ color: "#A79B84" }}>Not submitted</span>}
+                    {g?.decision && <div className="text-[12px] mt-1" style={{ color: submissionStatusColor(g.decision === "approved" ? "approved" : "sent back") }}>{g.decision === "approved" ? `Approved${g.score != null ? ` · ${g.score}%` : ""}` : "Sent back for resubmission"}{g.feedback ? ` — ${g.feedback}` : ""}</div>}
+                  </div>
+                );
+              }) : <div className="text-[14px] rounded-lg px-3 py-2.5 whitespace-pre-wrap" style={{ background: "#fff", border: "1px solid #E7DEC9" }}>{it.sub.note || "No written answer."}</div>}
+              {it.sub.comment && <div className="text-[13px]" style={{ color: "#4A4237" }}><strong>Your comment:</strong> {it.sub.comment}</div>}
+            </>
+          )}
+          {actions}
+        </div>
+      )}
+    </div>
+  );
+}
+// Everything one student has handed in, newest first. Read-only: grading
+// happens in the Submissions inbox, the Tasks tab, or "Awaiting your review".
+function StudentSubmissions({ student, tasks, courses }) {
+  const [filter, setFilter] = useState("all");
+  const [openId, setOpenId] = useState(null);
+  const items = buildSubmissionItems(student, tasks, courses);
   const shown = items.filter((i) => filter === "all" || i.kind === filter);
   const chip = (key, label) => <button key={key} onClick={() => setFilter(key)} className="f-label text-[11px] px-3 py-1.5 rounded-full" style={{ background: filter === key ? "var(--accent)" : "#F0E7D6", color: filter === key ? "#FAF6EC" : "#71675A", fontWeight: 700 }}>{label}</button>;
-  const statusColor = (st) => st === "approved" || st === "passed" ? "#2F7D4F" : st === "sent back" || st === "not passed" || st === "waiting on student" ? "#B2572B" : "#71675A";
   return (
     <div className="pt-5 mb-5" style={{ borderTop: "1px solid #F0E7D6" }}>
       <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
@@ -822,49 +914,42 @@ function StudentSubmissions({ student, tasks, courses }) {
         <div className="flex gap-2">{chip("all", "All")}{chip("task", "Tasks")}{chip("quick", "Quick checks")}</div>
       </div>
       {shown.length === 0 && <div className="text-[13px]" style={{ color: "#A79B84" }}>Nothing submitted yet.</div>}
-      <div className="flex flex-col gap-2">{shown.map((it) => (
-        <div key={it.id} className="rounded-lg" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
-          <button onClick={() => setOpenId(openId === it.id ? null : it.id)} className="w-full text-left px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap"><span className="f-code text-[9px] px-2 py-0.5 rounded-full tint-badge" style={{ fontWeight: 700 }}>{it.kind === "task" ? "TASK" : "QUICK CHECK"}</span><span className="text-[14px]" style={{ fontWeight: 700 }}>{it.title}</span></div>
-              <div className="text-[11.5px] mt-0.5" style={{ color: "#A79B84" }}>{it.course}{it.at ? ` · ${formatDateTime(it.at)}` : ""}</div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="f-code text-[10px]" style={{ color: statusColor(it.status), fontWeight: 700 }}>{(it.status || "").toUpperCase()}</span>
-              {it.score != null && <span className="f-code text-[11px]" style={{ fontWeight: 700 }}>{it.score}%</span>}
-              <ChevronDown size={15} color="#A79B84" style={{ transform: openId === it.id ? "rotate(180deg)" : "none" }} />
-            </div>
-          </button>
-          {openId === it.id && (
-            <div className="px-4 pb-4 pt-1 flex flex-col gap-3" style={{ borderTop: "1px dashed #E7DEC9" }}>
-              {it.kind === "quick" ? (
-                it.mod ? normalizeQuestions(it.mod).map((qn, qi) => (
-                  <div key={qn.id || qi}>
-                    {qn.prompt && <RichText html={qn.prompt} className="rich-content text-[12px] mb-1.5" style={{ color: "#71675A" }} />}
-                    <RichText html={(it.q.proofs || [])[qi] || ""} className="rich-content text-[14px] rounded-lg px-3 py-2.5" style={{ background: "#fff", border: "1px solid #E7DEC9" }} />
-                  </div>
-                )) : <div className="text-[13px]" style={{ color: "#A79B84" }}>This module no longer exists, so the questions can't be shown.</div>
-              ) : (
-                <>
-                  {it.task.requiredLinks?.length > 0 ? it.task.requiredLinks.map((r, i) => {
-                    const url = it.sub.links?.[i], g = it.sub.linkGrades?.[i];
-                    return (
-                      <div key={i} className="rounded-lg px-3 py-2.5" style={{ background: "#fff", border: "1px solid #E7DEC9" }}>
-                        <div className="text-[13px]" style={{ fontWeight: 700 }}>{r.label || r.type}</div>
-                        {url ? <a href={url} target="_blank" rel="noreferrer" className="text-[12.5px] accent-text break-all">{url} ↗</a> : <span className="text-[12.5px]" style={{ color: "#A79B84" }}>Not submitted</span>}
-                        {g?.decision && <div className="text-[12px] mt-1" style={{ color: statusColor(g.decision === "approved" ? "approved" : "sent back") }}>{g.decision === "approved" ? `Approved${g.score != null ? ` · ${g.score}%` : ""}` : "Sent back for resubmission"}{g.feedback ? ` — ${g.feedback}` : ""}</div>}
-                      </div>
-                    );
-                  }) : <div className="text-[14px] rounded-lg px-3 py-2.5 whitespace-pre-wrap" style={{ background: "#fff", border: "1px solid #E7DEC9" }}>{it.sub.note || "No written answer."}</div>}
-                  {it.sub.comment && <div className="text-[13px]" style={{ color: "#4A4237" }}><strong>Your comment:</strong> {it.sub.comment}</div>}
-                  <div className="text-[11.5px]" style={{ color: "#A79B84" }}>To change a grade, open this task from the Tasks tab.</div>
-                </>
-              )}
-            </div>
-          )}
-        </div>
-      ))}</div>
+      <div className="flex flex-col gap-2">{shown.map((it) => <SubmissionRow key={it.id} it={it} open={openId === it.id} onToggle={() => setOpenId(openId === it.id ? null : it.id)} />)}</div>
     </div>
+  );
+}
+// The inbox: every student's submissions in one place, sorted into folders by
+// where they stand. Nothing here is stored -- the folder is worked out from
+// the submission's status each time, so grading or a resubmission moves a row
+// from one folder to another on its own.
+export function SubmissionsTab({ students, setStudents, tasks, courses, onOpenTask }) {
+  const [folder, setFolder] = useState("awaiting");
+  const [openId, setOpenId] = useState(null);
+  const [q, setQ] = useState("");
+  const all = students.flatMap((s) => buildSubmissionItems(s, tasks, courses)).sort((a, b) => b.at - a.at);
+  const inFolder = (f) => all.filter((i) => f === "all" || i.folder === f);
+  const folders = [{ key: "awaiting", label: "Awaiting review" }, { key: "rework", label: "Needs rework" }, { key: "approved", label: "Approved" }, { key: "all", label: "All" }];
+  const needle = q.trim().toLowerCase();
+  const shown = inFolder(folder).filter((i) => !needle || i.student.name.toLowerCase().includes(needle) || (i.title || "").toLowerCase().includes(needle));
+  const empty = { awaiting: "Nothing waiting for you — you're all caught up.", rework: "Nothing is out with a student for rework.", approved: "Nothing approved yet.", all: "No submissions yet." };
+  return (
+    <>
+      <SectionHeader eyebrow="REVIEW" title="Submissions" />
+      <div className="flex items-center gap-2 flex-wrap mb-5">
+        {folders.map((f) => { const n = inFolder(f.key).length; const on = folder === f.key; return <button key={f.key} onClick={() => setFolder(f.key)} className="f-label text-[12px] px-4 py-2 rounded-full flex items-center gap-2" style={{ background: on ? "var(--accent)" : "#F0E7D6", color: on ? "#FAF6EC" : "#71675A", fontWeight: 700 }}>{f.label}<span className="f-code text-[10px] rounded-full px-1.5" style={{ background: on ? "rgba(250,246,236,.25)" : "#E7DEC9" }}>{n}</span></button>; })}
+        <input className="input-field rounded-full px-4 py-2 text-[13px] ml-auto" style={{ width: 200, maxWidth: "100%" }} placeholder="Search student or title" value={q} onChange={(e) => setQ(e.target.value)} />
+      </div>
+      {shown.length === 0 && <div className="card rounded-2xl p-8 text-center text-[14px]" style={{ color: "#A79B84" }}>{needle ? "No matches." : empty[folder]}</div>}
+      <div className="flex flex-col gap-2">{shown.map((it) => (
+        <SubmissionRow key={it.id} it={it} showStudent open={openId === it.id} onToggle={() => setOpenId(openId === it.id ? null : it.id)} actions={
+          it.kind === "quick" && it.awaiting ? (
+            <div className="flex items-center gap-3"><button onClick={() => decideQuickCheck({ student: it.student, enrollmentId: it.enrollmentId, approve: true, courses, setStudents })} className="btn-primary rounded-lg px-4 py-2 text-[12px]">Approve — unlock next module</button><button onClick={() => decideQuickCheck({ student: it.student, enrollmentId: it.enrollmentId, approve: false, courses, setStudents })} className="text-[12px]" style={{ color: "#B04A3A" }}>Send back</button></div>
+          ) : it.kind === "task" ? (
+            <div><button onClick={() => onOpenTask(it.task.id)} className="btn-soft rounded-lg px-4 py-2 text-[12px]" style={{ fontWeight: 700 }}>{it.folder === "awaiting" ? "Open task to grade" : "Open task to review or change the grade"}</button></div>
+          ) : null
+        } />
+      ))}</div>
+    </>
   );
 }
 export function StudentDetail({ student, applicant, setStudents, courses, cohorts, tasks, onClose, onDelete }) {
@@ -893,34 +978,7 @@ export function StudentDetail({ student, applicant, setStudents, courses, cohort
       }),
     }));
   }
-  function decideReview(enrollmentId, approve) {
-    const enrollment = student.enrollments.find((e) => e.id === enrollmentId);
-    const course = courses.find((c) => c.id === enrollment?.courseId);
-    const module = course?.modules.find((m) => m.id === enrollment?.pendingReview?.moduleId);
-    setStudents((prev) => prev.map((s) => s.id !== student.id ? s : {
-      ...s,
-      enrollments: s.enrollments.map((e) => {
-        if (e.id !== enrollmentId || !e.pendingReview) return e;
-        const moduleId = e.pendingReview.moduleId;
-        const pr = e.pendingReview, outcome = approve ? "approved" : "sent back", decidedAt = Date.now();
-        // Keep the answers: mark this attempt's record decided (or create
-        // it, for one submitted before records were kept) rather than
-        // letting clearing pendingReview erase them.
-        const log = e.quickChecks || [];
-        const found = log.some((q) => q.moduleId === moduleId && q.submittedAt === pr.submittedAt);
-        const quickChecks = found
-          ? log.map((q) => q.moduleId === moduleId && q.submittedAt === pr.submittedAt ? { ...q, outcome, decidedAt } : q)
-          : [...log, { id: "qc" + pr.submittedAt, moduleId, proofs: pr.proofs || [pr.proof], submittedAt: pr.submittedAt, score: pr.autoScore, outcome, decidedAt }];
-        return {
-          ...e,
-          quickChecks,
-          pendingReview: null,
-          completedModuleIds: approve ? [...new Set([...e.completedModuleIds, moduleId])] : e.completedModuleIds,
-        };
-      }),
-    }));
-    if (module) sendQuickCheckDecisionEmail({ email: student.email, name: student.name, moduleTitle: module.title, courseName: course?.title, approved: approve });
-  }
+  function decideReview(enrollmentId, approve) { decideQuickCheck({ student, enrollmentId, approve, courses, setStudents }); }
   const pendingReviews = student.enrollments.filter((e) => e.pendingReview);
   return (
     <div>
@@ -1360,8 +1418,8 @@ export function TaskDetail({ task, setTasks, students, courses, cohorts, onClose
     </div>
   );
 }
-export function TasksTab({ tasks, setTasks, students, courses, cohorts }) {
-  const [showAdd, setShowAdd] = useState(false); const [selected, setSelected] = useState(null);
+export function TasksTab({ tasks, setTasks, students, courses, cohorts, openTaskId }) {
+  const [showAdd, setShowAdd] = useState(false); const [selected, setSelected] = useState(openTaskId || null);
   function addTask(data) {
     const id = "t" + Date.now();
     const course = courses.find((c) => c.id === data.courseId);
@@ -2422,7 +2480,7 @@ export function AdminDashboard({ courses, setCourses, students, setStudents, onR
     { id: "cohorts", icon: Layers, label: "Cohorts" }, { id: "courses", icon: BookOpen, label: "Courses" },
     { id: "meetings", icon: PlayCircle, label: "Virtual Meetings" },
     { id: "students", icon: Users, label: "Students" }, { id: "gradebook", icon: FileText, label: "Gradebook" },
-    { id: "tasks", icon: ListChecks, label: "Tasks" }, { id: "library", icon: Library, label: "Library" },
+    { id: "submissions", icon: Inbox, label: "Submissions" }, { id: "tasks", icon: ListChecks, label: "Tasks" }, { id: "library", icon: Library, label: "Library" },
     { id: "certificates", icon: Award, label: "Certificates" }, { id: "testimonials", icon: Star, label: "Testimonials" },
     { id: "faq", icon: HelpIcon, label: "FAQ" }, { id: "chat", icon: MessageCircle, label: "Chat" },
     { id: "community", icon: Users, label: "Community" }, { id: "notice", icon: Megaphone, label: "Notice Board" },
@@ -2437,6 +2495,10 @@ export function AdminDashboard({ courses, setCourses, students, setStudents, onR
     ? [{ id: "account", icon: UserCircle, label: "My Account" }, ...allNavItems.filter((n) => teamAccess.permissions.includes(n.id))]
     : allNavItems;
   const [tab, setTab] = useState(() => navItems[0]?.id || "overview");
+  // Set when a row in the Submissions inbox says "Open task"; the Tasks tab
+  // opens straight onto it, then this clears so it doesn't stick around.
+  const [openTaskId, setOpenTaskId] = useState(null);
+  useEffect(() => { if (tab !== "tasks") setOpenTaskId(null); }, [tab]);
   const sidebar = (
     <>
       <div className="flex items-center justify-between mb-1 px-2"><LogoMark height={38} /><button onClick={onExit} title="Sign out"><LogOut size={16} color="#A79B84" /></button></div>
@@ -2464,7 +2526,8 @@ export function AdminDashboard({ courses, setCourses, students, setStudents, onR
         {tab === "meetings" && <AdminMeetingsTab courses={courses} setCourses={setCourses} cohorts={cohorts} students={students} />}
         {tab === "students" && <StudentsTab students={students} setStudents={setStudents} onRemove={onRemoveStudent} applicants={applicants} courses={courses} cohorts={cohorts} tasks={tasks} />}
         {tab === "gradebook" && <GradebookTab students={students} courses={courses} cohorts={cohorts} tasks={tasks} />}
-        {tab === "tasks" && <TasksTab tasks={tasks} setTasks={setTasks} students={students} courses={courses} cohorts={cohorts} />}
+        {tab === "submissions" && <SubmissionsTab students={students} setStudents={setStudents} tasks={tasks} courses={courses} onOpenTask={(id) => { setOpenTaskId(id); setTab("tasks"); }} />}
+        {tab === "tasks" && <TasksTab tasks={tasks} setTasks={setTasks} students={students} courses={courses} cohorts={cohorts} openTaskId={openTaskId} />}
         {tab === "library" && <LibraryTab resources={resources} onAdd={onAddResource} onEdit={onEditResource} onRemove={onRemoveResource} courses={courses} cohorts={cohorts} />}
         {tab === "certificates" && <CertificatesTab students={students} setStudents={setStudents} courses={courses} setCourses={setCourses} tasks={tasks} />}
         {tab === "testimonials" && <TestimonialsTab testimonials={testimonials} setTestimonials={setTestimonials} students={students} cohorts={cohorts} courses={courses} brand={brand} setBrand={setBrand} />}
