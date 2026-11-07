@@ -17,6 +17,7 @@ import { fetchTeamMembers, addTeamMember, updateTeamMember, removeTeamMember, fe
 import { sendTaskAssignedEmail, sendTaskDecisionEmail, sendQuickCheckDecisionEmail, sendApplicationReviewedEmail } from "./lib/email.js";
 import { EMAIL_TEMPLATE_KEYS, EMAIL_STARTERS, VAR_LABELS, SAMPLE_VARS, fillTemplate, fillTemplatePlain } from "./lib/emailDefaults.js";
 import { prepareImage } from "./lib/imageCompress.js";
+import { buildSubmissionItems, submissionStatusColor, SubmissionBody, SubmissionBadges } from "./submissions.jsx";
 
 // One applicant row, shared by the "pending" and "awaiting payment" queues
 // below -- same expand-to-see-answers shape either way, only which action
@@ -820,75 +821,6 @@ function decideQuickCheck({ student, enrollmentId, approve, courses, setStudents
   if (module) sendQuickCheckDecisionEmail({ email: student.email, name: student.name, moduleTitle: module.title, courseName: course?.title, approved: approve });
 }
 
-// Every submission one student has handed in, as plain items: tasks and
-// quick checks alike, each with the folder it belongs in right now.
-// A quick check that was sent back and then redone has an older attempt that
-// no longer needs anything from her -- only the latest attempt per module
-// counts toward the folders (older ones still show under "All").
-function buildSubmissionItems(student, tasks, courses) {
-  const items = [];
-  (tasks || []).forEach((t) => {
-    const sub = t.submissions?.[student.id];
-    if (!sub) return;
-    const status = deriveSubmissionStatus(t, sub);
-    const folder = status === "approved" ? "approved" : status === "waiting on student" ? "rework" : "awaiting";
-    items.push({ id: `task-${t.id}-${student.id}`, kind: "task", student, title: t.title, courseId: t.courseId, course: courses.find((c) => c.id === t.courseId)?.title, at: sub.lastActivityAt || sub.submittedAt || 0, status, label: status, score: sub.score, folder, task: t, sub, isCapstone: !!t.isCapstone, formerCapstone: !!t.formerCapstone && !t.isCapstone });
-  });
-  student.enrollments.forEach((e) => {
-    const course = courses.find((c) => c.id === e.courseId);
-    const log = [...(e.quickChecks || [])];
-    // Submitted before attempts were recorded: it's only in pendingReview.
-    const pr = e.pendingReview;
-    if (pr && !log.some((q) => q.moduleId === pr.moduleId && q.submittedAt === pr.submittedAt)) log.push({ id: "qc" + pr.submittedAt, moduleId: pr.moduleId, proofs: pr.proofs || [pr.proof], submittedAt: pr.submittedAt, score: pr.autoScore, outcome: "pending" });
-    const latest = {};
-    log.forEach((q) => { if (!latest[q.moduleId] || q.submittedAt > latest[q.moduleId].submittedAt) latest[q.moduleId] = q; });
-    log.forEach((q) => {
-      const mod = course?.modules.find((m) => m.id === q.moduleId);
-      const isLatest = latest[q.moduleId] === q;
-      const folder = !isLatest ? null : q.outcome === "pending" ? "awaiting" : q.outcome === "sent back" ? "rework" : q.outcome === "not passed" ? null : "approved";
-      items.push({ id: `qc-${e.id}-${q.id}`, kind: "quick", student, title: mod?.title || "Quick check", courseId: e.courseId, course: course?.title, at: q.decidedAt || q.submittedAt, status: q.outcome, label: q.outcome === "sent back" ? "sent back" : q.outcome, score: q.score, folder, mod, q, enrollmentId: e.id, awaiting: q.outcome === "pending" && e.pendingReview && e.pendingReview.moduleId === q.moduleId && e.pendingReview.submittedAt === q.submittedAt });
-    });
-  });
-  return items.sort((a, b) => b.at - a.at);
-}
-const submissionStatusColor = (st) => st === "approved" || st === "passed" ? "#2F7D4F" : st === "sent back" || st === "not passed" || st === "waiting on student" ? "#B2572B" : "#71675A";
-// The answer itself, shared by the per-student list (as a dropdown) and the
-// full-page view in the Submissions inbox.
-function SubmissionBody({ it }) {
-  if (it.kind === "quick") {
-    return it.mod ? <>{normalizeQuestions(it.mod).map((qn, qi) => (
-      <div key={qn.id || qi}>
-        {qn.prompt && <RichText html={qn.prompt} className="rich-content text-[12px] mb-1.5" style={{ color: "#71675A" }} />}
-        <RichText html={(it.q.proofs || [])[qi] || ""} className="rich-content text-[14px] rounded-lg px-3 py-2.5" style={{ background: "#fff", border: "1px solid #E7DEC9" }} />
-      </div>
-    ))}</> : <div className="text-[13px]" style={{ color: "#A79B84" }}>This module no longer exists, so the questions can't be shown.</div>;
-  }
-  return (
-    <>
-      {it.task.requiredLinks?.length > 0 ? it.task.requiredLinks.map((r, i) => {
-        const url = it.sub.links?.[i], g = it.sub.linkGrades?.[i];
-        return (
-          <div key={i} className="rounded-lg px-3 py-2.5" style={{ background: "#fff", border: "1px solid #E7DEC9" }}>
-            <div className="text-[13px]" style={{ fontWeight: 700 }}>{r.label || r.type}</div>
-            {url ? <a href={url} target="_blank" rel="noreferrer" className="text-[12.5px] accent-text break-all">{url} ↗</a> : <span className="text-[12.5px]" style={{ color: "#A79B84" }}>Not submitted</span>}
-            {g?.decision && <div className="text-[12px] mt-1" style={{ color: submissionStatusColor(g.decision === "approved" ? "approved" : "sent back") }}>{g.decision === "approved" ? `Approved${g.score != null ? ` · ${g.score}%` : ""}` : "Sent back for resubmission"}{g.feedback ? ` — ${g.feedback}` : ""}</div>}
-          </div>
-        );
-      }) : <>
-        {(it.sub.history || []).map((h, i) => <div key={i} className="text-[13px] rounded-lg px-3 py-2.5 whitespace-pre-wrap" style={{ background: "#F0E7D6", color: "#71675A" }}><div className="f-label text-[10px] mb-1">EARLIER ANSWER</div>{h.note}{h.feedback && <div className="mt-1.5" style={{ color: "#B2572B" }}>You said: {h.feedback}</div>}</div>)}
-        <div className="text-[14px] rounded-lg px-3 py-2.5 whitespace-pre-wrap" style={{ background: "#fff", border: "1px solid #E7DEC9" }}>{it.sub.note || "No written answer."}</div>
-      </>}
-      {it.sub.comment && <div className="text-[13px]" style={{ color: "#4A4237" }}><strong>Your comment:</strong> {it.sub.comment}</div>}
-    </>
-  );
-}
-function SubmissionBadges({ it }) {
-  return <>
-    <span className="f-code text-[9px] px-2 py-0.5 rounded-full tint-badge" style={{ fontWeight: 700 }}>{it.kind === "task" ? "TASK" : "QUICK CHECK"}</span>
-    {it.isCapstone && <span className="f-code text-[9px] px-2 py-0.5 rounded-full" style={{ background: "#F3E7C9", color: "#8A6A1F", fontWeight: 700 }}>CAPSTONE</span>}
-    {it.formerCapstone && <span className="f-code text-[9px] px-2 py-0.5 rounded-full" style={{ background: "#F0E7D6", color: "#71675A", fontWeight: 700 }}>FORMER CAPSTONE</span>}
-  </>;
-}
 // A row. With `onToggle`/`open` it expands in place (the per-student list);
 // with `onOpen` it's a plain button that opens the full page (the inbox), so
 // reading one submission never pushes the rest of the list down.
@@ -2305,11 +2237,12 @@ export function AdminProfileTab({ adminProfile, setAdminProfile }) {
 }
 export function GradebookTab({ students, courses, cohorts, tasks }) {
   const [cohortFilter, setCohortFilter] = useState("all");
+  const [courseFilter, setCourseFilter] = useState("all");
   const scopedStudents = cohortFilter === "all" ? students : students.filter((s) => s.cohortId === cohortFilter);
   // Same courseEligibility the Certificates tab uses -- so a student held
   // back there (certificateHeld) never shows as eligible here either; the
   // two screens always agree on who's actually cleared to get a certificate.
-  const rows = scopedStudents.flatMap((s) => s.enrollments.map((e) => {
+  const rows = scopedStudents.flatMap((s) => s.enrollments.filter((e) => courseFilter === "all" || e.courseId === courseFilter).map((e) => {
     const c = courses.find((x) => x.id === e.courseId);
     const elig = c ? courseEligibility(tasks, c, e, s.id) : { eligible: false, coursePct: 0, capstone: capstoneStatus(tasks, e.courseId, s.id) };
     return { student: s.name, course: c?.title, coursePct: elig.coursePct, capstone: elig.capstone, eligible: elig.eligible };
@@ -2320,6 +2253,7 @@ export function GradebookTab({ students, courses, cohorts, tasks }) {
       <div className="flex items-center gap-2 mb-6 flex-wrap">
         <button onClick={() => setCohortFilter("all")} className="f-label text-[11px] px-3.5 py-1.5 rounded-full" style={{ background: cohortFilter === "all" ? "var(--accent)" : "#F0E7D6", color: cohortFilter === "all" ? "#FAF6EC" : "#71675A" }}>All cohorts</button>
         {cohorts.map((co) => <button key={co.id} onClick={() => setCohortFilter(co.id)} className="f-label text-[11px] px-3.5 py-1.5 rounded-full" style={{ background: cohortFilter === co.id ? "var(--accent)" : "#F0E7D6", color: cohortFilter === co.id ? "#FAF6EC" : "#71675A" }}>{co.name}</button>)}
+        <SelectF value={courseFilter} onChange={(e) => setCourseFilter(e.target.value)} options={[{ value: "all", label: "All courses" }, ...courses.map((c) => ({ value: c.id, label: c.title }))]} />
       </div>
       <div className="card rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">

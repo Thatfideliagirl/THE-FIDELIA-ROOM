@@ -5,10 +5,11 @@ import {
   ChevronDown, Sparkles, Plus, Check, Send, X, Heart, MessageSquare,
   FileText, Download, GraduationCap, Mail, Phone, Award,
   UserCircle, FolderPlus, UploadCloud, ClipboardCheck, HelpCircle as HelpIcon,
-  Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Compass, Home, Repeat, Pause, IdCard as IdCardIcon
+  Clock, Inbox, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Compass, Home, Repeat, Pause, IdCard as IdCardIcon
 } from "lucide-react";
 import { pairKey, moduleStatus, scoreSubmission, scoreQuestions, normalizeQuestions, AUTO_APPROVE_THRESHOLD, LINK_TYPES, deriveSubmissionStatus, courseEligibility, formatDateTime } from "./lib/data.js";
 import { renderCertificate, formatIssueDate } from "./lib/certificate.js";
+import { buildSubmissionItems, submissionStatusColor, SubmissionBody, SubmissionBadges } from "./submissions.jsx";
 import { renderIdCard } from "./lib/idcard.js";
 import { uploadFile } from "./lib/storage.js";
 import { compressImage } from "./lib/imageCompress.js";
@@ -513,6 +514,7 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
         {!restrictedTabs.has("meetings") && <SidebarLink icon={PlayCircle} label="Virtual Meetings" active={tab === "meetings"} onClick={() => setTab("meetings")} />}
         {!restrictedTabs.has("library") && <SidebarLink icon={Library} label="Resource library" active={tab === "library"} onClick={() => setTab("library")} />}
         {!restrictedTabs.has("tasks") && <SidebarLink icon={ListChecks} label="Tasks" active={tab === "tasks"} onClick={() => { setTab("tasks"); setOpenTaskId(null); }} />}
+        {!restrictedTabs.has("submissions") && <SidebarLink icon={Inbox} label="My Submissions" active={tab === "submissions"} onClick={() => setTab("submissions")} />}
         {!restrictedTabs.has("certificate") && <SidebarLink icon={Award} label="Certificate" active={tab === "certificate"} onClick={() => setTab("certificate")} />}
         {!restrictedTabs.has("studentId") && <SidebarLink icon={IdCardIcon} label="Student ID" active={tab === "studentId"} onClick={() => setTab("studentId")} />}
         {!restrictedTabs.has("chat") && <SidebarLink icon={MessageCircle} label="Chat" active={tab === "chat"} onClick={() => setTab("chat")} />}
@@ -654,6 +656,8 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
         })()}
 
         {tab === "tasks" && (openTask ? <TaskDetailStudent task={openTask} student={student} allStudents={allStudents} setTasks={setTasks} onBack={() => setOpenTaskId(null)} courseName={course.title} /> : <><SectionHeader eyebrow="ASSIGNED TO YOU" title="Tasks" />{myTasks.length === 0 && <div className="text-[15px]" style={{ color: "#A79B84" }}>No tasks assigned yet.</div>}<div className="flex flex-col gap-3">{myTasks.map((t) => { const sub = t.submissions[student.id]; return <button key={t.id} onClick={() => setOpenTaskId(t.id)} className="card card-pop rounded-xl p-5 text-left"><div className="flex items-center justify-between mb-1.5"><div className="text-[16px]" style={{ fontWeight: 700 }}>{t.title}</div>{sub ? <span className="f-code text-[10px] px-2.5 py-1 rounded-full tint-badge">{sub.status.toUpperCase()}</span> : t.deadlineAt && Date.now() > new Date(t.deadlineAt).getTime() ? <span className="f-code text-[10px] flex items-center gap-1" style={{ color: "#B04A3A" }}><Clock size={11} /> CLOSED</span> : <span className="f-code text-[10px] flex items-center gap-1" style={{ color: "#A79B84" }}><Clock size={11} /> {t.deadlineAt ? new Date(t.deadlineAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : `${t.dueInDays}D LEFT`}</span>}</div><RichText html={t.description} className="rich-content text-[14px] line-clamp-2" style={{ color: "#71675A" }} /></button>; })}</div></>)}
+
+        {tab === "submissions" && <MySubmissions student={student} course={course} tasks={tasks} onRedoTask={(id) => { setTab("tasks"); setOpenTaskId(id); }} onRedoQuickCheck={(moduleId) => { setTab("path"); setOpenModuleId(moduleId); }} />}
 
         {tab === "certificate" && <><SectionHeader eyebrow="YOUR ACHIEVEMENT" title="Certificate" /><CertificateTab course={course} enrollment={enrollment} student={student} tasks={tasks} setStudents={setStudents} /></>}
 
@@ -852,6 +856,53 @@ function StudentIdTab({ course, cohort, student, setStudents, template }) {
         <a href={finalUrl || "#"} download={`${student.name} - FJ Room ID.png`} className="btn-primary rounded-full px-6 py-2.5 text-[14px]" style={{ opacity: finalUrl && student.photo ? 1 : 0.5, pointerEvents: finalUrl && student.photo ? "auto" : "none" }}>{finalUrl ? "Download ID card" : "Preparing…"}</a>
       </div>
     </div>
+  );
+}
+// The student's own record of everything they've handed in for this course:
+// the same folders the admin inbox uses, read-only. The only way anything
+// here changes is if it's sent back -- then the row offers a way back in to
+// redo it.
+export function MySubmissions({ student, course, tasks, onRedoTask, onRedoQuickCheck }) {
+  const [folder, setFolder] = useState("all");
+  const [kind, setKind] = useState("all");
+  const [openId, setOpenId] = useState(null);
+  const items = buildSubmissionItems(student, tasks.filter((t) => t.courseId === course.id), [course]).filter((i) => i.courseId === course.id);
+  const byKind = items.filter((i) => kind === "all" || i.kind === kind);
+  const inFolder = (f) => byKind.filter((i) => f === "all" || i.folder === f);
+  const folders = [{ key: "all", label: "All" }, { key: "awaiting", label: "Waiting for review" }, { key: "rework", label: "Needs rework" }, { key: "approved", label: "Approved" }];
+  const shown = inFolder(folder);
+  const open = openId ? items.find((i) => i.id === openId) : null;
+  const pill = (on, onClick, label, n) => <button key={label} onClick={onClick} className="f-label text-[12px] px-4 py-2 rounded-full flex items-center gap-2" style={{ background: on ? "var(--accent)" : "#F0E7D6", color: on ? "#FAF6EC" : "#71675A", fontWeight: 700 }}>{label}{n != null && <span className="f-code text-[10px] rounded-full px-1.5" style={{ background: on ? "rgba(250,246,236,.25)" : "#E7DEC9" }}>{n}</span>}</button>;
+  if (open) {
+    return (
+      <div className="max-w-[720px]">
+        <button onClick={() => setOpenId(null)} className="flex items-center gap-1.5 text-[13px] mb-6" style={{ color: "#71675A" }}><ArrowLeft size={14} /> Back to my submissions</button>
+        <div className="card rounded-2xl p-7">
+          <div className="flex items-center gap-2 flex-wrap mb-2"><SubmissionBadges it={open} /></div>
+          <div className="f-display text-[22px]" style={{ fontWeight: 800 }}>{open.title}</div>
+          <div className="text-[12.5px] mt-1 mb-4" style={{ color: "#71675A" }}>{[open.course, open.at ? formatDateTime(open.at) : null].filter(Boolean).join(" · ")}</div>
+          <div className="flex items-center gap-2 mb-5"><span className="f-code text-[11px] px-2.5 py-1 rounded-full" style={{ background: "#F0E7D6", color: submissionStatusColor(open.status), fontWeight: 700 }}>{(open.label || "").toUpperCase()}</span>{open.score != null && <span className="f-code text-[12px]" style={{ fontWeight: 700 }}>{open.score}%</span>}</div>
+          <div className="flex flex-col gap-3 mb-5"><SubmissionBody it={open} viewer="student" /></div>
+          {open.folder === "awaiting" && <div className="text-[13px] rounded-lg px-4 py-3" style={{ background: "#FAF6EC", color: "#71675A" }}>Waiting for Fidelia to review this.</div>}
+          {open.folder === "rework" && open.kind === "task" && <button onClick={() => onRedoTask(open.task.id)} className="btn-primary rounded-lg px-5 py-2.5 text-[13px]">Open this task to resubmit</button>}
+          {open.folder === "rework" && open.kind === "quick" && <button onClick={() => onRedoQuickCheck(open.q.moduleId)} className="btn-primary rounded-lg px-5 py-2.5 text-[13px]">Go to this module to redo the quick check</button>}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <>
+      <SectionHeader eyebrow="WHAT YOU'VE HANDED IN" title="My Submissions" />
+      <div className="flex items-center gap-2 flex-wrap mb-3"><span className="f-label text-[11px]" style={{ color: "#A79B84" }}>SHOW</span>{pill(kind === "all", () => setKind("all"), "Tasks & quick checks")}{pill(kind === "task", () => setKind("task"), "Tasks")}{pill(kind === "quick", () => setKind("quick"), "Quick checks")}</div>
+      <div className="flex items-center gap-2 flex-wrap mb-5">{folders.map((f) => pill(folder === f.key, () => setFolder(f.key), f.label, inFolder(f.key).length))}</div>
+      {shown.length === 0 && <div className="text-[15px]" style={{ color: "#A79B84" }}>{items.length === 0 ? "You haven't handed in anything yet." : "Nothing in this folder."}</div>}
+      <div className="flex flex-col gap-2">{shown.map((it) => (
+        <button key={it.id} onClick={() => setOpenId(it.id)} className="w-full text-left rounded-lg px-4 py-3 flex items-center justify-between gap-3 flex-wrap" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
+          <div className="min-w-0"><div className="flex items-center gap-2 flex-wrap"><SubmissionBadges it={it} /><span className="text-[14px]" style={{ fontWeight: 700 }}>{it.title}</span></div><div className="text-[11.5px] mt-0.5" style={{ color: "#A79B84" }}>{it.at ? formatDateTime(it.at) : ""}{it.folder == null ? " · earlier attempt" : ""}</div></div>
+          <div className="flex items-center gap-2 shrink-0"><span className="f-code text-[10px]" style={{ color: submissionStatusColor(it.status), fontWeight: 700 }}>{(it.label || "").toUpperCase()}</span>{it.score != null && <span className="f-code text-[11px]" style={{ fontWeight: 700 }}>{it.score}%</span>}<ChevronRight size={15} color="#A79B84" /></div>
+        </button>
+      ))}</div>
+    </>
   );
 }
 export function TaskDetailStudent({ task, student, allStudents, setTasks, onBack, courseName }) {

@@ -69,6 +69,7 @@ export const STUDENT_ACCESS_TABS = [
     { id: "path", label: "Your Path", sub: "Modules, lectures, quick checks" },
     { id: "meetings", label: "Virtual Meetings" },
     { id: "tasks", label: "Tasks", sub: "Assigned tasks & the capstone" },
+    { id: "submissions", label: "My Submissions", sub: "Their own answers, scores and what was sent back" },
   ] },
   { group: "Community & support", items: [
     { id: "library", label: "Resource Library", sub: "Downloadable slide decks & files" },
