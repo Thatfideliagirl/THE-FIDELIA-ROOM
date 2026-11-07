@@ -28,7 +28,12 @@ export function buildSubmissionItems(student, tasks, courses) {
       const mod = course?.modules.find((m) => m.id === q.moduleId);
       const isLatest = latest[q.moduleId] === q;
       const folder = !isLatest ? null : q.outcome === "pending" ? "awaiting" : q.outcome === "sent back" ? "rework" : q.outcome === "not passed" ? null : "approved";
-      items.push({ id: `qc-${e.id}-${q.id}`, kind: "quick", student, title: mod?.title || "Quick check", courseId: e.courseId, course: course?.title, at: q.decidedAt || q.submittedAt, status: q.outcome, label: q.outcome === "sent back" ? "sent back" : q.outcome, score: q.score, folder, mod, q, enrollmentId: e.id, awaiting: q.outcome === "pending" && e.pendingReview && e.pendingReview.moduleId === q.moduleId && e.pendingReview.submittedAt === q.submittedAt });
+      items.push({ id: `qc-${e.id}-${q.id}`, kind: "quick", student, title: mod?.title || "Quick check", courseId: e.courseId, course: course?.title, at: q.decidedAt || q.submittedAt, status: q.outcome, label: q.outcome === "sent back" ? "sent back" : q.outcome,
+        // Quick checks aren't graded by hand. The only number is the computer's keyword match against the marking guide (0% when
+        // there's no guide or no matching words) -- a hint for the admin, never a score. A real score exists only when the
+        // module grades itself ("passed" / "not passed").
+        score: q.outcome === "passed" || q.outcome === "not passed" ? q.score : null,
+        autoCheck: typeof q.score === "number" && q.outcome !== "passed" && q.outcome !== "not passed" ? q.score : null, folder, mod, q, enrollmentId: e.id, awaiting: q.outcome === "pending" && e.pendingReview && e.pendingReview.moduleId === q.moduleId && e.pendingReview.submittedAt === q.submittedAt });
     });
   });
   return items.sort((a, b) => b.at - a.at);
