@@ -893,6 +893,20 @@ export function TaskDetailStudent({ task, student, allStudents, setTasks, onBack
     }));
     setResubmitDrafts((p) => ({ ...p, [i]: "" }));
   }
+  // A written answer sent back with a note: the student rewrites it and it
+  // goes back for review. The earlier answer and the note are kept on
+  // `history` so neither side loses what was said before.
+  function resubmitWritten() {
+    const text = (resubmitDrafts.note || "").trim();
+    if (!text) return;
+    setTasks((prev) => prev.map((t) => {
+      if (t.id !== task.id) return t;
+      const p0 = t.submissions[student.id];
+      return { ...t, submissions: { ...t.submissions, [student.id]: { ...p0, status: "in review", note: text, score: null, round: (p0.round || 0) + 1, history: [...(p0.history || []), { note: p0.note, submittedAt: p0.submittedAt, feedback: p0.comment }], submittedAt: Date.now(), lastActivityAt: Date.now() } } };
+    }));
+    setResubmitDrafts((p) => ({ ...p, note: "" }));
+    notifyAdminTaskSubmitted({ studentName: student.name, taskTitle: task.title, courseName });
+  }
   const allLinksValid = hasLinks && task.requiredLinks.every((r, i) => {
     const type = LINK_TYPES.find((t) => t.key === r.type);
     return type && type.test(links[i] || "");
@@ -949,7 +963,19 @@ export function TaskDetailStudent({ task, student, allStudents, setTasks, onBack
                 );
                 return <a key={i} href={url} target="_blank" rel="noreferrer" className="text-[13.5px] accent-text flex items-center gap-1.5" style={{ fontWeight: 700 }}>{r.label || r.type} ↗</a>;
               })}</div>
-            ) : <div className="text-[14px] mt-3" style={{ color: "#4A4237" }}>{sub.note}</div>}
+            ) : (
+              <div className="mt-3">
+                <div className="text-[14px] whitespace-pre-wrap" style={{ color: "#4A4237" }}>{sub.note}</div>
+                {sub.comment && <div className="text-[13px] mt-3 rounded-lg px-3 py-2.5" style={{ background: sub.status === "waiting on student" ? "#FBEAE0" : "#FFFFFF", color: "#4A4237" }}><strong>Note from Fidelia:</strong> "{sub.comment}"</div>}
+                {sub.status === "waiting on student" && (
+                  <div className="mt-3">
+                    <div className="text-[13.5px] mb-2" style={{ fontWeight: 700 }}>This needs another try — write your new answer below.</div>
+                    <textarea className="input-field rounded-lg px-3 py-2.5 text-[14px] w-full" rows={4} placeholder="Your new answer…" value={resubmitDrafts.note || ""} onChange={(e) => setResubmitDrafts((p) => ({ ...p, note: e.target.value }))} />
+                    <button onClick={resubmitWritten} disabled={!(resubmitDrafts.note || "").trim()} className="btn-primary rounded-lg px-5 py-2.5 text-[13px] mt-2 disabled:opacity-40">Resubmit</button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ) : isPastDeadline ? (
           <div className="rounded-xl p-4 mt-2 flex items-start gap-2.5" style={{ background: "#FBEAE7", color: "#B04A3A" }}>

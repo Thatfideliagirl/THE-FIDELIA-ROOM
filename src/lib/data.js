@@ -249,10 +249,22 @@ export function sumLinkScores(task, sub) {
 export function capstoneStatus(tasks, courseId, studentId) {
   const capstone = tasks.find((t) => t.courseId === courseId && t.isCapstone);
   if (!capstone) return { pct: 100, label: "—", hasCapstone: false, passed: true };
-  const sub = capstone.submissions[studentId];
-  if (!sub) return { pct: 0, label: "Not started", hasCapstone: true, passed: false };
-  if (sub.status === "approved") { const score = sub.score ?? 100; return { pct: score, label: `${score}%`, hasCapstone: true, passed: score >= 80 }; }
-  return { pct: sub.score ?? 50, label: sub.score != null ? `${sub.score}% so far` : "In review", hasCapstone: true, passed: false };
+  const current = (() => {
+    const sub = capstone.submissions[studentId];
+    if (!sub) return { pct: 0, label: "Not started", hasCapstone: true, passed: false };
+    if (sub.status === "approved") { const score = sub.score ?? 100; return { pct: score, label: `${score}%`, hasCapstone: true, passed: score >= 80 }; }
+    return { pct: sub.score ?? 50, label: sub.score != null ? `${sub.score}% so far` : "In review", hasCapstone: true, passed: false };
+  })();
+  if (current.passed) return current;
+  // Replacing a course's capstone must not wipe out students who already
+  // passed the old one -- a pass on any earlier capstone for this course
+  // still counts. (Their old scores were never deleted, only no longer
+  // looked at.)
+  const earlier = tasks.filter((t) => t.courseId === courseId && t.formerCapstone && !t.isCapstone)
+    .map((t) => t.submissions[studentId]).filter((sub) => sub?.status === "approved" && (sub.score ?? 100) >= 80)
+    .sort((a, b) => (b.score ?? 100) - (a.score ?? 100))[0];
+  if (earlier) { const score = earlier.score ?? 100; return { pct: score, label: `${score}% (earlier capstone)`, hasCapstone: true, passed: true }; }
+  return current;
 }
 
 // Shared by the gradebook, the certificates screen and the student's own

@@ -889,7 +889,10 @@ function SubmissionRow({ it, open, onToggle, showStudent, actions }) {
                     {g?.decision && <div className="text-[12px] mt-1" style={{ color: submissionStatusColor(g.decision === "approved" ? "approved" : "sent back") }}>{g.decision === "approved" ? `Approved${g.score != null ? ` · ${g.score}%` : ""}` : "Sent back for resubmission"}{g.feedback ? ` — ${g.feedback}` : ""}</div>}
                   </div>
                 );
-              }) : <div className="text-[14px] rounded-lg px-3 py-2.5 whitespace-pre-wrap" style={{ background: "#fff", border: "1px solid #E7DEC9" }}>{it.sub.note || "No written answer."}</div>}
+              }) : <>
+                {(it.sub.history || []).map((h, i) => <div key={i} className="text-[13px] rounded-lg px-3 py-2.5 whitespace-pre-wrap" style={{ background: "#F0E7D6", color: "#71675A" }}><div className="f-label text-[10px] mb-1">EARLIER ANSWER</div>{h.note}{h.feedback && <div className="mt-1.5" style={{ color: "#B2572B" }}>You said: {h.feedback}</div>}</div>)}
+                <div className="text-[14px] rounded-lg px-3 py-2.5 whitespace-pre-wrap" style={{ background: "#fff", border: "1px solid #E7DEC9" }}>{it.sub.note || "No written answer."}</div>
+              </>}
               {it.sub.comment && <div className="text-[13px]" style={{ color: "#4A4237" }}><strong>Your comment:</strong> {it.sub.comment}</div>}
             </>
           )}
@@ -1259,6 +1262,7 @@ export function TaskForm({ students, courses, cohorts, initial, onSave, onClose 
 }
 export function SubmissionDetail({ sid, student, sub, task, onGrade, onGradeLinks, onClose }) {
   const [score, setScore] = useState(sub?.score || 100);
+  const [noteFeedback, setNoteFeedback] = useState(sub?.comment || "");
   const links = sub?.links || {};
   const hasLinks = task?.requiredLinks?.length > 0;
   const maxShare = hasLinks ? linkShare(task.requiredLinks.length) : 0;
@@ -1323,8 +1327,10 @@ export function SubmissionDetail({ sid, student, sub, task, onGrade, onGradeLink
       </div>
     ) : (
       <>
-        <div className="text-[14px] mb-4" style={{ color: "#4A4237" }}>{sub.note}</div>
-        <div className="flex items-center gap-3"><Field label="Score (%)" type="number" value={score} onChange={(e) => setScore(e.target.value)} /><button onClick={() => onGrade(sid, "approved", Number(score))} className="btn-primary rounded-lg px-5 py-2.5 text-[13px] shrink-0 mt-6">Mark reviewed</button></div>
+        {(sub.history || []).map((h, i) => <div key={i} className="rounded-lg px-3 py-2.5 mb-2 text-[13px]" style={{ background: "#F0E7D6", color: "#71675A" }}><div className="f-label text-[10px] mb-1">EARLIER ANSWER</div>{h.note}{h.feedback && <div className="mt-1.5" style={{ color: "#B2572B" }}>You said: {h.feedback}</div>}</div>)}
+        <div className="text-[14px] mb-4 whitespace-pre-wrap" style={{ color: "#4A4237" }}>{sub.note}</div>
+        <label className="block mb-3"><div className="f-label text-[11px] mb-1.5" style={{ color: "#71675A" }}>Note to {student?.name?.split(" ")[0]} (optional when approving; say what to fix when sending back)</div><textarea className="input-field rounded-lg px-3 py-2 text-[13px] w-full" rows={2} value={noteFeedback} onChange={(e) => setNoteFeedback(e.target.value)} /></label>
+        <div className="flex items-end gap-3 flex-wrap"><Field label="Score (%)" type="number" value={score} onChange={(e) => setScore(e.target.value)} /><button onClick={() => onGrade(sid, "approved", Number(score), noteFeedback)} className="btn-primary rounded-lg px-5 py-2.5 text-[13px] shrink-0 mb-[2px]">Mark reviewed</button><button onClick={() => onGrade(sid, "waiting on student", null, noteFeedback)} className="rounded-lg px-5 py-2.5 text-[13px] shrink-0 mb-[2px]" style={{ color: "#B2572B", border: "1px solid #E7C9B8", fontWeight: 600 }}>Send back</button></div>
       </>
     )}
   </div>;
@@ -1346,7 +1352,10 @@ function formatTaskDeadline(data) {
 }
 function applyCapstoneExclusivity(prev, taskId, courseId, isCapstone) {
   if (!isCapstone) return prev;
-  return prev.map((t) => (t.id !== taskId && t.courseId === courseId && t.isCapstone) ? { ...t, isCapstone: false } : t);
+  // The replaced one is remembered as a former capstone (not just un-ticked)
+  // so students who passed it don't silently lose that pass -- see
+  // capstoneStatus in data.js.
+  return prev.map((t) => (t.id !== taskId && t.courseId === courseId && t.isCapstone) ? { ...t, isCapstone: false, formerCapstone: true } : t);
 }
 const SUBMISSION_FILTERS = [
   { key: "all", label: "All" },
@@ -1358,8 +1367,12 @@ const SUBMISSION_FILTERS = [
 export function TaskDetail({ task, setTasks, students, courses, cohorts, onClose, onDelete }) {
   const [editing, setEditing] = useState(false); const [viewingSub, setViewingSub] = useState(null);
   const [filter, setFilter] = useState("all");
-  function grade(sid, status, score) {
-    setTasks((prev) => prev.map((t) => t.id !== task.id ? t : { ...t, submissions: { ...t.submissions, [sid]: { ...t.submissions[sid], status, score, lastActivityAt: Date.now() } } }));
+  // For a written (no-links) task: approve with a score, or send it back
+  // with a note. The round goes up each time so the student's bell treats
+  // every decision as new, and notifiedRound matches because this button
+  // always notifies.
+  function grade(sid, status, score, feedback) {
+    setTasks((prev) => prev.map((t) => { if (t.id !== task.id) return t; const prevSub = t.submissions[sid]; const round = (prevSub.round || 0) + 1; return { ...t, submissions: { ...t.submissions, [sid]: { ...prevSub, status, score, comment: feedback ?? prevSub.comment, round, notifiedRound: round, lastActivityAt: Date.now() } } }; }));
     setViewingSub(null);
     const s = students.find((x) => x.id === sid);
     const course = courses.find((c) => c.id === task.courseId);
@@ -1400,7 +1413,7 @@ export function TaskDetail({ task, setTasks, students, courses, cohorts, onClose
     // this, someone already reminded for the old date never gets reminded
     // again even once the new date re-enters the reminder window.
     const deadlineMoved = data.deadlineAt !== task.deadlineAt;
-    setTasks((prev) => applyCapstoneExclusivity(prev, task.id, data.courseId, data.isCapstone).map((t) => t.id !== task.id ? t : { ...t, ...data, remindedIds: deadlineMoved ? [] : t.remindedIds }));
+    setTasks((prev) => applyCapstoneExclusivity(prev, task.id, data.courseId, data.isCapstone).map((t) => t.id !== task.id ? t : { ...t, ...data, remindedIds: deadlineMoved ? [] : t.remindedIds, ...(t.isCapstone && !data.isCapstone ? { formerCapstone: true } : {}) }));
     setEditing(false);
     newlyAssigned.forEach((sid) => {
       const s = students.find((x) => x.id === sid);
