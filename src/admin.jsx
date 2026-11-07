@@ -832,7 +832,7 @@ function buildSubmissionItems(student, tasks, courses) {
     if (!sub) return;
     const status = deriveSubmissionStatus(t, sub);
     const folder = status === "approved" ? "approved" : status === "waiting on student" ? "rework" : "awaiting";
-    items.push({ id: `task-${t.id}-${student.id}`, kind: "task", student, title: t.title, courseId: t.courseId, course: courses.find((c) => c.id === t.courseId)?.title, at: sub.lastActivityAt || sub.submittedAt || 0, status, label: status, score: sub.score, folder, task: t, sub });
+    items.push({ id: `task-${t.id}-${student.id}`, kind: "task", student, title: t.title, courseId: t.courseId, course: courses.find((c) => c.id === t.courseId)?.title, at: sub.lastActivityAt || sub.submittedAt || 0, status, label: status, score: sub.score, folder, task: t, sub, isCapstone: !!t.isCapstone, formerCapstone: !!t.formerCapstone && !t.isCapstone });
   });
   student.enrollments.forEach((e) => {
     const course = courses.find((c) => c.id === e.courseId);
@@ -852,53 +852,64 @@ function buildSubmissionItems(student, tasks, courses) {
   return items.sort((a, b) => b.at - a.at);
 }
 const submissionStatusColor = (st) => st === "approved" || st === "passed" ? "#2F7D4F" : st === "sent back" || st === "not passed" || st === "waiting on student" ? "#B2572B" : "#71675A";
-// One expandable row. `actions` is whatever the screen wants to offer next to
-// the answer (Approve / Send back, Open task...); showStudent is for the
-// all-students inbox, where the name matters.
-function SubmissionRow({ it, open, onToggle, showStudent, actions }) {
+// The answer itself, shared by the per-student list (as a dropdown) and the
+// full-page view in the Submissions inbox.
+function SubmissionBody({ it }) {
+  if (it.kind === "quick") {
+    return it.mod ? <>{normalizeQuestions(it.mod).map((qn, qi) => (
+      <div key={qn.id || qi}>
+        {qn.prompt && <RichText html={qn.prompt} className="rich-content text-[12px] mb-1.5" style={{ color: "#71675A" }} />}
+        <RichText html={(it.q.proofs || [])[qi] || ""} className="rich-content text-[14px] rounded-lg px-3 py-2.5" style={{ background: "#fff", border: "1px solid #E7DEC9" }} />
+      </div>
+    ))}</> : <div className="text-[13px]" style={{ color: "#A79B84" }}>This module no longer exists, so the questions can't be shown.</div>;
+  }
+  return (
+    <>
+      {it.task.requiredLinks?.length > 0 ? it.task.requiredLinks.map((r, i) => {
+        const url = it.sub.links?.[i], g = it.sub.linkGrades?.[i];
+        return (
+          <div key={i} className="rounded-lg px-3 py-2.5" style={{ background: "#fff", border: "1px solid #E7DEC9" }}>
+            <div className="text-[13px]" style={{ fontWeight: 700 }}>{r.label || r.type}</div>
+            {url ? <a href={url} target="_blank" rel="noreferrer" className="text-[12.5px] accent-text break-all">{url} ↗</a> : <span className="text-[12.5px]" style={{ color: "#A79B84" }}>Not submitted</span>}
+            {g?.decision && <div className="text-[12px] mt-1" style={{ color: submissionStatusColor(g.decision === "approved" ? "approved" : "sent back") }}>{g.decision === "approved" ? `Approved${g.score != null ? ` · ${g.score}%` : ""}` : "Sent back for resubmission"}{g.feedback ? ` — ${g.feedback}` : ""}</div>}
+          </div>
+        );
+      }) : <>
+        {(it.sub.history || []).map((h, i) => <div key={i} className="text-[13px] rounded-lg px-3 py-2.5 whitespace-pre-wrap" style={{ background: "#F0E7D6", color: "#71675A" }}><div className="f-label text-[10px] mb-1">EARLIER ANSWER</div>{h.note}{h.feedback && <div className="mt-1.5" style={{ color: "#B2572B" }}>You said: {h.feedback}</div>}</div>)}
+        <div className="text-[14px] rounded-lg px-3 py-2.5 whitespace-pre-wrap" style={{ background: "#fff", border: "1px solid #E7DEC9" }}>{it.sub.note || "No written answer."}</div>
+      </>}
+      {it.sub.comment && <div className="text-[13px]" style={{ color: "#4A4237" }}><strong>Your comment:</strong> {it.sub.comment}</div>}
+    </>
+  );
+}
+function SubmissionBadges({ it }) {
+  return <>
+    <span className="f-code text-[9px] px-2 py-0.5 rounded-full tint-badge" style={{ fontWeight: 700 }}>{it.kind === "task" ? "TASK" : "QUICK CHECK"}</span>
+    {it.isCapstone && <span className="f-code text-[9px] px-2 py-0.5 rounded-full" style={{ background: "#F3E7C9", color: "#8A6A1F", fontWeight: 700 }}>CAPSTONE</span>}
+    {it.formerCapstone && <span className="f-code text-[9px] px-2 py-0.5 rounded-full" style={{ background: "#F0E7D6", color: "#71675A", fontWeight: 700 }}>FORMER CAPSTONE</span>}
+  </>;
+}
+// A row. With `onToggle`/`open` it expands in place (the per-student list);
+// with `onOpen` it's a plain button that opens the full page (the inbox), so
+// reading one submission never pushes the rest of the list down.
+function SubmissionRow({ it, open, onToggle, onOpen, showStudent }) {
+  const head = (
+    <>
+      <div className="min-w-0">
+        <div className="flex items-center gap-2 flex-wrap"><SubmissionBadges it={it} />{showStudent && <span className="text-[14px]" style={{ fontWeight: 700 }}>{it.student.name}</span>}<span className="text-[14px]" style={{ fontWeight: showStudent ? 500 : 700, color: showStudent ? "#4A4237" : undefined }}>{showStudent ? `· ${it.title}` : it.title}</span></div>
+        <div className="text-[11.5px] mt-0.5" style={{ color: "#A79B84" }}>{it.course}{it.at ? ` · ${formatDateTime(it.at)}` : ""}{it.folder == null && it.kind === "quick" ? " · earlier attempt" : ""}</div>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <span className="f-code text-[10px]" style={{ color: submissionStatusColor(it.status), fontWeight: 700 }}>{(it.label || "").toUpperCase()}</span>
+        {it.score != null && <span className="f-code text-[11px]" style={{ fontWeight: 700 }}>{it.score}%</span>}
+        {onOpen ? <ChevronRight size={15} color="#A79B84" /> : <ChevronDown size={15} color="#A79B84" style={{ transform: open ? "rotate(180deg)" : "none" }} />}
+      </div>
+    </>
+  );
   return (
     <div className="rounded-lg" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
-      <button onClick={onToggle} className="w-full text-left px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 flex-wrap"><span className="f-code text-[9px] px-2 py-0.5 rounded-full tint-badge" style={{ fontWeight: 700 }}>{it.kind === "task" ? "TASK" : "QUICK CHECK"}</span>{showStudent && <span className="text-[14px]" style={{ fontWeight: 700 }}>{it.student.name}</span>}<span className="text-[14px]" style={{ fontWeight: showStudent ? 500 : 700, color: showStudent ? "#4A4237" : undefined }}>{showStudent ? `· ${it.title}` : it.title}</span></div>
-          <div className="text-[11.5px] mt-0.5" style={{ color: "#A79B84" }}>{it.course}{it.at ? ` · ${formatDateTime(it.at)}` : ""}{it.folder == null && it.kind === "quick" ? " · earlier attempt" : ""}</div>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="f-code text-[10px]" style={{ color: submissionStatusColor(it.status), fontWeight: 700 }}>{(it.label || "").toUpperCase()}</span>
-          {it.score != null && <span className="f-code text-[11px]" style={{ fontWeight: 700 }}>{it.score}%</span>}
-          <ChevronDown size={15} color="#A79B84" style={{ transform: open ? "rotate(180deg)" : "none" }} />
-        </div>
-      </button>
-      {open && (
-        <div className="px-4 pb-4 pt-3 flex flex-col gap-3" style={{ borderTop: "1px dashed #E7DEC9" }}>
-          {it.kind === "quick" ? (
-            it.mod ? normalizeQuestions(it.mod).map((qn, qi) => (
-              <div key={qn.id || qi}>
-                {qn.prompt && <RichText html={qn.prompt} className="rich-content text-[12px] mb-1.5" style={{ color: "#71675A" }} />}
-                <RichText html={(it.q.proofs || [])[qi] || ""} className="rich-content text-[14px] rounded-lg px-3 py-2.5" style={{ background: "#fff", border: "1px solid #E7DEC9" }} />
-              </div>
-            )) : <div className="text-[13px]" style={{ color: "#A79B84" }}>This module no longer exists, so the questions can't be shown.</div>
-          ) : (
-            <>
-              {it.task.requiredLinks?.length > 0 ? it.task.requiredLinks.map((r, i) => {
-                const url = it.sub.links?.[i], g = it.sub.linkGrades?.[i];
-                return (
-                  <div key={i} className="rounded-lg px-3 py-2.5" style={{ background: "#fff", border: "1px solid #E7DEC9" }}>
-                    <div className="text-[13px]" style={{ fontWeight: 700 }}>{r.label || r.type}</div>
-                    {url ? <a href={url} target="_blank" rel="noreferrer" className="text-[12.5px] accent-text break-all">{url} ↗</a> : <span className="text-[12.5px]" style={{ color: "#A79B84" }}>Not submitted</span>}
-                    {g?.decision && <div className="text-[12px] mt-1" style={{ color: submissionStatusColor(g.decision === "approved" ? "approved" : "sent back") }}>{g.decision === "approved" ? `Approved${g.score != null ? ` · ${g.score}%` : ""}` : "Sent back for resubmission"}{g.feedback ? ` — ${g.feedback}` : ""}</div>}
-                  </div>
-                );
-              }) : <>
-                {(it.sub.history || []).map((h, i) => <div key={i} className="text-[13px] rounded-lg px-3 py-2.5 whitespace-pre-wrap" style={{ background: "#F0E7D6", color: "#71675A" }}><div className="f-label text-[10px] mb-1">EARLIER ANSWER</div>{h.note}{h.feedback && <div className="mt-1.5" style={{ color: "#B2572B" }}>You said: {h.feedback}</div>}</div>)}
-                <div className="text-[14px] rounded-lg px-3 py-2.5 whitespace-pre-wrap" style={{ background: "#fff", border: "1px solid #E7DEC9" }}>{it.sub.note || "No written answer."}</div>
-              </>}
-              {it.sub.comment && <div className="text-[13px]" style={{ color: "#4A4237" }}><strong>Your comment:</strong> {it.sub.comment}</div>}
-            </>
-          )}
-          {actions}
-        </div>
-      )}
+      <button onClick={onOpen || onToggle} className="w-full text-left px-4 py-3 flex items-center justify-between gap-3 flex-wrap">{head}</button>
+      {open && !onOpen && <div className="px-4 pb-4 pt-3 flex flex-col gap-3" style={{ borderTop: "1px dashed #E7DEC9" }}><SubmissionBody it={it} /></div>}
     </div>
   );
 }
@@ -924,7 +935,9 @@ function StudentSubmissions({ student, tasks, courses }) {
 // The inbox: every student's submissions in one place, sorted into folders by
 // where they stand. Nothing here is stored -- the folder is worked out from
 // the submission's status each time, so grading or a resubmission moves a row
-// from one folder to another on its own.
+// from one folder to another on its own. Clicking a row opens that one
+// submission as its own page (with a Back button) rather than dropping down
+// inside the list.
 export function SubmissionsTab({ students, setStudents, tasks, courses, cohorts = [], onOpenTask }) {
   const [folder, setFolder] = useState("awaiting");
   const [openId, setOpenId] = useState(null);
@@ -932,27 +945,57 @@ export function SubmissionsTab({ students, setStudents, tasks, courses, cohorts 
   // "all" = everyone, "none" = students who aren't in any cohort, else a cohort id.
   const [cohortId, setCohortId] = useState("all");
   const [courseId, setCourseId] = useState("all");
+  const [kind, setKind] = useState("all");
   // A cohort only offers its own courses; anyone in no cohort could be in
   // any course, so "no cohort" and "all" list them all.
   const activeCohort = cohorts.find((c) => c.id === cohortId);
   const courseOptions = activeCohort ? courses.filter((c) => (activeCohort.courseIds || []).includes(c.id)) : courses;
   const courseValid = courseId === "all" || courseOptions.some((c) => c.id === courseId);
   const effectiveCourse = courseValid ? courseId : "all";
+  const everything = students.flatMap((s) => buildSubmissionItems(s, tasks, courses));
   const all = students
     .filter((s) => cohortId === "all" || (cohortId === "none" ? !s.cohortId : s.cohortId === cohortId))
     .flatMap((s) => buildSubmissionItems(s, tasks, courses))
     .filter((i) => effectiveCourse === "all" || i.courseId === effectiveCourse)
+    .filter((i) => kind === "all" || i.kind === kind)
     .sort((a, b) => b.at - a.at);
   const inFolder = (f) => all.filter((i) => f === "all" || i.folder === f);
   const folders = [{ key: "awaiting", label: "Awaiting review" }, { key: "rework", label: "Needs rework" }, { key: "approved", label: "Approved" }, { key: "all", label: "All" }];
   const needle = q.trim().toLowerCase();
   const shown = inFolder(folder).filter((i) => !needle || i.student.name.toLowerCase().includes(needle) || (i.title || "").toLowerCase().includes(needle));
   const empty = { awaiting: "Nothing waiting for you — you're all caught up.", rework: "Nothing is out with a student for rework.", approved: "Nothing approved yet.", all: "No submissions yet." };
+
+  const open = openId ? everything.find((i) => i.id === openId) : null;
+  if (open) {
+    const cohortName = cohorts.find((c) => c.id === open.student.cohortId)?.name;
+    const decide = (approve) => { decideQuickCheck({ student: open.student, enrollmentId: open.enrollmentId, approve, courses, setStudents }); setOpenId(null); };
+    return (
+      <div className="max-w-[760px]">
+        <button onClick={() => setOpenId(null)} className="flex items-center gap-1.5 text-[13px] mb-6" style={{ color: "#71675A" }}><ArrowLeft size={14} /> Back to submissions</button>
+        <div className="card rounded-2xl p-7">
+          <div className="flex items-center gap-2 flex-wrap mb-2"><SubmissionBadges it={open} /></div>
+          <div className="f-display text-[24px]" style={{ fontWeight: 800 }}>{open.student.name}</div>
+          <div className="text-[15px] mt-1" style={{ fontWeight: 600 }}>{open.title}</div>
+          <div className="text-[12.5px] mt-1 mb-5" style={{ color: "#71675A" }}>{[open.course, cohortName, open.at ? formatDateTime(open.at) : null].filter(Boolean).join(" · ")}</div>
+          <div className="flex items-center gap-2 mb-5"><span className="f-code text-[11px] px-2.5 py-1 rounded-full" style={{ background: "#F0E7D6", color: submissionStatusColor(open.status), fontWeight: 700 }}>{(open.label || "").toUpperCase()}</span>{open.score != null && <span className="f-code text-[12px]" style={{ fontWeight: 700 }}>{open.score}%</span>}{open.folder == null && open.kind === "quick" && <span className="text-[12px]" style={{ color: "#A79B84" }}>earlier attempt</span>}</div>
+          <div className="flex flex-col gap-3 mb-6"><SubmissionBody it={open} /></div>
+          {open.kind === "quick" && open.awaiting && (
+            <div className="flex items-center gap-3 pt-5" style={{ borderTop: "1px solid #F0E7D6" }}><button onClick={() => decide(true)} className="btn-primary rounded-lg px-5 py-2.5 text-[13px]">Approve — unlock next module</button><button onClick={() => decide(false)} className="text-[13px]" style={{ color: "#B04A3A" }}>Send back</button></div>
+          )}
+          {open.kind === "task" && (
+            <div className="pt-5" style={{ borderTop: "1px solid #F0E7D6" }}><button onClick={() => onOpenTask(open.task.id)} className="btn-soft rounded-lg px-5 py-2.5 text-[13px]" style={{ fontWeight: 700 }}>{open.folder === "awaiting" ? "Open task to grade" : "Open task to review or change the grade"}</button></div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <SectionHeader eyebrow="REVIEW" title="Submissions" />
       <div className="flex items-center gap-2 flex-wrap mb-3">
         <span className="f-label text-[11px]" style={{ color: "#A79B84" }}>SHOW</span>
+        <SelectF value={kind} onChange={(e) => setKind(e.target.value)} options={[{ value: "all", label: "Tasks & quick checks" }, { value: "task", label: "Tasks only" }, { value: "quick", label: "Quick checks only" }]} />
         <SelectF value={cohortId} onChange={(e) => { setCohortId(e.target.value); setCourseId("all"); }} options={[{ value: "all", label: "All cohorts" }, ...cohorts.map((c) => ({ value: c.id, label: c.name })), { value: "none", label: "No cohort" }]} />
         <SelectF value={effectiveCourse} onChange={(e) => setCourseId(e.target.value)} options={[{ value: "all", label: "All courses" }, ...courseOptions.map((c) => ({ value: c.id, label: c.title }))]} />
       </div>
@@ -961,15 +1004,7 @@ export function SubmissionsTab({ students, setStudents, tasks, courses, cohorts 
         <input className="input-field rounded-full px-4 py-2 text-[13px] ml-auto" style={{ width: 200, maxWidth: "100%" }} placeholder="Search student or title" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
       {shown.length === 0 && <div className="card rounded-2xl p-8 text-center text-[14px]" style={{ color: "#A79B84" }}>{needle ? "No matches." : empty[folder]}</div>}
-      <div className="flex flex-col gap-2">{shown.map((it) => (
-        <SubmissionRow key={it.id} it={it} showStudent open={openId === it.id} onToggle={() => setOpenId(openId === it.id ? null : it.id)} actions={
-          it.kind === "quick" && it.awaiting ? (
-            <div className="flex items-center gap-3"><button onClick={() => decideQuickCheck({ student: it.student, enrollmentId: it.enrollmentId, approve: true, courses, setStudents })} className="btn-primary rounded-lg px-4 py-2 text-[12px]">Approve — unlock next module</button><button onClick={() => decideQuickCheck({ student: it.student, enrollmentId: it.enrollmentId, approve: false, courses, setStudents })} className="text-[12px]" style={{ color: "#B04A3A" }}>Send back</button></div>
-          ) : it.kind === "task" ? (
-            <div><button onClick={() => onOpenTask(it.task.id)} className="btn-soft rounded-lg px-4 py-2 text-[12px]" style={{ fontWeight: 700 }}>{it.folder === "awaiting" ? "Open task to grade" : "Open task to review or change the grade"}</button></div>
-          ) : null
-        } />
-      ))}</div>
+      <div className="flex flex-col gap-2">{shown.map((it) => <SubmissionRow key={it.id} it={it} showStudent onOpen={() => setOpenId(it.id)} />)}</div>
     </>
   );
 }
