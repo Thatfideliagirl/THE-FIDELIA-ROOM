@@ -1057,8 +1057,53 @@ export function TestimonialsPage({ testimonials, brand, onBack }) {
   );
 }
 // Shown when a student clicks "View" on a resource — full details before deciding to download.
+// An uploaded HTML file shown as a real, working web page. The storage bucket
+// won't serve an .html file as a page (it hands it back as plain text, which is
+// a deliberate safety rule), so the file is fetched and run inside a
+// sandboxed frame instead. The sandbox leaves out "allow-same-origin", so the
+// page runs as a stranger to FJ Room: its scripts work (buttons, copy, tabs)
+// but it can't read the site's logins, storage or anything else.
+function InteractivePageViewer({ resource, onClose }) {
+  const [html, setHtml] = useState(null);
+  const [error, setError] = useState(false);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    setHtml(null); setError(false);
+    fetch(resource.file?.dataUrl || "")
+      .then((r) => { if (!r.ok) throw new Error("bad response"); return r.text(); })
+      .then((t) => { if (!cancelled) setHtml(t); })
+      .catch((e) => { console.error("interactive page failed to load", e); if (!cancelled) setError(true); });
+    return () => { cancelled = true; };
+  }, [resource.file?.dataUrl]);
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  function copyLink() {
+    navigator.clipboard?.writeText(`${window.location.origin}/?r=${resource.id}`).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }).catch(() => {});
+  }
+  return (
+    <div className="fixed inset-0 flex flex-col" style={{ background: "#FAF6EC", zIndex: 999 }}>
+      <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 shrink-0" style={{ background: "#FFFDF6", borderBottom: "1px solid #E7DEC9" }}>
+        <div className="min-w-0"><div className="text-[15px] truncate" style={{ fontWeight: 700 }}>{resource.title}</div><div className="f-code text-[10px]" style={{ color: "#A79B84" }}>FJ ROOM · FREE RESOURCE</div></div>
+        <div className="flex items-center gap-2 shrink-0">
+          {resource.isPublic && <button onClick={copyLink} className="btn-soft rounded-full px-4 py-2 text-[12px]" style={{ fontWeight: 700 }}>{copied ? "Link copied!" : "Copy link"}</button>}
+          <button onClick={onClose} aria-label="Close" className="rounded-full flex items-center justify-center" style={{ width: 40, height: 40, background: "#F0E7D6" }}><X size={18} color="#4A4237" /></button>
+        </div>
+      </div>
+      <div className="flex-1 min-h-0 relative">
+        {html == null && !error && <div className="absolute inset-0 flex items-center justify-center text-[14px]" style={{ color: "#A79B84" }}>Opening…</div>}
+        {error && <div className="absolute inset-0 flex items-center justify-center text-center px-6 text-[14px]" style={{ color: "#B04A3A" }}>This page couldn't be opened right now. Please check your connection and try again.</div>}
+        {html != null && <iframe title={resource.title} srcDoc={html} sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-downloads" allow="clipboard-write" style={{ width: "100%", height: "100%", border: "none", background: "#fff", display: "block" }} />}
+      </div>
+    </div>
+  );
+}
 export function ResourceDetail({ resource, onClose, onBrowseMore }) {
   const [copied, setCopied] = useState(false);
+  if (resource.kind === "page" && resource.file) return <InteractivePageViewer resource={resource} onClose={onClose} />;
   function copyLink() {
     const link = `${window.location.origin}/?r=${resource.id}`;
     navigator.clipboard?.writeText(link).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });

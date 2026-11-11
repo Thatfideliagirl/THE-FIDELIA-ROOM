@@ -1477,13 +1477,13 @@ export function ResourceForm({ courses, folders = [], cohorts = [], initial, onS
   const isPublic = category === "free";
   const folder = folderChoice === "__new__" ? newFolderName.trim() : folderChoice;
   const needsRealCohort = category === "module" && visibility === "cohort";
-  const canSave = folder && title && (kind === "file" ? file : url) && (!needsRealCohort || cohortId !== "all");
+  const canSave = folder && title && (kind === "link" ? url : file) && (!needsRealCohort || cohortId !== "all");
   async function submit() {
     // Silently doing nothing when a required field was empty (no error, no
     // "saving" state) looked exactly like a successful save that just
     // didn't stick -- there was nothing here to tell you otherwise.
     if (!canSave) {
-      setError(!folder ? "Folder name is required." : !title ? "Resource title is required." : needsRealCohort && cohortId === "all" ? "Pick which cohort this is for." : kind === "file" ? "Please upload a file." : "Please add a link.");
+      setError(!folder ? "Folder name is required." : !title ? "Resource title is required." : needsRealCohort && cohortId === "all" ? "Pick which cohort this is for." : kind === "page" ? "Please upload the HTML file." : kind === "file" ? "Please upload a file." : "Please add a link.");
       return;
     }
     setSaving(true); setError("");
@@ -1507,9 +1507,9 @@ export function ResourceForm({ courses, folders = [], cohorts = [], initial, onS
       {folderChoice === "__new__" && <Field label="New folder name" value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder="e.g. Prompts" />}
       <Field label="Resource title" value={title} onChange={(e) => setTitle(e.target.value)} />
       <TextArea label="Full description (what it's for, who it's for, how it helps) — shown when someone clicks View" value={description} onChange={(e) => setDescription(e.target.value)} rows={4} />
-      <SelectF label="Output" value={kind} onChange={(e) => setKind(e.target.value)} options={[{ value: "link", label: "Link — Download opens the link" }, { value: "file", label: "Uploaded file — Download serves the file" }]} />
-      {kind === "link" ? <Field label="Link" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" /> : <FileField label="File (PDF, slides, image, document)" value={file} onChange={setFile} />}
-      <SelectF label="Format" value={type} onChange={(e) => setType(e.target.value)} options={[{ value: "Doc", label: "Doc" }, { value: "Sheet", label: "Sheet" }, { value: "Slides", label: "Slides" }, { value: "Link", label: "Link" }]} />
+      <SelectF label="Output" value={kind} onChange={(e) => { setKind(e.target.value); if (e.target.value === "page") setType("Page"); else if (type === "Page") setType("Doc"); }} options={[{ value: "link", label: "Link — Download opens the link" }, { value: "file", label: "Uploaded file — Download serves the file" }, { value: "page", label: "Interactive page — upload an HTML file; it opens as a web page" }]} />
+      {kind === "link" ? <Field label="Link" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" /> : kind === "page" ? <><FileField label="HTML file (one .html file with everything inside it)" value={file} onChange={setFile} accept=".html,.htm" /><div className="text-[12px]" style={{ color: "#A79B84", marginTop: -4 }}>Anyone who clicks this resource sees your page open full-screen, working just like a website. Images and styling need to be inside the file (or loaded from the web).</div></> : <FileField label="File (PDF, slides, image, document)" value={file} onChange={setFile} />}
+      <SelectF label="Format" value={type} onChange={(e) => setType(e.target.value)} options={[{ value: "Doc", label: "Doc" }, { value: "Sheet", label: "Sheet" }, { value: "Slides", label: "Slides" }, { value: "Link", label: "Link" }, { value: "Page", label: "Interactive page" }]} />
       {error && <div className="text-[13px]" style={{ color: "#B04A3A" }}>{error}</div>}
       <div className="flex gap-3"><button disabled={saving} onClick={submit} className="btn-primary rounded-lg px-5 py-2.5 text-[14px]">{saving ? "Saving…" : "Save resource"}</button><button onClick={onClose} className="text-[14px]" style={{ color: "#A79B84" }}>Cancel</button></div>
     </div>
