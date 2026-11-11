@@ -1063,7 +1063,7 @@ export function TestimonialsPage({ testimonials, brand, onBack }) {
 // sandboxed frame instead. The sandbox leaves out "allow-same-origin", so the
 // page runs as a stranger to FJ Room: its scripts work (buttons, copy, tabs)
 // but it can't read the site's logins, storage or anything else.
-function InteractivePageViewer({ resource, onClose }) {
+function InteractivePageViewer({ resource, onClose, onBrowseMore }) {
   const [html, setHtml] = useState(null);
   const [error, setError] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -1086,11 +1086,14 @@ function InteractivePageViewer({ resource, onClose }) {
   }
   return (
     <div className="fixed inset-0 flex flex-col" style={{ background: "#FAF6EC", zIndex: 999 }}>
-      <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 shrink-0" style={{ background: "#FFFDF6", borderBottom: "1px solid #E7DEC9" }}>
-        <div className="min-w-0"><div className="text-[15px] truncate" style={{ fontWeight: 700 }}>{resource.title}</div><div className="f-code text-[10px]" style={{ color: "#A79B84" }}>FJ ROOM · FREE RESOURCE</div></div>
+      <div className="flex items-center justify-between gap-3 px-3 sm:px-6 py-3 shrink-0" style={{ background: "#FFFDF6", borderBottom: "1px solid #E7DEC9" }}>
+        <div className="flex items-center gap-3 min-w-0">
+          <button onClick={onClose} aria-label="Back" className="rounded-full flex items-center justify-center shrink-0" style={{ width: 40, height: 40, background: "#F0E7D6" }}><ArrowLeft size={18} color="#4A4237" /></button>
+          <div className="min-w-0"><div className="text-[15px] truncate" style={{ fontWeight: 700 }}>{resource.title}</div><div className="f-code text-[10px]" style={{ color: "#A79B84" }}>FJ ROOM · FREE RESOURCE</div></div>
+        </div>
         <div className="flex items-center gap-2 shrink-0">
-          {resource.isPublic && <button onClick={copyLink} className="btn-soft rounded-full px-4 py-2 text-[12px]" style={{ fontWeight: 700 }}>{copied ? "Link copied!" : "Copy link"}</button>}
-          <button onClick={onClose} aria-label="Close" className="rounded-full flex items-center justify-center" style={{ width: 40, height: 40, background: "#F0E7D6" }}><X size={18} color="#4A4237" /></button>
+          {resource.isPublic && <button onClick={copyLink} className="btn-soft rounded-full px-4 py-2 text-[12px] hidden sm:block" style={{ fontWeight: 700 }}>{copied ? "Link copied!" : "Copy link"}</button>}
+          {onBrowseMore && <button onClick={onBrowseMore} className="btn-primary rounded-full px-4 py-2 text-[12px] flex items-center gap-1.5" style={{ fontWeight: 700 }}>More free resources <ArrowRight size={13} /></button>}
         </div>
       </div>
       <div className="flex-1 min-h-0 relative">
@@ -1103,7 +1106,12 @@ function InteractivePageViewer({ resource, onClose }) {
 }
 export function ResourceDetail({ resource, onClose, onBrowseMore }) {
   const [copied, setCopied] = useState(false);
-  if (resource.kind === "page" && resource.file) return <InteractivePageViewer resource={resource} onClose={onClose} />;
+  // An interactive page gets the same preview card as every other resource
+  // first (title, description, a nudge toward the rest of the site); the page
+  // itself only opens when they choose to.
+  const [pageOpen, setPageOpen] = useState(false);
+  const isPage = resource.kind === "page" && !!resource.file;
+  if (isPage && pageOpen) return <InteractivePageViewer resource={resource} onClose={() => setPageOpen(false)} onBrowseMore={onBrowseMore} />;
   function copyLink() {
     const link = `${window.location.origin}/?r=${resource.id}`;
     navigator.clipboard?.writeText(link).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
@@ -1116,7 +1124,9 @@ export function ResourceDetail({ resource, onClose, onBrowseMore }) {
         <div className="f-label text-[11px] mb-5" style={{ color: "#A79B84" }}>{(resource.type || "RESOURCE").toUpperCase()} · {resource.folder}</div>
         <p className="text-[14px] leading-relaxed mb-7 whitespace-pre-wrap" style={{ color: "#4A4237" }}>{resource.description}</p>
         <div className="flex items-center gap-3 flex-wrap">
-          {resource.kind === "file" && resource.file ? (
+          {isPage ? (
+            <button onClick={() => setPageOpen(true)} className="btn-primary rounded-full px-6 py-3 text-[14px] inline-flex items-center gap-2"><Eye size={15} /> Open it now</button>
+          ) : resource.kind === "file" && resource.file ? (
             <a href={resource.file.dataUrl} download={resource.file.name} className="btn-primary rounded-full px-6 py-3 text-[14px] inline-flex items-center gap-2"><Download size={15} /> Download {resource.file.name}</a>
           ) : (
             <a href={resource.url} target="_blank" rel="noreferrer" className="btn-primary rounded-full px-6 py-3 text-[14px] inline-flex items-center gap-2"><Download size={15} /> Go to link</a>
