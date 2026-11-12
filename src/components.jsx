@@ -13,6 +13,7 @@ import { moduleStatus, formatRelativeTime } from "./lib/data.js";
 import { changePassword } from "./lib/auth.js";
 import { uploadFile } from "./lib/storage.js";
 import { compressImage } from "./lib/imageCompress.js";
+import { getSavedLeadEmail, saveLeadEmail, isValidEmail, recordFreeResourceEmail } from "./lib/leads.js";
 import { renderTestimonialCard } from "./lib/testimonial.js";
 import { useEditor, EditorContent, NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
 import { Node as TiptapNode, Extension as TiptapExtension } from "@tiptap/core";
@@ -1111,6 +1112,33 @@ export function ResourceDetail({ resource, onClose, onBrowseMore }) {
   // itself only opens when they choose to.
   const [pageOpen, setPageOpen] = useState(false);
   const isPage = resource.kind === "page" && !!resource.file;
+  // Free (public) resources ask for an email first -- once per device -- then
+  // open straight away. It never blocks: saving the email is fire-and-forget.
+  const [askEmail, setAskEmail] = useState(false);
+  const [email, setEmail] = useState("");
+  const [emailError, setEmailError] = useState("");
+  function doAction() {
+    if (isPage) { setPageOpen(true); return; }
+    if (resource.kind === "file" && resource.file) {
+      const a = document.createElement("a");
+      a.href = resource.file.dataUrl; a.download = resource.file.name; a.target = "_blank"; a.rel = "noreferrer";
+      document.body.appendChild(a); a.click(); a.remove();
+      return;
+    }
+    window.open(resource.url, "_blank", "noopener");
+  }
+  function start() {
+    const saved = getSavedLeadEmail();
+    if (saved) { recordFreeResourceEmail(saved, resource.title); doAction(); return; }
+    setAskEmail(true);
+  }
+  function submitEmail(e) {
+    e?.preventDefault();
+    if (!isValidEmail(email)) { setEmailError("That email doesn't look right — please check it."); return; }
+    saveLeadEmail(email); recordFreeResourceEmail(email, resource.title);
+    setAskEmail(false); setEmailError("");
+    doAction();
+  }
   if (isPage && pageOpen) return <InteractivePageViewer resource={resource} onClose={() => setPageOpen(false)} onBrowseMore={onBrowseMore} />;
   function copyLink() {
     const link = `${window.location.origin}/?r=${resource.id}`;
@@ -1124,7 +1152,19 @@ export function ResourceDetail({ resource, onClose, onBrowseMore }) {
         <div className="f-label text-[11px] mb-5" style={{ color: "#A79B84" }}>{(resource.type || "RESOURCE").toUpperCase()} · {resource.folder}</div>
         <p className="text-[14px] leading-relaxed mb-7 whitespace-pre-wrap" style={{ color: "#4A4237" }}>{resource.description}</p>
         <div className="flex items-center gap-3 flex-wrap">
-          {isPage ? (
+          {resource.isPublic && askEmail ? (
+            <form onSubmit={submitEmail} noValidate className="w-full">
+              <div className="text-[13.5px] mb-3" style={{ color: "#4A4237" }}>Pop your email in and it's yours straight away. We'll only reach out when there's more free stuff.</div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <label htmlFor="free-resource-email" className="sr-only" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>Your email</label>
+                <input id="free-resource-email" type="email" autoFocus autoComplete="email" inputMode="email" placeholder="you@email.com" value={email} onChange={(e) => { setEmail(e.target.value); setEmailError(""); }} className="input-field rounded-full px-4 py-2.5 flex-1 min-w-0" style={{ fontSize: 16, minWidth: 180 }} />
+                <button type="submit" className="btn-primary rounded-full px-6 py-3 text-[14px] inline-flex items-center gap-2 shrink-0" style={{ fontWeight: 700 }}>{isPage ? <Eye size={15} /> : <Download size={15} />} {isPage ? "Open it now" : resource.kind === "file" ? "Download" : "Go to link"}</button>
+              </div>
+              {emailError && <div className="text-[12.5px] mt-2" style={{ color: "#B04A3A" }}>{emailError}</div>}
+            </form>
+          ) : resource.isPublic ? (
+            <button onClick={start} className="btn-primary rounded-full px-6 py-3 text-[14px] inline-flex items-center gap-2">{isPage ? <Eye size={15} /> : <Download size={15} />} {isPage ? "Open it now" : resource.kind === "file" && resource.file ? `Download ${resource.file.name}` : "Go to link"}</button>
+          ) : isPage ? (
             <button onClick={() => setPageOpen(true)} className="btn-primary rounded-full px-6 py-3 text-[14px] inline-flex items-center gap-2"><Eye size={15} /> Open it now</button>
           ) : resource.kind === "file" && resource.file ? (
             <a href={resource.file.dataUrl} download={resource.file.name} className="btn-primary rounded-full px-6 py-3 text-[14px] inline-flex items-center gap-2"><Download size={15} /> Download {resource.file.name}</a>

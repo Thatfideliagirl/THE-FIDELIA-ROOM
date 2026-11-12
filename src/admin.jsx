@@ -17,6 +17,7 @@ import { fetchTeamMembers, addTeamMember, updateTeamMember, removeTeamMember, fe
 import { sendTaskAssignedEmail, sendTaskDecisionEmail, sendQuickCheckDecisionEmail, sendApplicationReviewedEmail } from "./lib/email.js";
 import { EMAIL_TEMPLATE_KEYS, EMAIL_STARTERS, VAR_LABELS, SAMPLE_VARS, fillTemplate, fillTemplatePlain } from "./lib/emailDefaults.js";
 import { prepareImage } from "./lib/imageCompress.js";
+import { fetchFreeResourceEmails, deleteFreeResourceEmail } from "./lib/leads.js";
 import { buildSubmissionItems, submissionStatusColor, SubmissionBody, SubmissionBadges } from "./submissions.jsx";
 
 // One applicant row, shared by the "pending" and "awaiting payment" queues
@@ -1963,6 +1964,59 @@ export function FaqTab({ faqs, setFaqs }) {
   );
 }
 
+
+// Everyone who left an email to get a free resource. One row per person, no
+// duplicates: coming back again with the same email just raises their
+// "visits" number (each open or download counts as one).
+export function EmailListTab() {
+  const [rows, setRows] = useState(null);
+  const [error, setError] = useState("");
+  const [q, setQ] = useState("");
+  const [confirmEmail, setConfirmEmail] = useState(null);
+  useEffect(() => { fetchFreeResourceEmails().then(setRows).catch((e) => { console.error("fetchFreeResourceEmails failed", e); setError("The email list isn't set up yet. Run the setup file I sent you in Supabase, then reload this page."); }); }, []);
+  const needle = q.trim().toLowerCase();
+  const shown = (rows || []).filter((r) => !needle || r.email.includes(needle) || (r.last_resource || "").toLowerCase().includes(needle));
+  const totalVisits = (rows || []).reduce((n, r) => n + (r.visits || 0), 0);
+  const when = (t) => t ? new Date(t).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : "";
+  function exportCsv() {
+    const csv = [["Email", "Visits", "First seen", "Last seen", "Last resource", "All resources"], ...(rows || []).map((r) => [r.email, r.visits, r.first_seen, r.last_seen, r.last_resource || "", (r.resources || []).join(" | ")])].map((l) => l.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = "fj-room-email-list.csv"; a.click(); URL.revokeObjectURL(a.href);
+  }
+  async function remove(email) {
+    try { await deleteFreeResourceEmail(email); setRows((p) => p.filter((r) => r.email !== email)); } catch (e) { console.error("deleteFreeResourceEmail failed", e); setError("Couldn't remove that email. Try again."); }
+    setConfirmEmail(null);
+  }
+  return (
+    <>
+      <SectionHeader eyebrow="FREE RESOURCES" title="Your Email List" action={rows?.length > 0 && <button onClick={exportCsv} className="btn-soft rounded-full px-5 py-2.5 text-[13px] flex items-center gap-1.5" style={{ fontWeight: 700 }}><Download size={14} /> Download as spreadsheet</button>} />
+      {error && <div className="card rounded-2xl p-6 text-[14px]" style={{ color: "#B04A3A" }}>{error}</div>}
+      {!error && rows == null && <div className="text-[14px]" style={{ color: "#A79B84" }}>Loading…</div>}
+      {rows && (
+        <>
+          <div className="flex items-center gap-3 flex-wrap mb-5">
+            <div className="card rounded-xl px-5 py-3"><div className="f-code text-[10px]" style={{ color: "#A79B84" }}>PEOPLE</div><div className="f-display text-[24px]" style={{ fontWeight: 800 }}>{rows.length}</div></div>
+            <div className="card rounded-xl px-5 py-3"><div className="f-code text-[10px]" style={{ color: "#A79B84" }}>TOTAL VISITS</div><div className="f-display text-[24px]" style={{ fontWeight: 800 }}>{totalVisits}</div></div>
+            <input className="input-field rounded-full px-4 py-2 text-[13px] ml-auto" style={{ width: 240, maxWidth: "100%" }} placeholder="Search email or resource" value={q} onChange={(e) => setQ(e.target.value)} />
+          </div>
+          {shown.length === 0 && <div className="card rounded-2xl p-8 text-center text-[14px]" style={{ color: "#A79B84" }}>{needle ? "No matches." : "No emails yet. They'll appear here as people take your free resources."}</div>}
+          <div className="flex flex-col gap-2">{shown.map((r) => (
+            <div key={r.email} className="card rounded-xl px-5 py-4 flex items-start justify-between gap-4 flex-wrap">
+              <div className="min-w-0" style={{ flex: "1 1 260px" }}>
+                <div className="text-[15px]" style={{ fontWeight: 700, overflowWrap: "anywhere" }}>{r.email}</div>
+                <div className="text-[12px] mt-1" style={{ color: "#71675A" }}>Last took: {r.last_resource || "—"}</div>
+                <div className="text-[11.5px] mt-0.5" style={{ color: "#A79B84" }}>First {when(r.first_seen)} · Last {when(r.last_seen)}</div>
+              </div>
+              <div className="flex items-center gap-4 shrink-0">
+                <div className="text-center"><div className="f-display text-[24px] leading-none" style={{ fontWeight: 800, color: "var(--accent)" }}>{r.visits}</div><div className="f-code text-[9px] mt-1" style={{ color: "#A79B84" }}>{r.visits === 1 ? "VISIT" : "VISITS"}</div></div>
+                {confirmEmail === r.email ? <div className="flex items-center gap-2 text-[12px]"><span style={{ color: "#B04A3A" }}>Remove?</span><button onClick={() => remove(r.email)} className="f-label" style={{ color: "#B04A3A", fontWeight: 700 }}>YES</button><button onClick={() => setConfirmEmail(null)} style={{ color: "#A79B84" }}>No</button></div> : <button onClick={() => setConfirmEmail(r.email)} aria-label={`Remove ${r.email}`}><Trash2 size={15} color="#B04A3A" /></button>}
+              </div>
+            </div>
+          ))}</div>
+        </>
+      )}
+    </>
+  );
+}
 export function AdminChatTab({ students, directThreads, setDirectThreads, notifSeen = [], onMarkSeen }) {
   const [activeId, setActiveId] = useState(null); const [msg, setMsg] = useState("");
   const key = activeId ? pairKey("admin", activeId) : null; const thread = key ? (directThreads[key] || []) : [];
@@ -2490,7 +2544,7 @@ export function AdminDashboard({ courses, setCourses, students, setStudents, onR
     { id: "cohorts", icon: Layers, label: "Cohorts" }, { id: "courses", icon: BookOpen, label: "Courses" },
     { id: "meetings", icon: PlayCircle, label: "Virtual Meetings" },
     { id: "students", icon: Users, label: "Students" }, { id: "gradebook", icon: FileText, label: "Gradebook" },
-    { id: "submissions", icon: Inbox, label: "Submissions" }, { id: "tasks", icon: ListChecks, label: "Tasks" }, { id: "library", icon: Library, label: "Library" },
+    { id: "submissions", icon: Inbox, label: "Submissions" }, { id: "tasks", icon: ListChecks, label: "Tasks" }, { id: "library", icon: Library, label: "Library" }, { id: "emaillist", icon: Mail, label: "Your Email List" },
     { id: "certificates", icon: Award, label: "Certificates" }, { id: "testimonials", icon: Star, label: "Testimonials" },
     { id: "faq", icon: HelpIcon, label: "FAQ" }, { id: "chat", icon: MessageCircle, label: "Chat" },
     { id: "community", icon: Users, label: "Community" }, { id: "notice", icon: Megaphone, label: "Notice Board" },
@@ -2536,6 +2590,7 @@ export function AdminDashboard({ courses, setCourses, students, setStudents, onR
         {tab === "meetings" && <AdminMeetingsTab courses={courses} setCourses={setCourses} cohorts={cohorts} students={students} />}
         {tab === "students" && <StudentsTab students={students} setStudents={setStudents} onRemove={onRemoveStudent} applicants={applicants} courses={courses} cohorts={cohorts} tasks={tasks} />}
         {tab === "gradebook" && <GradebookTab students={students} courses={courses} cohorts={cohorts} tasks={tasks} />}
+        {tab === "emaillist" && <EmailListTab />}
         {tab === "submissions" && <SubmissionsTab students={students} setStudents={setStudents} tasks={tasks} courses={courses} cohorts={cohorts} onOpenTask={(id) => { setOpenTaskId(id); setTab("tasks"); }} />}
         {tab === "tasks" && <TasksTab tasks={tasks} setTasks={setTasks} students={students} courses={courses} cohorts={cohorts} openTaskId={openTaskId} />}
         {tab === "library" && <LibraryTab resources={resources} onAdd={onAddResource} onEdit={onEditResource} onRemove={onRemoveResource} courses={courses} cohorts={cohorts} />}
