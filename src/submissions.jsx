@@ -28,7 +28,7 @@ export function buildSubmissionItems(student, tasks, courses) {
       const mod = course?.modules.find((m) => m.id === q.moduleId);
       const isLatest = latest[q.moduleId] === q;
       const folder = !isLatest ? null : q.outcome === "pending" ? "awaiting" : q.outcome === "sent back" ? "rework" : q.outcome === "not passed" ? null : "approved";
-      items.push({ id: `qc-${e.id}-${q.id}`, kind: "quick", student, title: mod?.title || "Quick check", courseId: e.courseId, course: course?.title, at: q.decidedAt || q.submittedAt, status: q.outcome, label: { pending: "awaiting review", "not passed": "try again" }[q.outcome] || q.outcome,
+      items.push({ id: `qc-${e.id}-${q.id}`, kind: "quick", student, title: mod?.title || "Quick check", courseId: e.courseId, course: course?.title, at: q.decidedAt || q.submittedAt, status: q.outcome, label: { pending: "awaiting review", "not passed": "try again", passed: "passed ✓" }[q.outcome] || q.outcome,
         // Quick checks are shown in words only (approved / passed / sent back), never as a percentage. The one number kept is the
         // computer's keyword match against the marking guide (0% when there's no guide or no matching words), and only as an
         // admin-side hint.
@@ -48,7 +48,7 @@ export function SubmissionBody({ it, viewer = "admin" }) {
         {qn.prompt && <RichText html={qn.prompt} className="rich-content text-[12px] mb-1.5" style={{ color: "#71675A" }} />}
         <RichText html={(it.q.proofs || [])[qi] || ""} className="rich-content text-[14px] rounded-lg px-3 py-2.5" style={{ background: "#fff", border: "1px solid #E7DEC9", overflowWrap: "anywhere" }} />
       </div>
-    ))}</> : <div className="text-[13px]" style={{ color: "#A79B84" }}>This module no longer exists, so the questions can't be shown.</div>;
+    ))}{it.q.remark && <div className="text-[13px] rounded-lg px-3 py-2.5" style={{ background: "#FBF3DC", color: "#4A4237", overflowWrap: "anywhere" }}><strong>{viewer === "student" ? "Fidelia's remark" : "Your remark"}:</strong> {it.q.remark}</div>}</> : <div className="text-[13px]" style={{ color: "#A79B84" }}>This module no longer exists, so the questions can't be shown.</div>;
   }
   return (
     <>
@@ -69,9 +69,10 @@ export function SubmissionBody({ it, viewer = "admin" }) {
     </>
   );
 }
-export function SubmissionBadges({ it }) {
+export function SubmissionBadges({ it, viewer = "admin" }) {
   return <>
     <span className="f-code text-[9px] px-2 py-0.5 rounded-full tint-badge" style={{ fontWeight: 700 }}>{it.kind === "task" ? "TASK" : "QUICK CHECK"}</span>
+    {it.kind === "quick" && it.q?.outcome === "passed" && viewer !== "student" && <span className="f-code text-[9px] px-2 py-0.5 rounded-full" style={{ background: "#E4F3E9", color: "#2F7D4F", fontWeight: 700 }}>AUTO-PASSED</span>}
     {it.isCapstone && <span className="f-code text-[9px] px-2 py-0.5 rounded-full" style={{ background: "#F3E7C9", color: "#8A6A1F", fontWeight: 700 }}>CAPSTONE</span>}
     {it.formerCapstone && <span className="f-code text-[9px] px-2 py-0.5 rounded-full" style={{ background: "#F0E7D6", color: "#71675A", fontWeight: 700 }}>FORMER CAPSTONE</span>}
   </>;

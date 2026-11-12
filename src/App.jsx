@@ -425,7 +425,7 @@ export default function App() {
     }
     if (myStudent) { setActiveStudent(myStudent); setPage("studentDash"); return; }
     const myApplicant = [...apps].reverse().find((a) => a.email.toLowerCase() === email.toLowerCase());
-    if (myApplicant) { setActiveApplicant(myApplicant); setPage(myApplicant.status === "pending" ? "inReview" : "landing"); return; }
+    if (myApplicant) { setActiveApplicant(myApplicant); setPage("inReview"); return; }
     // A real, working login with no matching applicant/student record --
     // e.g. the account got created but the application step right after it
     // failed. Silently landing on the plain landing page here looked
@@ -504,7 +504,7 @@ export default function App() {
     setTeamSubmitting(true); setTeamError("");
     const { error, hasSession } = await signUpTeamMember({ name: teamName, email: teamEmail.trim(), password: teamPassword });
     setTeamSubmitting(false);
-    if (error) { setTeamError(error.toLowerCase().includes("already registered") ? "That email already has an account — try signing in instead." : error); return; }
+    if (error) { setTeamError(error.toLowerCase().includes("already registered") ? "That email already has an account — sign in instead (you can apply again from there)." : error); return; }
     if (hasSession) { supabase.auth.getSession().then(({ data }) => loadForSession(data.session, true)); }
     else { setTeamAwaitingConfirm(true); }
   }
@@ -518,7 +518,16 @@ export default function App() {
   async function submitApplication(data) {
     try {
       const { password, ...rest } = data;
-      logSignupBranch(applyingAsExisting?.isTeamMember ? "teammember" : applyingAsExisting ? "existing-student" : "new-applicant", rest.email);
+      logSignupBranch(applyingAsExisting?.isReapplicant ? "reapplicant" : applyingAsExisting?.isTeamMember ? "teammember" : applyingAsExisting ? "existing-student" : "new-applicant", rest.email);
+      if (applyingAsExisting?.isReapplicant) {
+        // Someone who already applied (and has a login) applying again --
+        // lands as a brand-new entry in the applicants list, flagged there
+        // as a reapplication, never merged into or blocked by the old one.
+        const saved = await insertApplicant({ ...rest, status: "pending", studentRef: null, authUserId: currentAuthUserId });
+        setApplicants((prev) => [...prev, saved]);
+        setActiveApplicant(saved); setApplyingAsExisting(null); setPage("inReview");
+        return null;
+      }
       if (applyingAsExisting?.isTeamMember) {
         // A team member applying for their first course -- they already
         // have a login (their team account), so this links straight to
@@ -537,7 +546,7 @@ export default function App() {
       }
       const { error, authUserId, needsConfirmation } = await signUpApplicant({ name: rest.name, email: rest.email, password, courseId: rest.courseId, answers: rest.answers });
       logSignupBranch(error ? "signup-error:" + error.slice(0, 60) : needsConfirmation ? "needs-confirmation" : "immediate", rest.email);
-      if (error) return error.toLowerCase().includes("already registered") ? "That email already has an account — try signing in instead." : error;
+      if (error) return error.toLowerCase().includes("already registered") ? "That email already has an account — sign in instead (you can apply again from there)." : error;
       if (needsConfirmation) {
         // No session yet, so nothing can be saved until they confirm --
         // the applicant row gets created automatically by a database
@@ -562,6 +571,16 @@ export default function App() {
       console.error("submitApplication failed", e);
       return "Couldn't reach the server — check your connection and try again.";
     }
+  }
+  // Courses a signed-in applicant could still apply for: live ones they
+  // don't already have waiting (pending/reviewed). A declined one can be
+  // applied for again.
+  const reapplyTaken = liveApplicant ? applicants.filter((x) => x.email.toLowerCase() === liveApplicant.email.toLowerCase() && (x.status === "pending" || x.status === "reviewed")).map((x) => ({ courseId: x.courseId })) : [];
+  const reapplyCourses = liveApplicant ? courses.filter((c) => c.status === "live" && !reapplyTaken.some((t) => t.courseId === c.id)) : [];
+  function startReapply() {
+    if (!liveApplicant) return;
+    setApplyingAsExisting({ isReapplicant: true, name: liveApplicant.name, email: liveApplicant.email, cohortId: null, enrollments: reapplyTaken });
+    setPresetCourseId(null); setPage("signup");
   }
   async function acceptApplicant(applicant, cohortId) {
     try {
@@ -674,6 +693,8 @@ export default function App() {
         return [{ id: `modapproved-${e.id}-${mid}`, t: `Your submission for "${mod.title}" was approved — the next module is unlocked` }];
       });
     }),
+    // A remark Fidelia left on a quick check (any outcome, including ones that passed by themselves).
+    ...liveStudent.enrollments.flatMap((e) => (e.quickChecks || []).filter((q) => q.remark && q.remarkAt).map((q) => ({ id: `qcremark-${e.id}-${q.id}-${q.remarkAt}`, t: `Fidelia left a remark on "${courses.find((c) => c.id === e.courseId)?.modules.find((m) => m.id === q.moduleId)?.title || "your quick check"}"`, at: q.remarkAt }))),
     ...liveStudent.enrollments.filter((e) => e.certificateReady).map((e) => ({ id: `cert-${e.id}`, t: "Your certificate is ready to download" })),
     // Only notices posted since notices started carrying a time (older ones
     // have none), and only until the student has marked it seen on the board.
@@ -706,9 +727,9 @@ export default function App() {
       {page === "courseDetail" && viewCourse && <CourseDetail course={viewCourse} testimonials={testimonials} brand={brand} onBack={() => setPage("courses")} onApply={(id) => { setPresetCourseId(id); setApplyingAsExisting(null); setPage("signup"); }} onViewTestimonials={() => setPage("testimonials")} />}
       {page === "resources" && <ResourcesPage resources={resources} onBack={() => setPage("landing")} />}
       {page === "testimonials" && <TestimonialsPage testimonials={testimonials} brand={brand} onBack={() => setPage("landing")} />}
-      {page === "signup" && <ApplicationForm courses={courses} cohorts={cohorts} presetCourseId={presetCourseId} existingUser={applyingAsExisting} onSubmit={submitApplication} onCancel={() => setPage(applyingAsExisting ? (applyingAsExisting.isTeamMember ? "adminDash" : "studentDash") : "landing")} />}
+      {page === "signup" && <ApplicationForm courses={courses} cohorts={cohorts} presetCourseId={presetCourseId} existingUser={applyingAsExisting} onSubmit={submitApplication} onCancel={() => setPage(applyingAsExisting ? (applyingAsExisting.isReapplicant ? "inReview" : applyingAsExisting.isTeamMember ? "adminDash" : "studentDash") : "landing")} />}
       {page === "login" && <SignInScreen students={students} applicants={applicants} onBack={() => setPage("landing")} onSignIn={handleSignIn} onForgotPassword={handleForgotPassword} onEnterStudent={(s) => { setActiveStudent(s); setPage("studentDash"); }} onEnterApplicant={(a) => { setActiveApplicant(a); setPage("inReview"); }} onEnterAdmin={() => setPage("adminDash")} />}
-      {page === "inReview" && liveApplicant && <InReviewScreen applicant={liveApplicant} onExit={teamAccess ? () => setPage("adminDash") : handleSignOut} exitLabel={teamAccess ? "BACK TO DASHBOARD" : "SIGN OUT"} />}
+      {page === "inReview" && liveApplicant && <InReviewScreen applicant={liveApplicant} onApplyAgain={reapplyCourses.length > 0 && !teamAccess ? startReapply : undefined} onExit={teamAccess ? () => setPage("adminDash") : handleSignOut} exitLabel={teamAccess ? "BACK TO DASHBOARD" : "SIGN OUT"} />}
       {page === "resetPassword" && (
         <div className="min-h-screen flex items-center justify-center px-6">
           <div className="reveal in w-full max-w-[420px]">

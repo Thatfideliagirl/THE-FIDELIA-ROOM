@@ -225,7 +225,7 @@ export function LessonView({ course, enrollment, student, updateEnrollment, onBa
   const hasNext = enrollment.completedModuleIds.length < course.modules.length;
   const pendingHere = enrollment.pendingReview?.moduleId === module.id;
 
-  useEffect(() => { setView("lecture"); setLectureStep(module.brief ? "brief" : "content"); setSectionIdx(0); setDrawerOpen(false); setAnswers({}); setResult(null); setProofs([]); setJustPassed(!!justApproved); }, [module.id]);
+  useEffect(() => { setView("lecture"); setLectureStep(module.brief ? "brief" : "content"); setSectionIdx(0); setDrawerOpen(false); setAnswers({}); setResult(null); setProofs(enrollment.quickCheckDrafts?.[module.id] || []); setJustPassed(!!justApproved); }, [module.id]);
   const checkQuestions = useMemo(() => normalizeQuestions(module), [module]);
   const sections = useMemo(() => {
     const s = splitLectureSections(module.notes);
@@ -249,9 +249,31 @@ export function LessonView({ course, enrollment, student, updateEnrollment, onBa
   // Every quick check attempt is kept as its own record (the answers
   // included). pendingReview is wiped the moment a decision is made, so
   // without this the answers vanished for good once they were marked.
-  function quickCheckLog(at, extra) { return { quickChecks: [...(enrollment.quickChecks || []), { id: "qc" + at, moduleId: module.id, proofs, submittedAt: at, ...extra }] }; }
+  function quickCheckLog(at, extra) {
+    const { [module.id]: _sent, ...otherDrafts } = enrollment.quickCheckDrafts || {};
+    return { quickChecks: [...(enrollment.quickChecks || []), { id: "qc" + at, moduleId: module.id, proofs, submittedAt: at, ...extra }], quickCheckDrafts: otherDrafts };
+  }
+  // Half-finished answers are kept (automatically a moment after typing
+  // stops, or on "Save draft") so they can leave and come back to it.
+  const draftTimer = useRef(null);
+  const [draftSavedAt, setDraftSavedAt] = useState(null);
+  const hasText = (v) => String(v || "").replace(/<[^>]*>/g, "").trim().length > 0;
+  function saveDraft() {
+    clearTimeout(draftTimer.current);
+    if (!proofs.some(hasText)) return;
+    if (JSON.stringify(proofs) === JSON.stringify(enrollment.quickCheckDrafts?.[module.id] || [])) { setDraftSavedAt(Date.now()); return; }
+    updateEnrollment({ quickCheckDrafts: { ...(enrollment.quickCheckDrafts || {}), [module.id]: proofs } });
+    setDraftSavedAt(Date.now());
+  }
+  const canDraft = status === "current" && !pendingHere && ["written", "file-upload", "milestone"].includes(module.testType);
+  useEffect(() => {
+    if (!canDraft || !proofs.some(hasText)) return;
+    draftTimer.current = setTimeout(saveDraft, 2500);
+    return () => clearTimeout(draftTimer.current);
+  }, [proofs]);
   function submitForReview() {
     if (!allFilled) return;
+    clearTimeout(draftTimer.current);
     const at = Date.now();
     // A link already gets checked for shape as it's typed (see linkValids) --
     // there's nothing left to keyword-match against a marking guide, so
@@ -430,6 +452,7 @@ export function LessonView({ course, enrollment, student, updateEnrollment, onBa
 
       {view === "check" && (
         <div className="card rounded-2xl p-5 md:p-8">
+          {(() => { const last = (enrollment.quickChecks || []).filter((q) => q.moduleId === module.id).sort((a, b) => b.submittedAt - a.submittedAt)[0]; return last?.remark ? <div className="rounded-xl px-4 py-3 mb-5 text-[14px]" style={{ background: "#FBF3DC", color: "#4A4237", overflowWrap: "anywhere" }}><div className="f-label text-[10px] mb-1" style={{ color: "#8A6A1F" }}>REMARK FROM FIDELIA</div>{last.remark}</div> : null; })()}
           {status === "complete" && <div className="flex items-center gap-3" style={{ color: "var(--accent)" }}><CheckCircle2 size={20} /><span className="text-[14px]" style={{ fontWeight: 700 }}>You've completed this module's quick check.</span></div>}
           {status !== "complete" && pendingHere && <div className="flex items-center gap-3" style={{ color: "#71675A" }}><Clock size={20} /><span className="text-[14px]" style={{ fontWeight: 700 }}>Submitted — awaiting review. You'll be notified once it's graded.</span></div>}
           {status === "current" && !pendingHere && module.testType === "multiple-choice" && (
@@ -467,7 +490,7 @@ export function LessonView({ course, enrollment, student, updateEnrollment, onBa
                 ))}
               </div>
               {module.autoGradeOnly && result != null && result < (module.passPct || 70) && <div className="text-[14px] mt-3" style={{ color: "#B04A3A", fontWeight: 700 }}>Not quite there yet — revise your answer{checkQuestions.length > 1 ? "s" : ""} and try again to unlock the next module.</div>}
-              <button onClick={submitForReview} disabled={isLinkProof ? !linkValids.every(Boolean) : !allFilled} className="btn-primary rounded-lg px-6 py-3 text-[14px] mt-4">{module.autoGradeOnly ? "Submit answer" : "Submit for review"}</button>
+              <div className="flex items-center gap-3 flex-wrap mt-4"><button onClick={submitForReview} disabled={isLinkProof ? !linkValids.every(Boolean) : !allFilled} className="btn-primary rounded-lg px-6 py-3 text-[14px]">{module.autoGradeOnly ? "Submit answer" : "Submit for review"}</button>{canDraft && <button type="button" onClick={saveDraft} className="btn-soft rounded-lg px-5 py-3 text-[14px]">Save draft</button>}{canDraft && (draftSavedAt || enrollment.quickCheckDrafts?.[module.id]) && <span className="text-[12.5px]" style={{ color: "#71675A" }}>Draft saved ✓ — you can leave and come back to finish.</span>}</div>
             </>
           )}
         </div>
@@ -881,7 +904,7 @@ export function MySubmissions({ student, course, tasks, onRedoTask, onRedoQuickC
       <div className="max-w-[720px]">
         <button onClick={() => setOpenId(null)} className="flex items-center gap-1.5 text-[13px] mb-6" style={{ color: "#71675A" }}><ArrowLeft size={14} /> Back to my submissions</button>
         <div className="card rounded-2xl p-7">
-          <div className="flex items-center gap-2 flex-wrap mb-2"><SubmissionBadges it={open} /></div>
+          <div className="flex items-center gap-2 flex-wrap mb-2"><SubmissionBadges it={open} viewer="student" /></div>
           <div className="f-display text-[22px]" style={{ fontWeight: 800 }}>{open.title}</div>
           <div className="text-[12.5px] mt-1 mb-4" style={{ color: "#71675A" }}>{[open.course, open.at ? formatDateTime(open.at) : null].filter(Boolean).join(" · ")}</div>
           <div className="flex items-center gap-2 mb-5"><span className="f-code text-[11px] px-2.5 py-1 rounded-full" style={{ background: "#F0E7D6", color: submissionStatusColor(open.status), fontWeight: 700 }}>{(open.label || "").toUpperCase()}</span>{open.score != null && <span className="f-code text-[12px]" style={{ fontWeight: 700 }}>{open.score}%</span>}</div>
@@ -901,7 +924,7 @@ export function MySubmissions({ student, course, tasks, onRedoTask, onRedoQuickC
       {shown.length === 0 && <div className="text-[15px]" style={{ color: "#A79B84" }}>{items.length === 0 ? "You haven't handed in anything yet." : "Nothing in this folder."}</div>}
       <div className="flex flex-col gap-2">{shown.map((it) => (
         <button key={it.id} onClick={() => setOpenId(it.id)} className="w-full text-left rounded-lg px-4 py-3 flex items-center justify-between gap-3 flex-wrap" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
-          <div className="min-w-0"><div className="flex items-center gap-2 flex-wrap"><SubmissionBadges it={it} /><span className="text-[14px]" style={{ fontWeight: 700 }}>{it.title}</span></div><div className="text-[11.5px] mt-0.5" style={{ color: "#A79B84" }}>{it.at ? formatDateTime(it.at) : ""}{it.folder == null ? " · earlier attempt" : ""}</div></div>
+          <div className="min-w-0"><div className="flex items-center gap-2 flex-wrap"><SubmissionBadges it={it} viewer="student" /><span className="text-[14px]" style={{ fontWeight: 700 }}>{it.title}</span></div><div className="text-[11.5px] mt-0.5" style={{ color: "#A79B84" }}>{it.at ? formatDateTime(it.at) : ""}{it.folder == null ? " · earlier attempt" : ""}</div></div>
           <div className="flex items-center gap-2 shrink-0"><span className="f-code text-[10px]" style={{ color: submissionStatusColor(it.status), fontWeight: 700 }}>{(it.label || "").toUpperCase()}</span>{it.score != null && <span className="f-code text-[11px]" style={{ fontWeight: 700 }}>{it.score}%</span>}<ChevronRight size={15} color="#A79B84" /></div>
         </button>
       ))}</div>

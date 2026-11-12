@@ -26,11 +26,11 @@ import { buildSubmissionItems, submissionStatusColor, SubmissionBody, Submission
 // buttons show changes. "Mark reviewed" only appears on a first-review
 // (pending) applicant; "Accept" works from either stage, so she's never
 // forced through the payment step for a course that doesn't need it.
-function ApplicantRow({ a, course, cohorts, cohortInput, setCohortInput, open, onToggleOpen, accepting, acceptError, onAccept, onMarkReviewed, onDecline, confirmDeleteId, setConfirmDeleteId, onConfirmRemove, showMarkReviewed }) {
+function ApplicantRow({ a, priorLines = [], course, cohorts, cohortInput, setCohortInput, open, onToggleOpen, accepting, acceptError, onAccept, onMarkReviewed, onDecline, confirmDeleteId, setConfirmDeleteId, onConfirmRemove, showMarkReviewed }) {
   return (
     <div className="card rounded-2xl p-6">
-      <button className="w-full flex items-center justify-between" onClick={onToggleOpen}><div className="text-left"><div className="text-[17px]" style={{ fontWeight: 700 }}>{a.name} {a.studentRef && <span className="f-code text-[10px] tint-badge px-2 py-0.5 rounded-full ml-1">EXISTING STUDENT</span>}</div><div className="text-[13px] mt-1" style={{ color: "#71675A" }}>{a.email} · applying to {course?.title}{a.createdAt && <> · applied {formatDateTime(a.createdAt)}</>}</div></div><ChevronDown size={18} color="#A79B84" style={{ transform: open ? "rotate(180deg)" : "none" }} /></button>
-      {open && <div className="mt-5 pt-5" style={{ borderTop: "1px solid #F0E7D6" }}>{(course?.applicationQuestions || []).map((q, i) => <div key={i} className="mb-3"><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>{q.toUpperCase()}</div><div className="text-[14px]">{a.answers[i]}</div></div>)}{!a.studentRef && <div className="mt-4 mb-4" style={{ maxWidth: 220 }}><SelectF label="Cohort" value={cohortInput} onChange={(e) => setCohortInput(e.target.value)} options={cohorts.map((c) => ({ value: c.id, label: c.name }))} /></div>}{accepting !== a.id && acceptError && <div className="text-[13px] mb-3" style={{ color: "#B04A3A" }}>{acceptError}</div>}
+      <button className="w-full flex items-center justify-between" onClick={onToggleOpen}><div className="text-left"><div className="text-[17px]" style={{ fontWeight: 700 }}>{a.name} {a.studentRef && <span className="f-code text-[10px] tint-badge px-2 py-0.5 rounded-full ml-1">EXISTING STUDENT</span>}{priorLines.length > 0 && <span className="f-code text-[10px] px-2 py-0.5 rounded-full ml-1" style={{ background: "#F3E7C9", color: "#8A6A1F", fontWeight: 700 }}>REAPPLIED · #{priorLines.length + 1}</span>}</div><div className="text-[13px] mt-1" style={{ color: "#71675A" }}>{a.email} · applying to {course?.title}{a.createdAt && <> · applied {formatDateTime(a.createdAt)}</>}</div></div><ChevronDown size={18} color="#A79B84" style={{ transform: open ? "rotate(180deg)" : "none" }} /></button>
+      {open && <div className="mt-5 pt-5" style={{ borderTop: "1px solid #F0E7D6" }}>{priorLines.length > 0 && <div className="rounded-lg px-4 py-3 mb-4 text-[13px]" style={{ background: "#FBF3DC", color: "#6B5516" }}><strong>This person applied before:</strong>{priorLines.map((l, i) => <div key={i}>{l}</div>)}</div>}{(course?.applicationQuestions || []).map((q, i) => <div key={i} className="mb-3"><div className="f-label text-[10px] mb-1" style={{ color: "#A79B84" }}>{q.toUpperCase()}</div><div className="text-[14px]">{a.answers[i]}</div></div>)}{!a.studentRef && <div className="mt-4 mb-4" style={{ maxWidth: 220 }}><SelectF label="Cohort" value={cohortInput} onChange={(e) => setCohortInput(e.target.value)} options={cohorts.map((c) => ({ value: c.id, label: c.name }))} /></div>}{accepting !== a.id && acceptError && <div className="text-[13px] mb-3" style={{ color: "#B04A3A" }}>{acceptError}</div>}
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex gap-3 flex-wrap">
             <button disabled={accepting === a.id} onClick={() => onAccept(a)} className="btn-primary rounded-lg px-5 py-2.5 text-[14px]">{accepting === a.id ? "Accepting…" : "Accept & generate code"}</button>
@@ -75,6 +75,9 @@ export function ApplicantsTab({ applicants, setApplicants, onRemove, students, s
   }
   function decline(a) { setApplicants((prev) => prev.map((x) => x.id === a.id ? { ...x, status: "declined" } : x)); }
   function confirmRemove(id) { onRemove(id); setConfirmDeleteId(null); }
+  // Earlier applications from the same email -- a reapplication is its own
+  // entry, with a note pointing back at the ones before it.
+  const priorLinesOf = (a) => applicants.filter((x) => x.id !== a.id && x.email.toLowerCase() === a.email.toLowerCase() && (x.createdAt || "") < (a.createdAt || "")).map((x) => `${course(x.courseId)?.title || "A course"} — ${x.status}${x.createdAt ? ", " + new Date(x.createdAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : ""}`);
   const pending = applicants.filter((a) => a.status === "pending");
   const reviewing = applicants.filter((a) => a.status === "reviewed");
   const resolved = applicants.filter((a) => a.status === "accepted" || a.status === "declined");
@@ -84,12 +87,12 @@ export function ApplicantsTab({ applicants, setApplicants, onRemove, students, s
       <SectionHeader eyebrow="REVIEW QUEUE" title="Applicants" />
       {pending.length === 0 && <div className="text-[15px] mb-8" style={{ color: "#A79B84" }}>No pending applications.</div>}
       <div className="flex flex-col gap-4 mb-10">{pending.map((a) => (
-        <ApplicantRow key={a.id} a={a} course={course(a.courseId)} open={openId === a.id} onToggleOpen={() => setOpenId(openId === a.id ? null : a.id)} onConfirmRemove={() => confirmRemove(a.id)} showMarkReviewed {...rowProps} />
+        <ApplicantRow key={a.id} a={a} priorLines={priorLinesOf(a)} course={course(a.courseId)} open={openId === a.id} onToggleOpen={() => setOpenId(openId === a.id ? null : a.id)} onConfirmRemove={() => confirmRemove(a.id)} showMarkReviewed {...rowProps} />
       ))}</div>
       {reviewing.length > 0 && <>
         <div className="f-label text-[12px] mb-4" style={{ color: "#71675A" }}>AWAITING PAYMENT — reviewed, payment info sent</div>
         <div className="flex flex-col gap-4 mb-10">{reviewing.map((a) => (
-          <ApplicantRow key={a.id} a={a} course={course(a.courseId)} open={openId === a.id} onToggleOpen={() => setOpenId(openId === a.id ? null : a.id)} onConfirmRemove={() => confirmRemove(a.id)} showMarkReviewed={false} {...rowProps} />
+          <ApplicantRow key={a.id} a={a} priorLines={priorLinesOf(a)} course={course(a.courseId)} open={openId === a.id} onToggleOpen={() => setOpenId(openId === a.id ? null : a.id)} onConfirmRemove={() => confirmRemove(a.id)} showMarkReviewed={false} {...rowProps} />
         ))}</div>
       </>}
       {resolved.length > 0 && <><div className="f-label text-[12px] mb-4" style={{ color: "#71675A" }}>DECIDED</div><div className="flex flex-col gap-2">{resolved.map((a) => (
@@ -794,7 +797,20 @@ export function CoursesTab({ courses, setCourses, testimonials }) {
 }
 
 
-function decideQuickCheck({ student, enrollmentId, approve, courses, setStudents }) {
+// A remark from Fidelia on a quick check -- can be written (or changed) at any
+// point, including on one that passed by itself. Saved on that attempt's record.
+function saveQuickCheckRemark({ student, enrollmentId, q, remark, setStudents }) {
+  const r = (remark || "").trim(), at = Date.now();
+  const apply = (x) => { const { remark: _old, remarkAt: _oldAt, ...rest } = x; return r ? { ...rest, remark: r, remarkAt: at } : rest; };
+  setStudents((prev) => prev.map((s) => s.id !== student.id ? s : { ...s, enrollments: s.enrollments.map((e) => {
+    if (e.id !== enrollmentId) return e;
+    const log = e.quickChecks || [];
+    const { id, moduleId, proofs, submittedAt, score, outcome, decidedAt } = q;
+    if (log.some((x) => x.id === id)) return { ...e, quickChecks: log.map((x) => x.id === id ? apply(x) : x) };
+    return { ...e, quickChecks: [...log, apply({ id, moduleId, proofs, submittedAt, score, outcome, decidedAt })] };
+  }) }));
+}
+function decideQuickCheck({ student, enrollmentId, approve, courses, setStudents, remark }) {
   const enrollment = student.enrollments.find((e) => e.id === enrollmentId);
   const course = courses.find((c) => c.id === enrollment?.courseId);
   const module = course?.modules.find((m) => m.id === enrollment?.pendingReview?.moduleId);
@@ -804,14 +820,15 @@ function decideQuickCheck({ student, enrollmentId, approve, courses, setStudents
       if (e.id !== enrollmentId || !e.pendingReview) return e;
       const moduleId = e.pendingReview.moduleId;
       const pr = e.pendingReview, outcome = approve ? "approved" : "sent back", decidedAt = Date.now();
+      const r = (remark || "").trim(), withRemark = r ? { remark: r, remarkAt: decidedAt } : {};
       // Keep the answers: mark this attempt's record decided (or create
       // it, for one submitted before records were kept) rather than
       // letting clearing pendingReview erase them.
       const log = e.quickChecks || [];
       const found = log.some((q) => q.moduleId === moduleId && q.submittedAt === pr.submittedAt);
       const quickChecks = found
-        ? log.map((q) => q.moduleId === moduleId && q.submittedAt === pr.submittedAt ? { ...q, outcome, decidedAt } : q)
-        : [...log, { id: "qc" + pr.submittedAt, moduleId, proofs: pr.proofs || [pr.proof], submittedAt: pr.submittedAt, score: pr.autoScore, outcome, decidedAt }];
+        ? log.map((q) => q.moduleId === moduleId && q.submittedAt === pr.submittedAt ? { ...q, outcome, decidedAt, ...withRemark } : q)
+        : [...log, { id: "qc" + pr.submittedAt, moduleId, proofs: pr.proofs || [pr.proof], submittedAt: pr.submittedAt, score: pr.autoScore, outcome, decidedAt, ...withRemark }];
       return {
         ...e,
         quickChecks,
@@ -881,6 +898,7 @@ export function SubmissionsTab({ students, setStudents, tasks, courses, cohorts 
   const [cohortId, setCohortId] = useState("all");
   const [courseId, setCourseId] = useState("all");
   const [kind, setKind] = useState("all");
+  const [remarkDraft, setRemarkDraft] = useState(""); const [remarkSaved, setRemarkSaved] = useState(false);
   // A cohort only offers its own courses; anyone in no cohort could be in
   // any course, so "no cohort" and "all" list them all.
   const activeCohort = cohorts.find((c) => c.id === cohortId);
@@ -901,9 +919,11 @@ export function SubmissionsTab({ students, setStudents, tasks, courses, cohorts 
   const empty = { awaiting: "Nothing waiting for you — you're all caught up.", rework: "Nothing is out with a student for rework.", approved: "Nothing approved yet.", all: "No submissions yet." };
 
   const open = openId ? everything.find((i) => i.id === openId) : null;
+  useEffect(() => { setRemarkDraft(open?.q?.remark || ""); setRemarkSaved(false); }, [openId]);
   if (open) {
     const cohortName = cohorts.find((c) => c.id === open.student.cohortId)?.name;
-    const decide = (approve) => { decideQuickCheck({ student: open.student, enrollmentId: open.enrollmentId, approve, courses, setStudents }); setOpenId(null); };
+    const decide = (approve) => { decideQuickCheck({ student: open.student, enrollmentId: open.enrollmentId, approve, courses, setStudents, remark: remarkDraft }); setOpenId(null); };
+    const saveRemark = () => { saveQuickCheckRemark({ student: open.student, enrollmentId: open.enrollmentId, q: open.q, remark: remarkDraft, setStudents }); setRemarkSaved(true); setTimeout(() => setRemarkSaved(false), 2500); };
     return (
       <div className="max-w-[760px]">
         <button onClick={() => setOpenId(null)} className="flex items-center gap-1.5 text-[13px] mb-6" style={{ color: "#71675A" }}><ArrowLeft size={14} /> Back to submissions</button>
@@ -914,6 +934,13 @@ export function SubmissionsTab({ students, setStudents, tasks, courses, cohorts 
           <div className="text-[12.5px] mt-1 mb-5" style={{ color: "#71675A" }}>{[open.course, cohortName, open.at ? formatDateTime(open.at) : null].filter(Boolean).join(" · ")}</div>
           <div className="flex items-center gap-2 mb-5"><span className="f-code text-[11px] px-2.5 py-1 rounded-full" style={{ background: "#F0E7D6", color: submissionStatusColor(open.status), fontWeight: 700 }}>{(open.label || "").toUpperCase()}</span>{open.score != null && <span className="f-code text-[12px]" style={{ fontWeight: 700 }}>{open.score}%</span>}{open.autoCheck != null && <span className="text-[12px]" style={{ color: "#A79B84" }}>Auto-check: {open.autoCheck}% keyword match — a guide for you, not a grade</span>}{open.folder == null && open.kind === "quick" && <span className="text-[12px]" style={{ color: "#A79B84" }}>earlier attempt</span>}</div>
           <div className="flex flex-col gap-3 mb-6"><SubmissionBody it={open} /></div>
+          {open.kind === "quick" && (
+            <div className="mb-6">
+              <div className="f-label text-[11px] mb-1.5" style={{ color: "#71675A" }}>REMARK FOR {(open.student.name || "").split(" ")[0].toUpperCase()} (optional — they'll see it in their Submissions)</div>
+              <textarea className="input-field rounded-lg px-3 py-2 text-[13px] w-full" rows={3} placeholder={open.awaiting ? "Add a remark with your decision…" : "Leave a remark on this one…"} value={remarkDraft} onChange={(e) => setRemarkDraft(e.target.value)} />
+              {!open.awaiting && <div className="flex items-center gap-3 mt-2"><button disabled={remarkDraft.trim() === (open.q.remark || "")} onClick={saveRemark} className="btn-soft rounded-lg px-5 py-2 text-[13px] disabled:opacity-40">Save remark</button>{remarkSaved && <span className="text-[13px] accent-text" style={{ fontWeight: 700 }}>Saved ✓</span>}</div>}
+            </div>
+          )}
           {open.kind === "quick" && open.awaiting && (
             <div className="flex items-center gap-3 pt-5" style={{ borderTop: "1px solid #F0E7D6" }}><button onClick={() => decide(true)} className="btn-primary rounded-lg px-5 py-2.5 text-[13px]">Approve — unlock next module</button><button onClick={() => decide(false)} className="text-[13px]" style={{ color: "#B04A3A" }}>Send back</button></div>
           )}
