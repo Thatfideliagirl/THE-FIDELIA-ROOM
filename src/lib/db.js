@@ -226,7 +226,7 @@ export async function fetchDirectMessages() {
   const { data, error } = await supabase.from("direct_messages").select("*").order("created_at", { ascending: true }).order("id", { ascending: true });
   if (error) throw error;
   const grouped = {};
-  (data || []).forEach((row) => { (grouped[row.thread_key] ||= []).push({ from: row.from_id, text: row.text }); });
+  (data || []).forEach((row) => { (grouped[row.thread_key] ||= []).push({ from: row.from_id, text: row.text, at: row.created_at ? new Date(row.created_at).getTime() : undefined }); });
   return grouped;
 }
 export async function insertDirectMessage({ threadKey, from, text }) {

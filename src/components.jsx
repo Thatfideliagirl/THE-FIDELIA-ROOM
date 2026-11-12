@@ -9,7 +9,7 @@ import {
   Clock, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Menu
 } from "lucide-react";
 import { LOGO_SRC, HERO_SRC, CREATOR_SRC, HOWITWORKS_01ACCOUNT_SRC, HOWITWORKS_02COURSE_SRC, HOWITWORKS_03REVIEW_SRC, HOWITWORKS_04EMAIL_SRC, HOWITWORKS_05CODE_SRC, HOWITWORKS_PHONEFRAME_SRC } from "./assets/brandImages.js";
-import { moduleStatus, formatRelativeTime } from "./lib/data.js";
+import { moduleStatus, formatRelativeTime, formatWhen, formatDayLabel } from "./lib/data.js";
 import { changePassword } from "./lib/auth.js";
 import { uploadFile } from "./lib/storage.js";
 import { compressImage } from "./lib/imageCompress.js";
@@ -634,7 +634,18 @@ export function ChatLayout({ people, activeId, mobileOpen, onSelect, onBack, mes
             </div>
             <div ref={scroller} className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col gap-3">
               {messages.length === 0 && <div className="text-[14px]" style={{ color: "#A79B84" }}>{noMessagesText}</div>}
-              {messages.map((m, i) => <div key={i} className="max-w-[82%] sm:max-w-[75%] px-4 py-2.5 rounded-xl text-[15px] sm:text-[14px]" style={{ alignSelf: m.mine ? "flex-end" : "flex-start", background: m.mine ? "var(--accent)" : "#F0E7D6", color: m.mine ? "#FAF6EC" : "#262019", overflowWrap: "anywhere" }}>{m.text}</div>)}
+              {messages.map((m, i) => {
+                const dayChanged = m.at && (i === 0 || !messages[i - 1].at || new Date(messages[i - 1].at).toDateString() !== new Date(m.at).toDateString());
+                return (
+                  <React.Fragment key={i}>
+                    {dayChanged && <div className="self-center f-code text-[10px] px-3 py-1 rounded-full my-1" style={{ background: "#F0E7D6", color: "#71675A" }}>{formatDayLabel(m.at).toUpperCase()}</div>}
+                    <div className="max-w-[82%] sm:max-w-[75%] px-4 py-2.5 rounded-xl text-[15px] sm:text-[14px]" style={{ alignSelf: m.mine ? "flex-end" : "flex-start", background: m.mine ? "var(--accent)" : "#F0E7D6", color: m.mine ? "#FAF6EC" : "#262019", overflowWrap: "anywhere" }}>
+                      {m.text}
+                      {m.at && <div className="f-code text-[9.5px] mt-1 text-right" style={{ opacity: 0.65 }}>{new Date(m.at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}</div>}
+                    </div>
+                  </React.Fragment>
+                );
+              })}
             </div>
             <div className="flex items-center gap-2 p-3 sm:p-4" style={{ borderTop: "1px solid #E7DEC9" }}>
               <input className="input-field rounded-full px-4 py-2.5 flex-1 min-w-0" style={{ fontSize: 16 }} placeholder={placeholder} value={msg} onChange={(e) => setMsg(e.target.value)} onKeyDown={(e) => e.key === "Enter" && onSend()} />
@@ -707,7 +718,7 @@ export function NotifBell({ items, seen, onMarkSeen, cleared, onClear }) {
             <div key={n.id} className="py-2.5 flex items-start justify-between gap-2" style={{ borderTop: i > 0 ? "1px solid #F0E7D6" : "none" }}>
               <div className="min-w-0">
                 <div className="text-[13px]">{n.t}</div>
-                {n.at && <div className="f-code text-[10.5px] mt-1" style={{ color: "#A79B84" }}>{formatRelativeTime(n.at)}</div>}
+                {n.at && <div className="f-code text-[10.5px] mt-1" style={{ color: "#A79B84" }}>{formatWhen(n.at)}</div>}
               </div>
               <button onClick={() => clearOne(n.id)} title="Clear" className="shrink-0 mt-0.5" style={{ color: "#C9BFAE" }}><X size={13} /></button>
             </div>

@@ -69,3 +69,47 @@ $$;
 
 revoke all on function record_free_resource_email(text, text) from public;
 grant execute on function record_free_resource_email(text, text) to anon, authenticated;
+
+
+-- ------------------------------------------------------------
+-- PART 2 — Meeting reminders ("your class starts in 1 hour")
+--
+-- (a) A small record of which meetings have already been reminded,
+--     so nobody is ever emailed twice for the same class.
+-- (b) A timer inside Supabase that wakes the website's reminder job
+--     every 10 minutes. (Your hosting plan only allows a timer once
+--     a day, so this one lives here instead. It is free.)
+--
+-- Before this works you also need to add ONE setting on Vercel --
+-- see the note I sent you ("SUPABASE_SERVICE_ROLE_KEY").
+-- ------------------------------------------------------------
+create table if not exists meeting_reminders (
+  key        text primary key,
+  sent_at    timestamptz not null default now(),
+  recipients integer     not null default 0
+);
+-- No policies on purpose: only the website's server (using the service key)
+-- can read or write this. Visitors and students can't touch it.
+alter table meeting_reminders enable row level security;
+
+create extension if not exists pg_net;
+create extension if not exists pg_cron;
+
+-- Remove an older copy of this timer if you run the file again.
+do $$
+begin
+  perform cron.unschedule('fjroom-meeting-reminders');
+exception when others then
+  null;
+end;
+$$;
+
+select cron.schedule(
+  'fjroom-meeting-reminders',
+  '*/10 * * * *',
+  $$ select net.http_post(
+       url     := 'https://www.fjroom.com/api/send-meeting-reminders',
+       headers := '{"Content-Type": "application/json"}'::jsonb,
+       body    := '{}'::jsonb
+     ); $$
+);

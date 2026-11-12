@@ -7,7 +7,11 @@
 import { sendTemplatedEmail } from "./send-email.js";
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY;
+// Tasks and students are private tables, so the public key gets "permission
+// denied" on them -- this job has to use the server-only service key. (It
+// used the public key before, which meant it could never actually read a task
+// and no deadline reminder was ever sent.)
+const SUPABASE_ANON_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const REMINDER_WINDOW_DAYS = 2;
 
 async function supaGet(table, query) {
@@ -38,7 +42,7 @@ function formatDeadline(iso) {
 }
 
 export default async function handler(req, res) {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) { res.status(200).json({ skipped: true, reason: "Supabase not configured" }); return; }
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) { res.status(200).json({ skipped: true, reason: "SUPABASE_SERVICE_ROLE_KEY is not set on the hosting site yet, so reminders can't run." }); return; }
 
   let taskRows, studentRows, courseRows;
   try {

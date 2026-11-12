@@ -13,6 +13,40 @@ export function formatDateTime(ts) {
 // "5m ago" style, for the notification panel -- falls back to a short date
 // once something's more than a day old, so "3 weeks ago" doesn't sit there
 // forever next to things that still need a decision.
+// "Today, 3:40 PM" / "Yesterday, 3:40 PM" / "Tomorrow, 6:00 PM" / "Fri 14 Nov, 6:00 PM"
+// (year added only when it isn't this year) -- the day always shows, so a time
+// is never ambiguous about which day it was.
+export function formatDayTime(ts, now = new Date()) {
+  const d = new Date(ts);
+  if (!ts || isNaN(d)) return "";
+  const t = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  const same = (a, b) => a.toDateString() === b.toDateString();
+  const shift = (n) => { const x = new Date(now); x.setDate(x.getDate() + n); return x; };
+  if (same(d, now)) return `Today, ${t}`;
+  if (same(d, shift(-1))) return `Yesterday, ${t}`;
+  if (same(d, shift(1))) return `Tomorrow, ${t}`;
+  const date = d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", ...(d.getFullYear() !== now.getFullYear() ? { year: "numeric" } : {}) });
+  return `${date}, ${t}`;
+}
+// "Today" / "Yesterday" / "Mon 10 Nov" -- the day heading in a chat.
+export function formatDayLabel(ts, now = new Date()) {
+  const d = new Date(ts);
+  if (!ts || isNaN(d)) return "";
+  const same = (a, b) => a.toDateString() === b.toDateString();
+  const y = new Date(now); y.setDate(y.getDate() - 1);
+  if (same(d, now)) return "Today";
+  if (same(d, y)) return "Yesterday";
+  return d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", ...(d.getFullYear() !== now.getFullYear() ? { year: "numeric" } : {}) });
+}
+// Fresh things read as "12m ago"; anything older than an hour shows the day
+// and time ("Today, 3:40 PM", "Yesterday, 9:15 AM", "Mon 10 Nov, 2:00 PM").
+export function formatWhen(ts, now = new Date()) {
+  if (!ts) return "";
+  const mins = Math.floor((now.getTime() - new Date(ts).getTime()) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  return formatDayTime(ts, now);
+}
 export function formatRelativeTime(ts) {
   if (!ts) return "";
   const diffMs = Date.now() - new Date(ts).getTime();
@@ -359,6 +393,41 @@ export function pairKey(a, b) { return [a, b].sort().join("__"); }
 // A notice (or meeting) can be aimed at one cohort and/or one course; "all" or
 // missing means everyone on that axis. A student is reached when they match
 // both -- a cohort they're in and a course they're enrolled in.
+// Every meeting in every course, flat, with where it lives.
+export function allMeetings(courses) {
+  const list = [];
+  for (const c of courses) {
+    for (const m of c.modules || []) for (const mt of (m.meetings || [])) list.push({ mt, course: c, moduleId: m.id });
+    for (const mt of (c.generalMeetings || [])) list.push({ mt, course: c, moduleId: "other" });
+  }
+  return list;
+}
+// Who a meeting is for: someone enrolled in its course, in its cohort if it
+// has one, and -- for an "Other" meeting where specific people were tagged --
+// only those people.
+export function meetingReaches(mt, courseId, student) {
+  if (!student.enrollments.some((e) => e.courseId === courseId)) return false;
+  if (mt.cohortId && mt.cohortId !== student.cohortId) return false;
+  const tagged = mt.assignedStudentIds || [];
+  return tagged.length ? tagged.includes(student.id) : true;
+}
+// The bell alerts for one student's meetings: "a class was scheduled" for
+// anything still ahead of them, and "starting soon" in the last hour. Past
+// meetings are old news and never alert.
+export function meetingBellItems(courses, student, now = Date.now()) {
+  const items = [];
+  allMeetings(courses).forEach(({ mt, course }) => {
+    if (!mt.label || !meetingReaches(mt, course.id, student)) return;
+    const start = mt.date ? new Date(mt.date).getTime() : NaN;
+    const hasStart = !isNaN(start);
+    const upcoming = hasStart ? start > now : (mt.createdAt && now - mt.createdAt < 14 * 86400000);
+    if (!upcoming) return;
+    items.push({ id: `meeting-${mt.id}-${mt.date || "tbc"}`, t: `New class scheduled: "${mt.label}"${hasStart ? ` — ${formatDayTime(start, new Date(now))}` : ""}`, at: mt.createdAt });
+    const mins = hasStart ? (start - now) / 60000 : null;
+    if (mins != null && mins > 0 && mins <= 60) items.push({ id: `soon-${mt.id}-${mt.date}`, t: `Starting soon: "${mt.label}" in ${Math.ceil(mins)} min`, at: start - 3600000 });
+  });
+  return items;
+}
 export function noticeReaches(n, student) {
   const cohortOk = !n.cohortId || n.cohortId === "all" || n.cohortId === student.cohortId;
   const courseOk = !n.courseId || n.courseId === "all" || student.enrollments.some((e) => e.courseId === n.courseId);

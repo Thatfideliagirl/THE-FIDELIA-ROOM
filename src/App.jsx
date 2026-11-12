@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { moveDataUrlToStorage } from "./lib/imageCompress.js";
-import { FONT_STYLE, genCode, nextStudentId, noticeReaches } from "./lib/data.js";
+import { FONT_STYLE, genCode, nextStudentId, noticeReaches, meetingBellItems } from "./lib/data.js";
 import {
   Landing, CoursesIndex, CourseDetail, ResourcesPage, TestimonialsPage, ApplicationForm,
   SignInScreen, InReviewScreen, CodeRedeemScreen, LogoMark, Field, ResourceDetail,
@@ -135,6 +135,9 @@ export default function App() {
   // notification listed; "cleared" is a deliberate action that drops it from
   // the list entirely, until whatever caused it happens again (a fresh id).
   const [notifCleared, setNotifCleared] = useState([]);
+  // Re-renders once a minute so a "starting soon" alert appears (and counts down) on its own.
+  const [, setMinuteTick] = useState(0);
+  useEffect(() => { const i = setInterval(() => setMinuteTick((n) => n + 1), 60000); return () => clearInterval(i); }, []);
   function syncNotifSeen(updater) {
     setNotifSeen((prev) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
@@ -675,11 +678,9 @@ export default function App() {
     // Only notices posted since notices started carrying a time (older ones
     // have none), and only until the student has marked it seen on the board.
     ...notices.filter((n) => n.postedAt && noticeReaches(n, liveStudent) && !(n.seenBy || []).includes(liveStudent.id)).map((n) => ({ id: `notice-${n.id}`, t: `New notice: ${n.text.length > 70 ? n.text.slice(0, 70) + "…" : n.text}`, at: n.postedAt })),
-    ...liveStudent.enrollments.flatMap((e) => {
-      const course = courses.find((c) => c.id === e.courseId);
-      if (!course) return [];
-      return (course.generalMeetings || []).filter((mt) => (mt.assignedStudentIds || []).includes(liveStudent.id)).map((mt) => ({ id: `meeting-${mt.id}`, t: `You've been added to a meeting: "${mt.label}"`, at: mt.createdAt }));
-    }),
+    // Every class meant for them, not only ones they were tagged on -- see
+    // meetingBellItems in data.js for who counts and what "soon" means.
+    ...meetingBellItems(courses, liveStudent, Date.now()),
   ] : [];
 
   return (

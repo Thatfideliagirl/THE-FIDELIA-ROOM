@@ -670,7 +670,7 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
             <ChatLayout
               people={[{ id: "admin", name: "Fidelia (Tutor)", strong: true }, ...peers.map((p) => ({ id: p.id, name: p.name }))]}
               activeId={activePeer} mobileOpen={chatOpen} onSelect={(id) => { setActivePeer(id); setChatOpen(true); }} onBack={() => setChatOpen(false)}
-              messages={thread.map((m) => ({ mine: m.from === student.id, text: m.text }))}
+              messages={thread.map((m) => ({ mine: m.from === student.id, text: m.text, at: m.at }))}
               msg={msg} setMsg={setMsg} onSend={sendMsg}
             />
           </>

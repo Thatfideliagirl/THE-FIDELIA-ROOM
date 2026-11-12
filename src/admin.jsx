@@ -2039,7 +2039,7 @@ export function AdminChatTab({ students, directThreads, setDirectThreads, notifS
       <ChatLayout
         people={students.map((s) => ({ id: s.id, name: s.name, unread: activeId === s.id ? 0 : unreadFor(s.id) }))}
         activeId={activeId} mobileOpen={!!activeId} onSelect={setActiveId} onBack={() => setActiveId(null)}
-        messages={thread.map((m) => ({ mine: m.from === "admin", text: m.text }))}
+        messages={thread.map((m) => ({ mine: m.from === "admin", text: m.text, at: m.at }))}
         msg={msg} setMsg={setMsg} onSend={send} placeholder="Reply…"
         noMessagesText="No messages yet." pickText="Select a conversation to open it."
       />
