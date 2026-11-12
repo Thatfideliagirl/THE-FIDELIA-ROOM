@@ -10,6 +10,14 @@ export function getSavedLeadEmail() { try { return localStorage.getItem(KEY) || 
 export function saveLeadEmail(email) { try { localStorage.setItem(KEY, email.trim().toLowerCase()); } catch { /* private window: they'll just be asked again */ } }
 export const isValidEmail = (e) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test((e || "").trim());
 export async function recordFreeResourceEmail(email, resourceTitle) {
+  // Preferred: the site's own server records it AND sends the one-time
+  // thank-you email for a brand-new address. If that isn't available (not set
+  // up yet, offline, or running locally) fall back to recording directly.
+  try {
+    const r = await fetch("/api/free-resource-signup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: email.trim(), resourceTitle: resourceTitle || "" }) });
+    const j = await r.json().catch(() => null);
+    if (r.ok && j && j.ok) return;
+  } catch { /* fall through to the direct save below */ }
   if (!supabase) return;
   const { error } = await supabase.rpc("record_free_resource_email", { p_email: email.trim(), p_resource_title: resourceTitle || null });
   if (error) console.error("recordFreeResourceEmail failed", error);

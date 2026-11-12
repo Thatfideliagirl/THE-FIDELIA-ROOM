@@ -2293,6 +2293,7 @@ export function BrandingTab({ brand, setBrand }) {
           <Field label="WhatsApp number (digits only, country code, no + or spaces)" value={brand.whatsapp} onChange={(e) => setBrand((b) => ({ ...b, whatsapp: e.target.value.replace(/[^0-9]/g, "") }))} placeholder="2348135793935" />
           <Field label="Instagram handle (no @)" value={brand.instagram} onChange={(e) => setBrand((b) => ({ ...b, instagram: e.target.value.replace(/^@/, "") }))} placeholder="yourhandle" />
           <Field label="Twitter / X handle (no @)" value={brand.twitter} onChange={(e) => setBrand((b) => ({ ...b, twitter: e.target.value.replace(/^@/, "") }))} placeholder="yourhandle" />
+          <Field label="LinkedIn page link (paste the full address — used in your emails)" value={brand.linkedin || ""} onChange={(e) => setBrand((b) => ({ ...b, linkedin: e.target.value }))} placeholder="linkedin.com/in/yourname" />
         </div>
       </div>
       <div className="card rounded-2xl p-8 max-w-[560px] mt-6">

@@ -102,6 +102,17 @@ function paymentBox(price, details) {
     ${details ? `<div style="font-size:11px;letter-spacing:.08em;color:${BRAND.muted};margin-bottom:4px;">PAYMENT DETAILS</div><div style="font-size:14px;line-height:1.6;color:${BRAND.ink};white-space:pre-wrap;">${escapeHtml(details)}</div>` : ""}
   </div>`;
 }
+function socialsRow(brand) {
+  const links = [];
+  const url = (u) => (/^https?:\/\//i.test(u) ? u : "https://" + u);
+  if (brand.instagram) links.push(["Instagram", `https://instagram.com/${brand.instagram}`]);
+  if (brand.linkedin) links.push(["LinkedIn", url(brand.linkedin.trim())]);
+  if (brand.twitter) links.push(["Twitter / X", `https://x.com/${brand.twitter}`]);
+  if (brand.whatsapp) links.push(["WhatsApp", `https://wa.me/${brand.whatsapp}`]);
+  if (brand.email) links.push(["Email", `mailto:${brand.email}`]);
+  if (!links.length) return "";
+  return `<div style="font-size:14px;line-height:2;">Find me here:<br>${links.map(([l, u]) => `<a href="${escapeHtml(u)}" style="color:${BRAND.accent};font-weight:700;text-decoration:none;">${l}</a>`).join(" &nbsp;·&nbsp; ")}</div>`;
+}
 // The structural bits every template of a given kind needs -- never part of
 // the admin's editable text (see emailDefaults.js), so rewriting the
 // message can't delete the one thing that actually shows the access code
@@ -119,6 +130,7 @@ function extra(templateKey, vars) {
   if (templateKey === "task-deadline-reminder") return deadlineLine(vars.deadlineText) + button("View the task", vars.loginUrl || SITE_URL);
   if (templateKey === "notice-posted") return button("Open the Notice Board", vars.loginUrl || SITE_URL);
   if (templateKey === "meeting-reminder") return button("Open Virtual Meetings", vars.loginUrl || SITE_URL);
+  if (templateKey === "free-resource-thanks") return `<div style="margin:0 0 22px;">${button("Visit the Free Resource Lab", SITE_URL + "/?library=1")}</div>${vars.socialsHtml || ""}<div style="margin-top:22px;font-size:12px;color:${BRAND.muted};">You're getting this one-time note because you took a free resource on fjroom.com.</div>`;
   return "";
 }
 
@@ -127,7 +139,7 @@ function extra(templateKey, vars) {
 // (api/send-deadline-reminders.js) can call it directly -- a plain function
 // call within the same serverless bundle, not a second HTTP round trip --
 // and so both paths share one template/customization system instead of two.
-export async function sendTemplatedEmail({ kind, email, name, courseName, accessCode, loginUrl, taskTitle, moduleTitle, studentName, itemTitle, approved, deadlineText, fromName, price, paymentDetails, noticeText, meetingTitle, meetingTime }) {
+export async function sendTemplatedEmail({ kind, email, name, courseName, accessCode, loginUrl, taskTitle, moduleTitle, studentName, itemTitle, approved, deadlineText, fromName, price, paymentDetails, noticeText, meetingTitle, meetingTime, resourceTitle }) {
   if (!RESEND_API_KEY || !FROM) return { skipped: true, reason: "Email not configured yet" };
   if (!kind) return { error: "Missing kind", status: 400 };
 
@@ -156,7 +168,10 @@ export async function sendTemplatedEmail({ kind, email, name, courseName, access
   // submitting a task doesn't need to know or care that her admin-notify
   // email happens to be paused right now).
   if (custom?.muted) return { ok: true, skipped: true, reason: "This email is currently paused" };
-  const vars = { name: firstName(name), studentName, courseName, accessCode, loginUrl, taskTitle: taskTitle || itemTitle, moduleTitle: moduleTitle || itemTitle, deadlineText, fromName, price, paymentDetails: brand.paymentDetails, noticeText, meetingTitle, meetingTime };
+  const vars = { name: firstName(name), studentName, courseName, accessCode, loginUrl, taskTitle: taskTitle || itemTitle, moduleTitle: moduleTitle || itemTitle, deadlineText, fromName, price, paymentDetails: brand.paymentDetails, noticeText, meetingTitle, meetingTime, resourceTitle };
+  // Her contact links (set in Branding), turned into a row of links for the
+  // free-resource thank-you.
+  vars.socialsHtml = socialsRow(brand);
   const defaults = EMAIL_DEFAULTS[templateKey];
   const subject = custom?.subject ? fillTemplatePlain(custom.subject, vars) : defaults.subject(vars);
   const messageHtml = custom?.body ? fillTemplate(custom.body, vars) : defaults.body(vars);

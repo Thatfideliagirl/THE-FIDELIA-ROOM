@@ -23,6 +23,7 @@ export const EMAIL_TEMPLATE_KEYS = [
   { key: "task-deadline-reminder", label: "Task deadline reminder", to: "student", vars: ["name", "taskTitle", "courseName"] },
   { key: "notice-posted", label: "New notice on the Notice Board", to: "student", vars: ["name", "noticeText", "courseName"] },
   { key: "meeting-reminder", label: "Class starts in 1 hour", to: "student", vars: ["name", "meetingTitle", "courseName", "meetingTime"] },
+  { key: "free-resource-thanks", label: "Thank-you for a free resource (first time only)", to: "visitor", vars: ["resourceTitle"] },
 ];
 
 // Shown next to each token button in the editor.
@@ -38,6 +39,7 @@ export const VAR_LABELS = {
   noticeText: "The notice you posted",
   meetingTitle: "Meeting title",
   meetingTime: "Start time",
+  resourceTitle: "Name of the free resource",
 };
 
 // Sample values the admin editor fills in so an unedited template still
@@ -46,7 +48,7 @@ export const SAMPLE_VARS = {
   name: "Amaka", studentName: "Amaka", courseName: "Voice Acting Mastery",
   taskTitle: "Record a demo reel", moduleTitle: "Finding Your Voice", accessCode: "FJ-7K2QR",
   fromName: "Fidelia", price: "₦50,000",
-  noticeText: "Class resumes on Monday at 6pm. Please come ready.", meetingTitle: "Tuesday class", meetingTime: "6:00 PM",
+  noticeText: "Class resumes on Monday at 6pm. Please come ready.", meetingTitle: "Tuesday class", meetingTime: "6:00 PM", resourceTitle: "30 Link-Page Designs",
 };
 
 // What the editor actually loads into an UNTOUCHED template's boxes --
@@ -75,6 +77,7 @@ export const EMAIL_STARTERS = {
   "message-to-student": { subject: "You have a new message on FJ Room", body: "<h1>New message, {{name}}.</h1><p>You've got a new message waiting for you on FJ Room.</p>" },
   "community-tagged": { subject: "{{fromName}} tagged you on FJ Room", body: "<h1>You were tagged, {{name}}.</h1><p><strong>{{fromName}}</strong> tagged you in the community on FJ Room.</p>" },
   "notice-posted": { subject: "A new notice from Fidelia", body: "<h1>A new notice, {{name}}.</h1><p>{{noticeText}}</p>" },
+  "free-resource-thanks": { subject: "Thanks for grabbing {{resourceTitle}}", body: "<h1>Thank you for getting {{resourceTitle}}.</h1><p>I'm so glad you picked it up, and I hope it helps you move forward.</p><p>I share free tips and new resources all the time, so follow me on my pages below and stay tuned. Whenever you want something new, the Free Resource Lab is always open for you.</p><p>With love,<br>Fidelia</p>" },
   "meeting-reminder": { subject: "Your class starts in 1 hour: {{meetingTitle}}", body: "<h1>Almost time, {{name}}.</h1><p>It's officially 1 hour to <strong>{{meetingTitle}}</strong> ({{courseName}}), starting at <strong>{{meetingTime}}</strong>. Are you ready?</p><p>Open your Virtual Meetings tab in FJ Room for the join link. See you there!</p>" },
   "task-deadline-reminder": { subject: "Reminder: {{taskTitle}} closes soon", body: "<h1>Don't forget, {{name}}.</h1><p><strong>{{taskTitle}}</strong> in <strong>{{courseName}}</strong> closes soon — you haven't submitted it yet.</p>" },
 };
@@ -140,6 +143,10 @@ export const EMAIL_DEFAULTS = {
   "notice-posted": {
     subject: () => "A new notice from Fidelia",
     body: (v) => `<h1>A new notice, ${firstName(v.name)}.</h1><p>${escapeHtml(v.noticeText || "")}</p>`,
+  },
+  "free-resource-thanks": {
+    subject: (v) => `Thanks for grabbing ${v.resourceTitle || "your free resource"}`,
+    body: (v) => `<h1>Thank you for getting ${escapeHtml(v.resourceTitle || "your free resource")}.</h1><p>I'm so glad you picked it up, and I hope it helps you move forward.</p><p>I share free tips and new resources all the time, so follow me on my pages below and stay tuned. Whenever you want something new, the Free Resource Lab is always open for you.</p><p>With love,<br>Fidelia</p>`,
   },
   "meeting-reminder": {
     subject: (v) => `Your class starts in 1 hour: ${v.meetingTitle}`,
