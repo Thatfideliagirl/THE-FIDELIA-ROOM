@@ -14,7 +14,7 @@ import { renderTestimonialCard } from "./lib/testimonial.js";
 import { Field, SectionHeader, NotifBell, ChatLayout, SidebarLink, LogoMark, TextArea, SelectF, ImgField, FileField, TaskFileList, ChangePasswordCard, RichTextEditor, RichText, DashboardShell, WelcomeTour, TEAM_TOUR_STEPS } from "./components.jsx";
 import { CommunityPanel, SOCIAL_PLATFORMS } from "./student.jsx";
 import { fetchTeamMembers, addTeamMember, updateTeamMember, removeTeamMember, fetchTeamActivity, updateMyTeamProfile, markTourSeen } from "./lib/team.js";
-import { sendTaskAssignedEmail, sendTaskDecisionEmail, sendQuickCheckDecisionEmail, sendApplicationReviewedEmail, sendNoticeEmail } from "./lib/email.js";
+import { sendFreeResourceThanks, sendTaskAssignedEmail, sendTaskDecisionEmail, sendQuickCheckDecisionEmail, sendApplicationReviewedEmail, sendNoticeEmail } from "./lib/email.js";
 import { EMAIL_TEMPLATE_KEYS, EMAIL_STARTERS, VAR_LABELS, SAMPLE_VARS, fillTemplate, fillTemplatePlain } from "./lib/emailDefaults.js";
 import { prepareImage } from "./lib/imageCompress.js";
 import { fetchFreeResourceEmails, deleteFreeResourceEmail } from "./lib/leads.js";
@@ -2001,6 +2001,13 @@ export function EmailListTab() {
   const [error, setError] = useState("");
   const [q, setQ] = useState("");
   const [confirmEmail, setConfirmEmail] = useState(null);
+  const [thanksArm, setThanksArm] = useState(null); const [thanksMsg, setThanksMsg] = useState({});
+  async function sendThanks(r) {
+    if (thanksArm !== r.email) { setThanksArm(r.email); setTimeout(() => setThanksArm((c) => c === r.email ? null : c), 4000); return; }
+    setThanksArm(null); setThanksMsg((m) => ({ ...m, [r.email]: "Sending…" }));
+    const out = await sendFreeResourceThanks({ email: r.email, resourceTitle: r.last_resource });
+    setThanksMsg((m) => ({ ...m, [r.email]: out.ok ? "Sent ✓" : out.message }));
+  }
   useEffect(() => { fetchFreeResourceEmails().then(setRows).catch((e) => { console.error("fetchFreeResourceEmails failed", e); setError("The email list isn't set up yet. Run the setup file I sent you in Supabase, then reload this page."); }); }, []);
   const needle = q.trim().toLowerCase();
   const shown = (rows || []).filter((r) => !needle || r.email.includes(needle) || (r.last_resource || "").toLowerCase().includes(needle));
@@ -2036,6 +2043,7 @@ export function EmailListTab() {
               </div>
               <div className="flex items-center gap-4 shrink-0">
                 <div className="text-center"><div className="f-display text-[24px] leading-none" style={{ fontWeight: 800, color: "var(--accent)" }}>{r.visits}</div><div className="f-code text-[9px] mt-1" style={{ color: "#A79B84" }}>{r.visits === 1 ? "VISIT" : "VISITS"}</div></div>
+                <div className="flex flex-col items-end gap-1"><button onClick={() => sendThanks(r)} className="f-label text-[11px] px-3 py-1.5 rounded-full" style={{ background: thanksArm === r.email ? "var(--accent)" : "#F0E7D6", color: thanksArm === r.email ? "#FAF6EC" : "#71675A", fontWeight: 700 }}>{thanksArm === r.email ? "Sure? Click to send" : "Send thank-you"}</button>{thanksMsg[r.email] && <span className="text-[11.5px]" style={{ color: thanksMsg[r.email] === "Sent ✓" ? "#2F7D4F" : "#B04A3A", maxWidth: 200, textAlign: "right" }}>{thanksMsg[r.email]}</span>}</div>
                 {confirmEmail === r.email ? <div className="flex items-center gap-2 text-[12px]"><span style={{ color: "#B04A3A" }}>Remove?</span><button onClick={() => remove(r.email)} className="f-label" style={{ color: "#B04A3A", fontWeight: 700 }}>YES</button><button onClick={() => setConfirmEmail(null)} style={{ color: "#A79B84" }}>No</button></div> : <button onClick={() => setConfirmEmail(r.email)} aria-label={`Remove ${r.email}`}><Trash2 size={15} color="#B04A3A" /></button>}
               </div>
             </div>

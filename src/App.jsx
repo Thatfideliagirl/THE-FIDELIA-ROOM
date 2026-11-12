@@ -15,6 +15,7 @@ const AdminDashboard = React.lazy(() => import("./admin.jsx").then((m) => ({ def
 import { supabase } from "./lib/supabaseClient.js";
 import { signIn, signOut, signUpApplicant, sendPasswordReset, isAdminEmail } from "./lib/auth.js";
 import { fetchApplicants, insertApplicant, updateApplicant, deleteApplicant, fetchStudents, insertStudent, updateStudent, deleteStudent, fetchResources, insertResource, updateResource, deleteResource, fetchCourses, upsertCourse, deleteCourse, fetchCohorts, upsertCohort, deleteCohort, fetchSettings, updateSettings, fetchTestimonials, upsertTestimonial, deleteTestimonial, fetchFaqs, upsertFaq, deleteFaq, fetchNotices, upsertNotice, fetchTasks, upsertTask, deleteTask, fetchCommunityPosts, upsertCommunityPost, fetchDirectMessages, insertDirectMessage, fetchNotifSeen, saveNotifSeen } from "./lib/db.js";
+import { fetchFreeResourceEmails } from "./lib/leads.js";
 import { sendWelcomeEmail, sendAcceptanceEmail, logSignupBranch, notifyAdminMessageReceived, sendMessageReceivedEmail } from "./lib/email.js";
 import { checkTeamInvite, signUpTeamMember, getMyTeamAccess, logActivity } from "./lib/team.js";
 
@@ -74,6 +75,7 @@ export default function App() {
   // that resource, layered over the normal public site behind it (rather
   // than a bare, isolated page), so they see the rest of FJ Room too.
   const [sharedResourceId, setSharedResourceId] = useState(() => new URLSearchParams(window.location.search).get("r"));
+  const [leadRows, setLeadRows] = useState([]);
   const [courses, setCourses] = useState([]);
   const [cohorts, setCohorts] = useState([]);
   // These all start empty and get replaced within moments by their real
@@ -328,6 +330,14 @@ export default function App() {
   // ~4 MB that every visitor downloaded before a single card could draw. The
   // first time an admin opens the dashboard, each oversized one is shrunk,
   // uploaded, and swapped for its link, but only if it's still unchanged.
+  useEffect(() => {
+    if (page !== "adminDash" || teamAccess) return;
+    let live = true;
+    const load = () => fetchFreeResourceEmails().then((rows) => { if (live) setLeadRows(rows); }).catch(() => {});
+    load();
+    const t = setInterval(load, 60000);
+    return () => { live = false; clearInterval(t); };
+  }, [page, teamAccess]);
   const imagesMovedRef = useRef(false);
   useEffect(() => {
     if (page !== "adminDash" || !settingsLoaded || !testimonialsLoaded || !coursesLoaded || imagesMovedRef.current) return;
@@ -622,6 +632,10 @@ export default function App() {
   const pendingEnrollment = !hasUsableEnrollment ? liveStudent?.enrollments.find((e) => e.status === "awaiting-code") : null;
 
   const adminNotifItems = [
+    // Someone new took a free resource (an email that has joined the list in
+    // the last week) -- the list is re-read every minute while she has the
+    // dashboard open.
+    ...leadRows.filter((l) => l.first_seen && Date.now() - new Date(l.first_seen).getTime() < 7 * 86400000).map((l) => ({ id: `lead-${l.email}`, t: `New on your email list: ${l.email}${l.last_resource ? ` (took "${l.last_resource}")` : ""}`, at: new Date(l.first_seen).getTime() })),
     ...applicants.filter((a) => a.status === "pending").map((a) => ({ id: `ap-${a.id}`, t: `${a.name} applied for a course`, at: a.createdAt })),
     // "needs review" covers both a first submission and a resubmission on
     // a task with required links -- the round number keeps the id fresh

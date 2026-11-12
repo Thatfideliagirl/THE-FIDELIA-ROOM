@@ -6,6 +6,17 @@
 // logs on failure, never throws. Resend's own dashboard shows delivery
 // status per email, which replaces the diagnostic logging this used to
 // need to even tell whether EmailJS had been reached at all.
+// Used by the admin's "Send thank-you" button -- unlike the fire-and-forget
+// ones, it reports what happened so she can see whether it really went.
+export async function sendFreeResourceThanks({ email, resourceTitle }) {
+  try {
+    const res = await fetch("/api/send-email", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "free-resource-thanks", email, resourceTitle: resourceTitle || "your free resource" }) });
+    const j = await res.json().catch(() => ({}));
+    if (res.ok && j.ok && !j.skipped) return { ok: true };
+    if (j.skipped) return { ok: false, message: j.reason || "Emails aren't switched on." };
+    return { ok: false, message: "It didn't go through. Check your email settings on Resend." };
+  } catch { return { ok: false, message: "Couldn't reach the server — check your connection." }; }
+}
 async function send(kind, params) {
   try {
     const res = await fetch("/api/send-email", {
