@@ -172,6 +172,8 @@ export async function sendTemplatedEmail({ kind, email, name, courseName, access
   // Her contact links (set in Branding), turned into a row of links for the
   // free-resource thank-you.
   vars.socialsHtml = socialsRow(brand);
+  // If she has already typed her own links into the wording, don't add the automatic row on top (it would show everything twice).
+  if (templateKey === "free-resource-thanks" && custom?.body && /(instagram\.com|linkedin\.com|twitter\.com|x\.com\/|wa\.me)/i.test(custom.body)) vars.socialsHtml = "";
   const defaults = EMAIL_DEFAULTS[templateKey];
   const subject = custom?.subject ? fillTemplatePlain(custom.subject, vars) : defaults.subject(vars);
   const messageHtml = custom?.body ? fillTemplate(custom.body, vars) : defaults.body(vars);
