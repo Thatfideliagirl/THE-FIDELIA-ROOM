@@ -9,6 +9,13 @@ export const INLINE_MIN_CHARS = 150000;   // ~110 KB of picture
 export const STORED_MIN_BYTES = 500000;   // 0.5 MB
 const STORED_RE = /\/storage\/v1\/object\/public\/uploads\/[^?#]+\.(jpe?g|png|webp)(\?|#|$)/i;
 
+// Pictures already handled (shrunk, or checked and found as small as they can
+// get) are remembered on this device, so a rescan doesn't keep listing a
+// picture that simply can't be made any lighter.
+const CHECKED_KEY = "fjroom_photo_checked";
+function loadChecked() { try { return new Set(JSON.parse(localStorage.getItem(CHECKED_KEY) || "[]")); } catch { return new Set(); } }
+function saveChecked(set) { try { localStorage.setItem(CHECKED_KEY, JSON.stringify([...set].slice(-800))); } catch { /* private window: it may show up again next scan */ } }
+
 export function getIn(obj, path) { return path.reduce((o, k) => (o == null ? o : o[k]), obj); }
 export function setIn(obj, path, value) {
   if (!path.length) return value;
@@ -44,8 +51,9 @@ async function inBatches(list, n, fn) {
 // Returns the pictures worth cleaning, biggest first.
 export async function scanPictures(sources) {
   const found = [];
+  const checked = loadChecked();
   for (const s of sources) {
-    walkPictures(s.value, (path, url, kind, bytes) => found.push({ source: s, path, url, kind, bytes }));
+    walkPictures(s.value, (path, url, kind, bytes) => { if (!checked.has(url)) found.push({ source: s, path, url, kind, bytes }); });
   }
   const sizes = new Map();
   const toMeasure = [...new Set(found.filter((f) => f.kind === "stored").map((f) => f.url))];
@@ -74,22 +82,25 @@ export async function cleanPictures(items, onProgress) {
   for (const it of items) { if (!byUrl.has(it.url)) byUrl.set(it.url, []); byUrl.get(it.url).push(it); }
   const groups = [...byUrl.values()];
   let done = 0, savedBytes = 0, cleaned = 0, alreadySmall = 0, failed = 0;
+  const checked = loadChecked();
   for (const group of groups) {
     const first = group[0];
     try {
       const blob = await (await fetch(first.url)).blob();
       const file = new File([blob], "picture", { type: blob.type });
       const small = await compressImage(file, optionsFor(first.path));
-      if (small === file || small.size > blob.size * 0.85) { alreadySmall += group.length; }
+      if (small === file || small.size > blob.size * 0.85) { alreadySmall += group.length; checked.add(first.url); }
       else {
         const newUrl = await uploadFile(small);
         for (const it of group) it.source.replace(it.path, it.url, newUrl);
         savedBytes += (blob.size - small.size) * group.length;
         cleaned += group.length;
+        checked.add(newUrl);
       }
     } catch (e) { console.error("photo cleanup failed for one picture", e); failed += group.length; }
     done += 1; onProgress?.(done, groups.length);
   }
+  saveChecked(checked);
   return { savedBytes, cleaned, alreadySmall, failed };
 }
 

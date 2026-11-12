@@ -89,7 +89,7 @@ export function PhotoCleanupTab({ courses, setCourses, students, setStudents, te
           <div className="text-[16px] flex items-center gap-2" style={{ fontWeight: 800, color: "#3F7A55" }}><Check size={18} /> Done</div>
           <div className="text-[14.5px] mt-2" style={{ color: "#4A4338", lineHeight: 1.6 }}>
             {result.cleaned > 0 ? <>Shrunk <strong>{result.cleaned}</strong> {result.cleaned === 1 ? "picture" : "pictures"} and freed up about <strong>{formatBytes(result.savedBytes)}</strong>. </> : "Nothing needed shrinking. "}
-            {result.alreadySmall > 0 && <>{result.alreadySmall} {result.alreadySmall === 1 ? "was" : "were"} already as small as they can get. </>}
+            {result.alreadySmall > 0 && <>{result.alreadySmall} {result.alreadySmall === 1 ? "was" : "were"} already as small as they can get, so I won't list {result.alreadySmall === 1 ? "it" : "them"} again. </>}
             {result.failed > 0 && <span style={{ color: "#B04A3A" }}>{result.failed} couldn't be done — press Scan again to retry them.</span>}
           </div>
         </div>

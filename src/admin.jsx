@@ -2291,8 +2291,8 @@ export function BrandingTab({ brand, setBrand }) {
         <div className="flex flex-col gap-4">
           <Field label="Contact email" value={brand.email} onChange={(e) => setBrand((b) => ({ ...b, email: e.target.value }))} placeholder="you@example.com" />
           <Field label="WhatsApp number (digits only, country code, no + or spaces)" value={brand.whatsapp} onChange={(e) => setBrand((b) => ({ ...b, whatsapp: e.target.value.replace(/[^0-9]/g, "") }))} placeholder="2348135793935" />
-          <Field label="Instagram handle (no @)" value={brand.instagram} onChange={(e) => setBrand((b) => ({ ...b, instagram: e.target.value.replace(/^@/, "") }))} placeholder="yourhandle" />
-          <Field label="Twitter / X handle (no @)" value={brand.twitter} onChange={(e) => setBrand((b) => ({ ...b, twitter: e.target.value.replace(/^@/, "") }))} placeholder="yourhandle" />
+          <Field label="Instagram (handle or link)" value={brand.instagram} onChange={(e) => setBrand((b) => ({ ...b, instagram: handleFrom(e.target.value) }))} placeholder="yourhandle — or paste your full Instagram link" />
+          <Field label="Twitter / X (handle or link)" value={brand.twitter} onChange={(e) => setBrand((b) => ({ ...b, twitter: handleFrom(e.target.value) }))} placeholder="yourhandle — or paste your full X / Twitter link" />
           <Field label="LinkedIn page link (paste the full address — used in your emails)" value={brand.linkedin || ""} onChange={(e) => setBrand((b) => ({ ...b, linkedin: e.target.value }))} placeholder="linkedin.com/in/yourname" />
         </div>
       </div>
@@ -2594,6 +2594,11 @@ export function TeamAccountTab({ teamAccess, onUpdate }) {
   );
 }
 
+// Accepts a plain handle, an @handle, or a whole pasted link
+// (https://www.instagram.com/name/?hl=en) and keeps just the handle.
+function handleFrom(v) {
+  return String(v || "").trim().replace(/^https?:\/\/(www\.)?(instagram\.com|twitter\.com|x\.com)\//i, "").replace(/[/?#].*$/, "").replace(/^@/, "");
+}
 export function AdminDashboard({ courses, setCourses, students, setStudents, onRemoveStudent, applicants, setApplicants, onRemoveApplicant, onAcceptApplicant, cohorts, setCohorts, tasks, setTasks, resources, onAddResource, onEditResource, onRemoveResource, community, setCommunity, notices, setNotices, directThreads, setDirectThreads, testimonials, setTestimonials, faqs, setFaqs, brand, setBrand, adminProfile, setAdminProfile, onExit, onViewSite, notifItems, notifSeen, onMarkSeen, notifCleared, onClearNotif, teamAccess, onSwitchToStudent, onUpdateTeamAccess }) {
   const allNavItems = [
     { id: "overview", icon: Sparkles, label: "Overview" }, { id: "profile", icon: UserCircle, label: "My Profile" }, { id: "applicants", icon: ClipboardCheck, label: "Applicants" },
