@@ -8,13 +8,13 @@ import {
   Clock, Inbox, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Home, UserCog, Repeat, RotateCcw, IdCard
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from "recharts";
-import { genCode, pairKey, ADMIN_EMAIL, TEAM_PERMISSION_TABS, LINK_TYPES, STUDENT_ACCESS_TABS, linkShare, deriveSubmissionStatus, sumLinkScores, capstoneStatus, courseEligibility, formatDateTime, formatRelativeTime, AUTO_APPROVE_THRESHOLD, normalizeQuestions } from "./lib/data.js";
+import { genCode, pairKey, noticeReaches, ADMIN_EMAIL, TEAM_PERMISSION_TABS, LINK_TYPES, STUDENT_ACCESS_TABS, linkShare, deriveSubmissionStatus, sumLinkScores, capstoneStatus, courseEligibility, formatDateTime, formatRelativeTime, AUTO_APPROVE_THRESHOLD, normalizeQuestions } from "./lib/data.js";
 import { renderCertificate, formatIssueDate } from "./lib/certificate.js";
 import { renderTestimonialCard } from "./lib/testimonial.js";
 import { Field, SectionHeader, NotifBell, ChatLayout, SidebarLink, LogoMark, TextArea, SelectF, ImgField, FileField, TaskFileList, ChangePasswordCard, RichTextEditor, RichText, DashboardShell, WelcomeTour, TEAM_TOUR_STEPS } from "./components.jsx";
 import { CommunityPanel, SOCIAL_PLATFORMS } from "./student.jsx";
 import { fetchTeamMembers, addTeamMember, updateTeamMember, removeTeamMember, fetchTeamActivity, updateMyTeamProfile, markTourSeen } from "./lib/team.js";
-import { sendTaskAssignedEmail, sendTaskDecisionEmail, sendQuickCheckDecisionEmail, sendApplicationReviewedEmail } from "./lib/email.js";
+import { sendTaskAssignedEmail, sendTaskDecisionEmail, sendQuickCheckDecisionEmail, sendApplicationReviewedEmail, sendNoticeEmail } from "./lib/email.js";
 import { EMAIL_TEMPLATE_KEYS, EMAIL_STARTERS, VAR_LABELS, SAMPLE_VARS, fillTemplate, fillTemplatePlain } from "./lib/emailDefaults.js";
 import { prepareImage } from "./lib/imageCompress.js";
 import { fetchFreeResourceEmails, deleteFreeResourceEmail } from "./lib/leads.js";
@@ -2056,22 +2056,49 @@ export function AdminCommunityTab({ community, setCommunity, students, cohorts }
     </>
   );
 }
-export function AdminNoticeTab({ notices, setNotices, cohorts, students }) {
-  const [noticeMsg, setNoticeMsg] = useState(""); const [cohortId, setCohortId] = useState("all"); const [openSeenId, setOpenSeenId] = useState(null);
-  function post() { if (!noticeMsg.trim()) return; setNotices((p) => [...p, { id: "n" + Date.now(), text: noticeMsg, cohortId, seenBy: [] }]); setNoticeMsg(""); }
+export function AdminNoticeTab({ notices, setNotices, cohorts, students, courses = [] }) {
+  const [noticeMsg, setNoticeMsg] = useState(""); const [cohortId, setCohortId] = useState("all"); const [courseId, setCourseId] = useState("all"); const [openSeenId, setOpenSeenId] = useState(null);
+  const [emailThem, setEmailThem] = useState(true); const [posted, setPosted] = useState("");
+  // A cohort only offers the courses it runs, so the two can't be set to a
+  // combination nobody is in.
+  const activeCohort = cohorts.find((c) => c.id === cohortId);
+  const courseOptions = activeCohort ? courses.filter((c) => (activeCohort.courseIds || []).includes(c.id)) : courses;
+  const audience = students.filter((s) => noticeReaches({ cohortId, courseId }, s));
+  const courseTitle = (id) => courses.find((c) => c.id === id)?.title;
+  function post() {
+    if (!noticeMsg.trim()) return;
+    const n = { id: "n" + Date.now(), text: noticeMsg.trim(), cohortId, courseId, postedAt: Date.now(), seenBy: [] };
+    setNotices((p) => [...p, n]);
+    if (emailThem) audience.forEach((s) => { if (s.email) sendNoticeEmail({ email: s.email, name: s.name, noticeText: n.text, courseName: courseId === "all" ? undefined : courseTitle(courseId) }); });
+    setPosted(`Posted to ${audience.length} student${audience.length === 1 ? "" : "s"}${emailThem ? " and emailed" : ""}.`);
+    setTimeout(() => setPosted(""), 4000);
+    setNoticeMsg("");
+  }
+  const label = (a) => `${a.cohortId === "all" || !a.cohortId ? "ALL COHORTS" : (cohorts.find((c) => c.id === a.cohortId)?.name || "COHORT").toUpperCase()} · ${!a.courseId || a.courseId === "all" ? "ALL COURSES" : (courseTitle(a.courseId) || "COURSE").toUpperCase()}`;
   return (
     <>
       <SectionHeader eyebrow="ONE-WAY BROADCAST" title="Notice Board" />
       <div className="card rounded-2xl p-6">
-        <div className="flex gap-2 mb-3"><SelectF value={cohortId} onChange={(e) => setCohortId(e.target.value)} options={[{ value: "all", label: "All cohorts" }, ...cohorts.map((c) => ({ value: c.id, label: c.name }))]} /></div>
-        <div className="flex gap-2 mb-5"><input className="input-field rounded-lg px-4 py-2.5" placeholder="Post to the whole cohort…" value={noticeMsg} onChange={(e) => setNoticeMsg(e.target.value)} /><button onClick={post} className="btn-primary rounded-lg px-5 text-[14px] shrink-0">Post</button></div>
+        <div className="f-label text-[10px] mb-2" style={{ color: "#A79B84" }}>WHO SHOULD SEE THIS</div>
+        <div className="flex gap-2 mb-3 flex-wrap">
+          <SelectF value={cohortId} onChange={(e) => { setCohortId(e.target.value); setCourseId("all"); }} options={[{ value: "all", label: "All cohorts" }, ...cohorts.map((c) => ({ value: c.id, label: c.name }))]} />
+          <SelectF value={courseOptions.some((c) => c.id === courseId) ? courseId : "all"} onChange={(e) => setCourseId(e.target.value)} options={[{ value: "all", label: "All courses" }, ...courseOptions.map((c) => ({ value: c.id, label: c.title }))]} />
+        </div>
+        <div className="text-[12.5px] mb-3" style={{ color: "#71675A" }}>This will reach <strong>{audience.length}</strong> student{audience.length === 1 ? "" : "s"}.</div>
+        <textarea className="input-field rounded-lg px-4 py-2.5 w-full mb-3" rows={3} placeholder="Write your notice…" value={noticeMsg} onChange={(e) => setNoticeMsg(e.target.value)} />
+        <div className="flex items-center gap-4 mb-5 flex-wrap">
+          <button onClick={post} disabled={!noticeMsg.trim()} className="btn-primary rounded-lg px-6 py-2.5 text-[14px] shrink-0 disabled:opacity-40">Post</button>
+          <label className="flex items-center gap-2 text-[13px] cursor-pointer" style={{ color: "#4A4237" }}><input type="checkbox" checked={emailThem} onChange={(e) => setEmailThem(e.target.checked)} /> Also email them</label>
+          {emailThem && audience.length > 30 && <span className="text-[12px]" style={{ color: "#B2572B" }}>That's {audience.length} emails — the free email plan allows about 100 a day.</span>}
+          {posted && <span className="text-[13px] accent-text" style={{ fontWeight: 700 }}>{posted}</span>}
+        </div>
         <div className="flex flex-col gap-3">{[...notices].reverse().map((a) => {
           const seenStudents = (a.seenBy || []).map((sid) => students.find((s) => s.id === sid)).filter(Boolean);
           return (
             <div key={a.id} className="rounded-xl p-4 text-[15px]" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
-              {a.text}
-              <div className="flex items-center justify-between mt-2">
-                <div className="f-code text-[9px]" style={{ color: "#A79B84" }}>{a.cohortId === "all" ? "ALL COHORTS" : cohorts.find((c) => c.id === a.cohortId)?.name.toUpperCase()}</div>
+              <div className="whitespace-pre-wrap" style={{ overflowWrap: "anywhere" }}>{a.text}</div>
+              <div className="flex items-center justify-between mt-2 gap-3 flex-wrap">
+                <div className="f-code text-[9px]" style={{ color: "#A79B84" }}>{label(a)}{a.postedAt ? ` · ${formatDateTime(a.postedAt)}` : ""}</div>
                 <button onClick={() => setOpenSeenId(openSeenId === a.id ? null : a.id)} className="f-label text-[10px] accent-text flex items-center gap-1"><Eye size={11} /> {seenStudents.length} seen</button>
               </div>
               {openSeenId === a.id && (
@@ -2599,7 +2626,7 @@ export function AdminDashboard({ courses, setCourses, students, setStudents, onR
         {tab === "faq" && <FaqTab faqs={faqs} setFaqs={setFaqs} />}
         {tab === "chat" && <AdminChatTab students={students} directThreads={directThreads} setDirectThreads={setDirectThreads} notifSeen={notifSeen} onMarkSeen={onMarkSeen} />}
         {tab === "community" && <AdminCommunityTab community={community} setCommunity={setCommunity} students={students} cohorts={cohorts} />}
-        {tab === "notice" && <AdminNoticeTab notices={notices} setNotices={setNotices} cohorts={cohorts} students={students} />}
+        {tab === "notice" && <AdminNoticeTab notices={notices} setNotices={setNotices} cohorts={cohorts} students={students} courses={courses} />}
         {tab === "branding" && <BrandingTab brand={brand} setBrand={setBrand} />}
         {tab === "team" && !teamAccess && <TeamTab />}
     </DashboardShell>

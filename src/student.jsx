@@ -676,7 +676,7 @@ export function EnrollmentDashboard({ student, setStudents, course, enrollment, 
           </>
         )}
         {tab === "community" && <CommunityPanel community={community} setCommunity={setCommunity} authorName={student.name} authorId={student.id} allStudents={peers} cohortId={student.cohortId} />}
-        {tab === "notice" && <><SectionHeader eyebrow="FROM THE CREATOR" title="Notice Board" /><div className="flex flex-col gap-3">{[...notices].reverse().map((a) => { const seen = (a.seenBy || []).includes(student.id); return (
+        {tab === "notice" && <><SectionHeader eyebrow="FROM THE CREATOR" title="Notice Board" /><div className="flex flex-col gap-3">{notices.filter((n) => !n.courseId || n.courseId === "all" || n.courseId === course.id).reverse().map((a) => { const seen = (a.seenBy || []).includes(student.id); return (
           <div key={a.id} className="card rounded-xl p-5">
             <div className="f-label text-[11px] mb-2 accent-text">THE CREATOR</div>
             <div className="text-[16px] mb-3">{a.text}</div>

@@ -117,6 +117,8 @@ function extra(templateKey, vars) {
   if (templateKey === "message-to-student") return button("View message", vars.loginUrl || SITE_URL);
   if (templateKey === "community-tagged") return button("View it", vars.loginUrl || SITE_URL);
   if (templateKey === "task-deadline-reminder") return deadlineLine(vars.deadlineText) + button("View the task", vars.loginUrl || SITE_URL);
+  if (templateKey === "notice-posted") return button("Open the Notice Board", vars.loginUrl || SITE_URL);
+  if (templateKey === "meeting-reminder") return button("Open Virtual Meetings", vars.loginUrl || SITE_URL);
   return "";
 }
 
@@ -125,7 +127,7 @@ function extra(templateKey, vars) {
 // (api/send-deadline-reminders.js) can call it directly -- a plain function
 // call within the same serverless bundle, not a second HTTP round trip --
 // and so both paths share one template/customization system instead of two.
-export async function sendTemplatedEmail({ kind, email, name, courseName, accessCode, loginUrl, taskTitle, moduleTitle, studentName, itemTitle, approved, deadlineText, fromName, price, paymentDetails }) {
+export async function sendTemplatedEmail({ kind, email, name, courseName, accessCode, loginUrl, taskTitle, moduleTitle, studentName, itemTitle, approved, deadlineText, fromName, price, paymentDetails, noticeText, meetingTitle, meetingTime }) {
   if (!RESEND_API_KEY || !FROM) return { skipped: true, reason: "Email not configured yet" };
   if (!kind) return { error: "Missing kind", status: 400 };
 
@@ -154,7 +156,7 @@ export async function sendTemplatedEmail({ kind, email, name, courseName, access
   // submitting a task doesn't need to know or care that her admin-notify
   // email happens to be paused right now).
   if (custom?.muted) return { ok: true, skipped: true, reason: "This email is currently paused" };
-  const vars = { name: firstName(name), studentName, courseName, accessCode, loginUrl, taskTitle: taskTitle || itemTitle, moduleTitle: moduleTitle || itemTitle, deadlineText, fromName, price, paymentDetails: brand.paymentDetails };
+  const vars = { name: firstName(name), studentName, courseName, accessCode, loginUrl, taskTitle: taskTitle || itemTitle, moduleTitle: moduleTitle || itemTitle, deadlineText, fromName, price, paymentDetails: brand.paymentDetails, noticeText, meetingTitle, meetingTime };
   const defaults = EMAIL_DEFAULTS[templateKey];
   const subject = custom?.subject ? fillTemplatePlain(custom.subject, vars) : defaults.subject(vars);
   const messageHtml = custom?.body ? fillTemplate(custom.body, vars) : defaults.body(vars);

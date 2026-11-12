@@ -72,3 +72,6 @@ export function sendMessageReceivedEmail({ email, name }) {
 export function sendCommunityTaggedEmail({ email, name, fromName }) {
   return send("community-tagged", { email, name, fromName });
 }
+export function sendNoticeEmail({ email, name, noticeText, courseName }) {
+  return send("notice-posted", { email, name, noticeText, courseName });
+}

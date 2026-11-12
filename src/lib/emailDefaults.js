@@ -21,6 +21,8 @@ export const EMAIL_TEMPLATE_KEYS = [
   { key: "message-to-student", label: "Message received", to: "student", vars: ["name"] },
   { key: "community-tagged", label: "Tagged in community", to: "student", vars: ["name", "fromName"] },
   { key: "task-deadline-reminder", label: "Task deadline reminder", to: "student", vars: ["name", "taskTitle", "courseName"] },
+  { key: "notice-posted", label: "New notice on the Notice Board", to: "student", vars: ["name", "noticeText", "courseName"] },
+  { key: "meeting-reminder", label: "Class starts in 1 hour", to: "student", vars: ["name", "meetingTitle", "courseName", "meetingTime"] },
 ];
 
 // Shown next to each token button in the editor.
@@ -33,6 +35,9 @@ export const VAR_LABELS = {
   accessCode: "Access code",
   fromName: "Who tagged them",
   price: "Training fee",
+  noticeText: "The notice you posted",
+  meetingTitle: "Meeting title",
+  meetingTime: "Start time",
 };
 
 // Sample values the admin editor fills in so an unedited template still
@@ -41,6 +46,7 @@ export const SAMPLE_VARS = {
   name: "Amaka", studentName: "Amaka", courseName: "Voice Acting Mastery",
   taskTitle: "Record a demo reel", moduleTitle: "Finding Your Voice", accessCode: "FJ-7K2QR",
   fromName: "Fidelia", price: "₦50,000",
+  noticeText: "Class resumes on Monday at 6pm. Please come ready.", meetingTitle: "Tuesday class", meetingTime: "6:00 PM",
 };
 
 // What the editor actually loads into an UNTOUCHED template's boxes --
@@ -68,6 +74,8 @@ export const EMAIL_STARTERS = {
   "message-to-admin": { subject: "New message from {{studentName}}", body: "<h1>New message.</h1><p><strong>{{studentName}}</strong> sent you a message on FJ Room.</p>" },
   "message-to-student": { subject: "You have a new message on FJ Room", body: "<h1>New message, {{name}}.</h1><p>You've got a new message waiting for you on FJ Room.</p>" },
   "community-tagged": { subject: "{{fromName}} tagged you on FJ Room", body: "<h1>You were tagged, {{name}}.</h1><p><strong>{{fromName}}</strong> tagged you in the community on FJ Room.</p>" },
+  "notice-posted": { subject: "A new notice from Fidelia", body: "<h1>A new notice, {{name}}.</h1><p>{{noticeText}}</p>" },
+  "meeting-reminder": { subject: "Your class starts in 1 hour: {{meetingTitle}}", body: "<h1>Almost time, {{name}}.</h1><p>It's officially 1 hour to <strong>{{meetingTitle}}</strong> ({{courseName}}), starting at <strong>{{meetingTime}}</strong>. Are you ready?</p><p>Open your Virtual Meetings tab in FJ Room for the join link. See you there!</p>" },
   "task-deadline-reminder": { subject: "Reminder: {{taskTitle}} closes soon", body: "<h1>Don't forget, {{name}}.</h1><p><strong>{{taskTitle}}</strong> in <strong>{{courseName}}</strong> closes soon — you haven't submitted it yet.</p>" },
 };
 
@@ -128,6 +136,14 @@ export const EMAIL_DEFAULTS = {
   "community-tagged": {
     subject: (v) => `${v.fromName} tagged you on FJ Room`,
     body: (v) => `<h1>You were tagged, ${firstName(v.name)}.</h1><p><strong>${v.fromName}</strong> tagged you in the community on FJ Room.</p>`,
+  },
+  "notice-posted": {
+    subject: () => "A new notice from Fidelia",
+    body: (v) => `<h1>A new notice, ${firstName(v.name)}.</h1><p>${escapeHtml(v.noticeText || "")}</p>`,
+  },
+  "meeting-reminder": {
+    subject: (v) => `Your class starts in 1 hour: ${v.meetingTitle}`,
+    body: (v) => `<h1>Almost time, ${firstName(v.name)}.</h1><p>It's officially 1 hour to <strong>${escapeHtml(v.meetingTitle || "your class")}</strong> (${escapeHtml(v.courseName || "FJ Room")}), starting at <strong>${escapeHtml(v.meetingTime || "")}</strong>. Are you ready?</p><p>Open your Virtual Meetings tab in FJ Room for the join link. See you there!</p>`,
   },
   "task-deadline-reminder": {
     subject: (v) => `Reminder: ${v.taskTitle} closes soon`,

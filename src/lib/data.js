@@ -356,5 +356,13 @@ export function moduleStatus(course, enrollment, moduleId) {
   return "locked";
 }
 export function pairKey(a, b) { return [a, b].sort().join("__"); }
+// A notice (or meeting) can be aimed at one cohort and/or one course; "all" or
+// missing means everyone on that axis. A student is reached when they match
+// both -- a cohort they're in and a course they're enrolled in.
+export function noticeReaches(n, student) {
+  const cohortOk = !n.cohortId || n.cohortId === "all" || n.cohortId === student.cohortId;
+  const courseOk = !n.courseId || n.courseId === "all" || student.enrollments.some((e) => e.courseId === n.courseId);
+  return cohortOk && courseOk;
+}
 
 // ---------------- shared ----------------

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { moveDataUrlToStorage } from "./lib/imageCompress.js";
-import { FONT_STYLE, genCode, nextStudentId } from "./lib/data.js";
+import { FONT_STYLE, genCode, nextStudentId, noticeReaches } from "./lib/data.js";
 import {
   Landing, CoursesIndex, CourseDetail, ResourcesPage, TestimonialsPage, ApplicationForm,
   SignInScreen, InReviewScreen, CodeRedeemScreen, LogoMark, Field, ResourceDetail,
@@ -672,6 +672,9 @@ export default function App() {
       });
     }),
     ...liveStudent.enrollments.filter((e) => e.certificateReady).map((e) => ({ id: `cert-${e.id}`, t: "Your certificate is ready to download" })),
+    // Only notices posted since notices started carrying a time (older ones
+    // have none), and only until the student has marked it seen on the board.
+    ...notices.filter((n) => n.postedAt && noticeReaches(n, liveStudent) && !(n.seenBy || []).includes(liveStudent.id)).map((n) => ({ id: `notice-${n.id}`, t: `New notice: ${n.text.length > 70 ? n.text.slice(0, 70) + "…" : n.text}`, at: n.postedAt })),
     ...liveStudent.enrollments.flatMap((e) => {
       const course = courses.find((c) => c.id === e.courseId);
       if (!course) return [];
@@ -800,12 +803,12 @@ export default function App() {
       {page === "studentDash" && liveStudent && pendingEnrollment && <CodeRedeemScreen student={liveStudent} enrollment={pendingEnrollment} onRedeem={() => redeemCode(pendingEnrollment.id)} onExit={handleSignOut} />}
       {page === "studentDash" && liveStudent && !pendingEnrollment && (
         <React.Suspense fallback={<LazyLoadingScreen />}>
-          <MyCourses student={liveStudent} setStudents={syncStudents} courses={courses} cohorts={cohorts} applicants={applicants} tasks={tasks} setTasks={syncTasks} resources={resources} community={community} setCommunity={syncCommunity} notices={notices.filter((n) => n.cohortId === "all" || n.cohortId === liveStudent.cohortId)} setNotices={syncNotices} directThreads={directThreads} setDirectThreads={syncDirectThreads} allStudents={students} brand={brand} onExit={handleSignOut} onViewSite={() => setPage("landing")} onApplyMore={(courseId) => { setApplyingAsExisting(liveStudent); setPresetCourseId(courseId || null); setPage("signup"); }} notifItems={studentNotifItems} notifSeen={notifSeen} onMarkSeen={syncNotifSeen} notifCleared={notifCleared} onClearNotif={syncNotifCleared} />
+          <MyCourses student={liveStudent} setStudents={syncStudents} courses={courses} cohorts={cohorts} applicants={applicants} tasks={tasks} setTasks={syncTasks} resources={resources} community={community} setCommunity={syncCommunity} notices={notices.filter((n) => noticeReaches(n, liveStudent))} setNotices={syncNotices} directThreads={directThreads} setDirectThreads={syncDirectThreads} allStudents={students} brand={brand} onExit={handleSignOut} onViewSite={() => setPage("landing")} onApplyMore={(courseId) => { setApplyingAsExisting(liveStudent); setPresetCourseId(courseId || null); setPage("signup"); }} notifItems={studentNotifItems} notifSeen={notifSeen} onMarkSeen={syncNotifSeen} notifCleared={notifCleared} onClearNotif={syncNotifCleared} />
         </React.Suspense>
       )}
       {page === "adminDash" && teamAccess && teamViewMode === "student" && liveStudent && (
         <React.Suspense fallback={<LazyLoadingScreen />}>
-          <MyCourses student={liveStudent} setStudents={syncStudents} courses={courses} cohorts={cohorts} applicants={applicants} tasks={tasks} setTasks={syncTasks} resources={resources} community={community} setCommunity={syncCommunity} notices={notices.filter((n) => n.cohortId === "all" || n.cohortId === liveStudent.cohortId)} setNotices={syncNotices} directThreads={directThreads} setDirectThreads={syncDirectThreads} allStudents={students} brand={brand} onExit={handleSignOut} onViewSite={() => setPage("landing")} onApplyMore={(courseId) => { setApplyingAsExisting(liveStudent); setPresetCourseId(courseId || null); setPage("signup"); }} notifItems={studentNotifItems} notifSeen={notifSeen} onMarkSeen={syncNotifSeen} notifCleared={notifCleared} onClearNotif={syncNotifCleared} onSwitchToTeamAdmin={() => setTeamViewMode("admin")} />
+          <MyCourses student={liveStudent} setStudents={syncStudents} courses={courses} cohorts={cohorts} applicants={applicants} tasks={tasks} setTasks={syncTasks} resources={resources} community={community} setCommunity={syncCommunity} notices={notices.filter((n) => noticeReaches(n, liveStudent))} setNotices={syncNotices} directThreads={directThreads} setDirectThreads={syncDirectThreads} allStudents={students} brand={brand} onExit={handleSignOut} onViewSite={() => setPage("landing")} onApplyMore={(courseId) => { setApplyingAsExisting(liveStudent); setPresetCourseId(courseId || null); setPage("signup"); }} notifItems={studentNotifItems} notifSeen={notifSeen} onMarkSeen={syncNotifSeen} notifCleared={notifCleared} onClearNotif={syncNotifCleared} onSwitchToTeamAdmin={() => setTeamViewMode("admin")} />
         </React.Suspense>
       )}
       {page === "adminDash" && !(teamAccess && teamViewMode === "student") && (
