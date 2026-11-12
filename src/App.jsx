@@ -572,16 +572,6 @@ export default function App() {
       return "Couldn't reach the server — check your connection and try again.";
     }
   }
-  // Courses a signed-in applicant could still apply for: live ones they
-  // don't already have waiting (pending/reviewed). A declined one can be
-  // applied for again.
-  const reapplyTaken = liveApplicant ? applicants.filter((x) => x.email.toLowerCase() === liveApplicant.email.toLowerCase() && (x.status === "pending" || x.status === "reviewed")).map((x) => ({ courseId: x.courseId })) : [];
-  const reapplyCourses = liveApplicant ? courses.filter((c) => c.status === "live" && !reapplyTaken.some((t) => t.courseId === c.id)) : [];
-  function startReapply() {
-    if (!liveApplicant) return;
-    setApplyingAsExisting({ isReapplicant: true, name: liveApplicant.name, email: liveApplicant.email, cohortId: null, enrollments: reapplyTaken });
-    setPresetCourseId(null); setPage("signup");
-  }
   async function acceptApplicant(applicant, cohortId) {
     try {
       const code = genCode();
@@ -612,6 +602,16 @@ export default function App() {
   function redeemCode(enrollmentId) { syncStudents((prev) => prev.map((s) => s.id !== activeStudent.id ? s : { ...s, enrollments: s.enrollments.map((e) => e.id === enrollmentId ? { ...e, status: "active" } : e) })); }
   const liveStudent = activeStudent ? students.find((s) => s.id === activeStudent.id) || activeStudent : null;
   const liveApplicant = activeApplicant ? applicants.find((a) => a.id === activeApplicant.id) || activeApplicant : null;
+  // Courses a signed-in applicant could still apply for: live ones they
+  // don't already have waiting (pending/reviewed). A declined one can be
+  // applied for again.
+  const reapplyTaken = liveApplicant ? applicants.filter((x) => x.email.toLowerCase() === liveApplicant.email.toLowerCase() && (x.status === "pending" || x.status === "reviewed")).map((x) => ({ courseId: x.courseId })) : [];
+  const reapplyCourses = liveApplicant ? courses.filter((c) => c.status === "live" && !reapplyTaken.some((t) => t.courseId === c.id)) : [];
+  function startReapply() {
+    if (!liveApplicant) return;
+    setApplyingAsExisting({ isReapplicant: true, name: liveApplicant.name, email: liveApplicant.email, cohortId: null, enrollments: reapplyTaken });
+    setPresetCourseId(null); setPage("signup");
+  }
   const viewCourse = viewCourseId ? courses.find((c) => c.id === viewCourseId) : null;
   // Only gate the whole dashboard behind the code-entry screen for a genuinely
   // brand-new student (nothing usable yet). A student who already has an
