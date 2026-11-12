@@ -18,6 +18,7 @@ import { sendTaskAssignedEmail, sendTaskDecisionEmail, sendQuickCheckDecisionEma
 import { EMAIL_TEMPLATE_KEYS, EMAIL_STARTERS, VAR_LABELS, SAMPLE_VARS, fillTemplate, fillTemplatePlain } from "./lib/emailDefaults.js";
 import { prepareImage } from "./lib/imageCompress.js";
 import { fetchFreeResourceEmails, deleteFreeResourceEmail } from "./lib/leads.js";
+import { PhotoCleanupTab } from "./photoCleanup.jsx";
 import { buildSubmissionItems, submissionStatusColor, SubmissionBody, SubmissionBadges } from "./submissions.jsx";
 
 // One applicant row, shared by the "pending" and "awaiting payment" queues
@@ -2571,7 +2572,7 @@ export function AdminDashboard({ courses, setCourses, students, setStudents, onR
     { id: "cohorts", icon: Layers, label: "Cohorts" }, { id: "courses", icon: BookOpen, label: "Courses" },
     { id: "meetings", icon: PlayCircle, label: "Virtual Meetings" },
     { id: "students", icon: Users, label: "Students" }, { id: "gradebook", icon: FileText, label: "Gradebook" },
-    { id: "submissions", icon: Inbox, label: "Submissions" }, { id: "tasks", icon: ListChecks, label: "Tasks" }, { id: "library", icon: Library, label: "Library" }, { id: "emaillist", icon: Mail, label: "Your Email List" },
+    { id: "submissions", icon: Inbox, label: "Submissions" }, { id: "tasks", icon: ListChecks, label: "Tasks" }, { id: "library", icon: Library, label: "Library" }, { id: "emaillist", icon: Mail, label: "Your Email List" }, { id: "photocleanup", icon: Sparkles, label: "Photo Cleanup" },
     { id: "certificates", icon: Award, label: "Certificates" }, { id: "testimonials", icon: Star, label: "Testimonials" },
     { id: "faq", icon: HelpIcon, label: "FAQ" }, { id: "chat", icon: MessageCircle, label: "Chat" },
     { id: "community", icon: Users, label: "Community" }, { id: "notice", icon: Megaphone, label: "Notice Board" },
@@ -2618,6 +2619,7 @@ export function AdminDashboard({ courses, setCourses, students, setStudents, onR
         {tab === "students" && <StudentsTab students={students} setStudents={setStudents} onRemove={onRemoveStudent} applicants={applicants} courses={courses} cohorts={cohorts} tasks={tasks} />}
         {tab === "gradebook" && <GradebookTab students={students} courses={courses} cohorts={cohorts} tasks={tasks} />}
         {tab === "emaillist" && <EmailListTab />}
+        {tab === "photocleanup" && <PhotoCleanupTab courses={courses} setCourses={setCourses} students={students} setStudents={setStudents} testimonials={testimonials} setTestimonials={setTestimonials} brand={brand} setBrand={setBrand} adminProfile={adminProfile} setAdminProfile={setAdminProfile} resources={resources} onEditResource={onEditResource} community={community} setCommunity={setCommunity} tasks={tasks} setTasks={setTasks} />}
         {tab === "submissions" && <SubmissionsTab students={students} setStudents={setStudents} tasks={tasks} courses={courses} cohorts={cohorts} onOpenTask={(id) => { setOpenTaskId(id); setTab("tasks"); }} />}
         {tab === "tasks" && <TasksTab tasks={tasks} setTasks={setTasks} students={students} courses={courses} cohorts={cohorts} openTaskId={openTaskId} />}
         {tab === "library" && <LibraryTab resources={resources} onAdd={onAddResource} onEdit={onEditResource} onRemove={onRemoveResource} courses={courses} cohorts={cohorts} />}
