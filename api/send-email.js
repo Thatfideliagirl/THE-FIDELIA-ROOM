@@ -19,7 +19,7 @@ const ADMIN_EMAIL = process.env.ADMIN_NOTIFY_EMAIL || "fjroomm@gmail.com";
 // A fixed, unhashed path in /public (copied from the real logo asset) so
 // this still resolves after every future rebuild, unlike the hashed
 // filename Vite gives the same image inside the app bundle.
-const LOGO_URL = "https://fjroom.com/logo-email.png";
+const LOGO_URL = "https://www.fjroom.com/logo-email.png";
 const SITE_URL = "https://fjroom.com";
 // Same values the client already builds with (VITE_-prefixed because Vite
 // needs that prefix to inline them into the browser bundle) -- Vercel hands
@@ -62,7 +62,7 @@ const BRAND = { bg: "#FAF6EC", accent: "#1C6FA0", ink: "#262019", muted: "#71675
 function wrap(bodyHtml) {
   return `<div style="background:${BRAND.bg};padding:32px 16px;font-family:Georgia,'Times New Roman',serif;color:${BRAND.ink};">
     <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:16px;padding:40px 32px;">
-      <img src="${LOGO_URL}" alt="FJ Room" width="40" style="display:block;margin:0 0 20px;" />
+      <img src="${LOGO_URL}" alt="FJ Room" width="48" style="display:block;margin:0 0 20px;" />
       ${bodyHtml}
       <div style="margin-top:32px;padding-top:20px;border-top:1px solid #F0E7D6;font-size:12px;color:${BRAND.muted};">This is more than learning. This is your growth room.</div>
     </div>
