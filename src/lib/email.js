@@ -17,9 +17,13 @@ export async function sendFreeResourceThanks({ email, resourceTitle }) {
     return { ok: false, message: "It didn't go through. Check your email settings on Resend." };
   } catch { return { ok: false, message: "Couldn't reach the server — check your connection." }; }
 }
+// Returns { ok, message } so the admin screens that care (Accept, payment
+// email, resend) can say whether the email really went; every other caller
+// simply ignores the result.
 async function send(kind, params) {
   // One quiet retry: a dropped connection or a momentary server hiccup
   // shouldn't mean a person never hears from her.
+  let last = { ok: false, message: "Couldn't reach the server." };
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const res = await fetch("/api/send-email", {
@@ -34,14 +38,23 @@ async function send(kind, params) {
         // is built for.
         keepalive: true,
       });
-      if (res.ok) return;
-      console.error("Email send failed", res.status, await res.text().catch(() => ""));
-      if (res.status < 500) return; // a refusal (bad input, not configured) won't change on retry
+      const text = await res.text().catch(() => "");
+      let j = {}; try { j = JSON.parse(text); } catch { /* not JSON */ }
+      if (res.ok) {
+        if (j.skipped) return { ok: false, message: j.reason || "Emails aren't switched on yet." };
+        return { ok: true };
+      }
+      console.error("Email send failed", res.status, text);
+      const detail = j.error?.message || (typeof j.error === "string" ? j.error : "");
+      last = { ok: false, message: `The email service refused it${detail ? `: ${detail}` : ` (error ${res.status})`}.` };
+      if (res.status < 500 && res.status !== 429) return last; // a refusal won't change on retry
     } catch (e) {
       console.error("Email send error", e);
+      last = { ok: false, message: "Couldn't reach the server." };
     }
     if (attempt === 0) await new Promise((r) => setTimeout(r, 2500));
   }
+  return last;
 }
 
 // Kept as a no-op-safe stub so existing call sites don't need to change --

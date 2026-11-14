@@ -599,8 +599,8 @@ export default function App() {
       }
       const acceptedApplicant = await updateApplicant(applicant.id, { ...applicant, status: "accepted" });
       setApplicants((prev) => prev.map((a) => a.id === acceptedApplicant.id ? acceptedApplicant : a));
-      sendAcceptanceEmail({ email: applicant.email, name: applicant.name, courseName: courses.find((c) => c.id === applicant.courseId)?.title || "your course", accessCode: code, loginUrl: window.location.origin });
-      return null;
+      const out = await sendAcceptanceEmail({ email: applicant.email, name: applicant.name, courseName: courses.find((c) => c.id === applicant.courseId)?.title || "your course", accessCode: code, loginUrl: window.location.origin });
+      return { name: applicant.name, email: applicant.email, emailOk: !!out?.ok, emailMessage: out?.message };
     } catch (e) {
       console.error("acceptApplicant failed", e);
       // PGRST116 = .single() matched zero (or more than one) row -- the

@@ -14,7 +14,7 @@ import { renderTestimonialCard } from "./lib/testimonial.js";
 import { Field, SectionHeader, NotifBell, ChatLayout, SidebarLink, LogoMark, TextArea, SelectF, ImgField, FileField, TaskFileList, ChangePasswordCard, RichTextEditor, RichText, DashboardShell, WelcomeTour, TEAM_TOUR_STEPS } from "./components.jsx";
 import { CommunityPanel, SOCIAL_PLATFORMS } from "./student.jsx";
 import { fetchTeamMembers, addTeamMember, updateTeamMember, removeTeamMember, fetchTeamActivity, updateMyTeamProfile, markTourSeen } from "./lib/team.js";
-import { sendFreeResourceThanks, sendTaskAssignedEmail, sendTaskDecisionEmail, sendQuickCheckDecisionEmail, sendApplicationReviewedEmail, sendNoticeEmail } from "./lib/email.js";
+import { sendFreeResourceThanks, sendAcceptanceEmail, sendTaskAssignedEmail, sendTaskDecisionEmail, sendQuickCheckDecisionEmail, sendApplicationReviewedEmail, sendNoticeEmail } from "./lib/email.js";
 import { EMAIL_TEMPLATE_KEYS, EMAIL_STARTERS, VAR_LABELS, SAMPLE_VARS, fillTemplate, fillTemplatePlain } from "./lib/emailDefaults.js";
 import { prepareImage } from "./lib/imageCompress.js";
 import { fetchFreeResourceEmails, deleteFreeResourceEmail } from "./lib/leads.js";
@@ -52,6 +52,9 @@ export function ApplicantsTab({ applicants, setApplicants, onRemove, students, s
   const [accepting, setAccepting] = useState(null);
   const [acceptError, setAcceptError] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  // Says plainly whether an email really went out (and why not, if it didn't).
+  const [emailNote, setEmailNote] = useState(null);
+  const [resendArm, setResendArm] = useState(null);
   const course = (id) => courses.find((c) => c.id === id);
   // Cohorts load asynchronously and can still be empty the instant this
   // tab first mounts -- that initial useState above would otherwise lock
@@ -61,17 +64,28 @@ export function ApplicantsTab({ applicants, setApplicants, onRemove, students, s
   useEffect(() => { if (!cohortInput && cohorts[0]?.id) setCohortInput(cohorts[0].id); }, [cohorts]);
   async function accept(a) {
     setAccepting(a.id); setAcceptError("");
-    const err = await onAccept(a, cohortInput);
+    const r = await onAccept(a, cohortInput);
     setAccepting(null);
-    if (err) setAcceptError(err);
+    if (typeof r === "string") { setAcceptError(r); return; }
+    if (r) setEmailNote(r.emailOk ? { ok: true, text: `Accepted ${r.name} ✓ — the access-code email was sent to ${r.email}.` } : { ok: false, text: `Accepted ${r.name}, but the email did NOT go out (${r.emailMessage || "unknown reason"}). Use "Resend access email" in the Decided list below once it's fixed.` });
+  }
+  async function resendAccess(a) {
+    if (resendArm !== a.id) { setResendArm(a.id); setTimeout(() => setResendArm((c) => c === a.id ? null : c), 4000); return; }
+    setResendArm(null);
+    const stu = (students || []).find((s) => s.email.toLowerCase() === a.email.toLowerCase());
+    const code = stu?.enrollments.find((e) => e.courseId === a.courseId)?.code;
+    if (!code) { setEmailNote({ ok: false, text: `Couldn't find ${a.name}'s access code. Open them in Students to see or reissue it.` }); return; }
+    const out = await sendAcceptanceEmail({ email: a.email, name: a.name, courseName: course(a.courseId)?.title || "your course", accessCode: code, loginUrl: window.location.origin });
+    setEmailNote(out.ok ? { ok: true, text: `Access-code email re-sent to ${a.email} ✓` } : { ok: false, text: `Still couldn't send it (${out.message}).` });
   }
   // A separate stage from Accept, not a replacement for it -- this tells
   // them what to pay and sends no access code. She confirms the transfer
   // herself (no payment gateway involved) and only then clicks Accept,
   // same as for any other applicant.
-  function markReviewed(a) {
+  async function markReviewed(a) {
     setApplicants((prev) => prev.map((x) => x.id === a.id ? { ...x, status: "reviewed" } : x));
-    sendApplicationReviewedEmail({ email: a.email, name: a.name, courseName: course(a.courseId)?.title, price: course(a.courseId)?.price });
+    const out = await sendApplicationReviewedEmail({ email: a.email, name: a.name, courseName: course(a.courseId)?.title, price: course(a.courseId)?.price });
+    setEmailNote(out?.ok ? { ok: true, text: `Payment-info email sent to ${a.email} ✓` } : { ok: false, text: `Marked reviewed, but the payment email did NOT go out (${out?.message || "unknown reason"}).` });
   }
   function decline(a) { setApplicants((prev) => prev.map((x) => x.id === a.id ? { ...x, status: "declined" } : x)); }
   function confirmRemove(id) { onRemove(id); setConfirmDeleteId(null); }
@@ -85,6 +99,7 @@ export function ApplicantsTab({ applicants, setApplicants, onRemove, students, s
   return (
     <>
       <SectionHeader eyebrow="REVIEW QUEUE" title="Applicants" />
+      {emailNote && <div className="rounded-xl px-5 py-3 mb-5 text-[14px] flex items-start justify-between gap-3" style={{ background: emailNote.ok ? "#E4F3E9" : "#FBEAE7", color: emailNote.ok ? "#2F7D4F" : "#B04A3A", fontWeight: 600 }}><span>{emailNote.text}</span><button onClick={() => setEmailNote(null)}><X size={14} /></button></div>}
       {pending.length === 0 && <div className="text-[15px] mb-8" style={{ color: "#A79B84" }}>No pending applications.</div>}
       <div className="flex flex-col gap-4 mb-10">{pending.map((a) => (
         <ApplicantRow key={a.id} a={a} priorLines={priorLinesOf(a)} course={course(a.courseId)} open={openId === a.id} onToggleOpen={() => setOpenId(openId === a.id ? null : a.id)} onConfirmRemove={() => confirmRemove(a.id)} showMarkReviewed {...rowProps} />
@@ -100,6 +115,7 @@ export function ApplicantsTab({ applicants, setApplicants, onRemove, students, s
           <span>{a.name} <span className="text-[12px]" style={{ color: "#A79B84" }}>· {a.email}</span></span>
           <div className="flex items-center gap-4">
             <span className="f-code text-[10px]" style={{ color: a.status === "accepted" ? "var(--accent)" : "#A79B84" }}>{a.status.toUpperCase()}</span>
+            {a.status === "accepted" && <button onClick={() => resendAccess(a)} className="f-label text-[10.5px] px-3 py-1 rounded-full" style={{ background: resendArm === a.id ? "var(--accent)" : "#fff", color: resendArm === a.id ? "#FAF6EC" : "#71675A", fontWeight: 700 }}>{resendArm === a.id ? "Sure? Click to send" : "Resend access email"}</button>}
             {confirmDeleteId === a.id ? (
               <div className="flex items-center gap-2 text-[12px]"><span style={{ color: "#B04A3A" }}>Delete?</span><button onClick={() => confirmRemove(a.id)} className="f-label" style={{ color: "#B04A3A", fontWeight: 700 }}>YES</button><button onClick={() => setConfirmDeleteId(null)} style={{ color: "#A79B84" }}>Cancel</button></div>
             ) : (
