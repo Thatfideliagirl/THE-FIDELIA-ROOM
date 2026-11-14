@@ -17,6 +17,7 @@ import { fetchTeamMembers, addTeamMember, updateTeamMember, removeTeamMember, fe
 import { sendFreeResourceThanks, sendAcceptanceEmail, sendTaskAssignedEmail, sendTaskDecisionEmail, sendQuickCheckDecisionEmail, sendApplicationReviewedEmail, sendNoticeEmail } from "./lib/email.js";
 import { EMAIL_TEMPLATE_KEYS, EMAIL_STARTERS, VAR_LABELS, SAMPLE_VARS, fillTemplate, fillTemplatePlain } from "./lib/emailDefaults.js";
 import { prepareImage } from "./lib/imageCompress.js";
+import { uploadFile } from "./lib/storage.js";
 import { fetchFreeResourceEmails, deleteFreeResourceEmail } from "./lib/leads.js";
 import { PhotoCleanupTab } from "./photoCleanup.jsx";
 import { buildSubmissionItems, submissionStatusColor, SubmissionBody, SubmissionBadges } from "./submissions.jsx";
@@ -2182,6 +2183,17 @@ function EmailTemplateEditor({ def, custom, onSave, onReset, onBack }) {
   const [subject, setSubject] = useState(custom?.subject || starter.subject);
   const [body, setBody] = useState(custom?.body || starter.body);
   const [muted, setMuted] = useState(!!custom?.muted);
+  // Files shown as download buttons at the bottom of this email (e.g. the handbook).
+  const [files, setFiles] = useState(custom?.files || []);
+  const [fileBusy, setFileBusy] = useState(false); const [fileError, setFileError] = useState("");
+  const fileInputRef = useRef(null);
+  async function addFile(f) {
+    if (!f) return;
+    setFileBusy(true); setFileError("");
+    try { const url = await uploadFile(f); setFiles((p) => [...p, { name: f.name, url }]); }
+    catch (e) { console.error("email file upload failed", e); setFileError("That file didn't upload — check your connection (or its size) and try again."); }
+    finally { setFileBusy(false); }
+  }
   const editorRef = useRef(null);
   const subjectRef = useRef(null);
   // Which box last had the cursor -- a token has to land wherever she was
@@ -2205,7 +2217,7 @@ function EmailTemplateEditor({ def, custom, onSave, onReset, onBack }) {
     if (!editorRef.current) { setBody((b) => b + tag); return; }
     editorRef.current.chain().focus().insertContent(tag).run();
   }
-  function save() { onSave(def.key, { subject, body, muted }); onBack(); }
+  function save() { onSave(def.key, { subject, body, muted, ...(files.length && { files }) }); onBack(); }
   function reset() { onReset(def.key); setSubject(starter.subject); setBody(starter.body); }
   // Takes effect immediately, separate from Save -- pausing shouldn't
   // accidentally also commit whatever she's mid-typing in the boxes, and
@@ -2215,7 +2227,7 @@ function EmailTemplateEditor({ def, custom, onSave, onReset, onBack }) {
   function toggleMute() {
     const next = !muted;
     setMuted(next);
-    onSave(def.key, { subject: custom?.subject || starter.subject, body: custom?.body || starter.body, muted: next });
+    onSave(def.key, { subject: custom?.subject || starter.subject, body: custom?.body || starter.body, muted: next, ...(custom?.files?.length && { files: custom.files }) });
   }
   return (
     <div className="card rounded-2xl p-8 max-w-[640px]">
@@ -2236,8 +2248,17 @@ function EmailTemplateEditor({ def, custom, onSave, onReset, onBack }) {
         <div>
           <div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Message</div>
           <div onFocus={() => { lastFocus.current = "body"; }}>
-            <RichTextEditor value={body} onChange={setBody} onEditorReady={(ed) => { editorRef.current = ed; }} minRows={6} />
+            <RichTextEditor value={body} onChange={setBody} onEditorReady={(ed) => { editorRef.current = ed; }} minRows={6} fonts />
           </div>
+        </div>
+        <div>
+          <div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Files to include (optional)</div>
+          <div className="text-[12px] mb-2" style={{ color: "#A79B84" }}>Each file you add shows as a download button at the bottom of this email — handy for your handbook. Works for every template.</div>
+          {files.map((f, i) => <div key={i} className="flex items-center justify-between gap-3 rounded-lg px-3.5 py-2 mb-1.5" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}><span className="text-[13px] min-w-0" style={{ overflowWrap: "anywhere", fontWeight: 600 }}>{f.name}</span><button type="button" onClick={() => setFiles((p) => p.filter((_, j) => j !== i))} className="text-[12px] shrink-0" style={{ color: "#B04A3A" }}>Remove</button></div>)}
+          <button type="button" disabled={fileBusy} onClick={() => fileInputRef.current?.click()} className="btn-soft rounded-lg px-4 py-2 text-[13px]">{fileBusy ? "Uploading…" : "+ Add a file"}</button>
+          <input ref={fileInputRef} type="file" style={{ display: "none" }} onChange={(e) => { addFile(e.target.files?.[0]); e.target.value = ""; }} />
+          {fileError && <div className="text-[12.5px] mt-1.5" style={{ color: "#B04A3A" }}>{fileError}</div>}
+          {files.length > 0 && <div className="text-[12px] mt-1.5" style={{ color: "#71675A" }}>Press <strong>Save</strong> below to keep these.</div>}
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-[11px]" style={{ color: "#A79B84" }}>Click to insert — lands in whichever box you clicked into last:</span>
@@ -2248,6 +2269,7 @@ function EmailTemplateEditor({ def, custom, onSave, onReset, onBack }) {
           <div className="rounded-lg px-3.5 py-3" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
             <div className="text-[13px] mb-2" style={{ color: "#71675A" }}><strong style={{ color: "#262019" }}>Subject:</strong> {fillTemplatePlain(subject, SAMPLE_VARS)}</div>
             <RichText html={fillTemplate(body, SAMPLE_VARS)} className="rich-content text-[14px]" />
+            {files.length > 0 && <div className="mt-3 text-[13px]" style={{ borderTop: "1px solid #E7DEC9", paddingTop: 8 }}><strong>Files for you:</strong>{files.map((f, i) => <div key={i} className="accent-text">⬇ {f.name}</div>)}</div>}
           </div>
         </div>
         <div className="flex items-center gap-3 mt-1">
@@ -2298,7 +2320,8 @@ export function BrandingTab({ brand, setBrand }) {
           // choice and resetting the words shouldn't silently also
           // unpause it.
           const existing = b.emailTemplates?.[key];
-          const next = { ...b.emailTemplates, [key]: existing?.muted ? { muted: true } : undefined };
+          const keep = { ...(existing?.muted && { muted: true }), ...(existing?.files?.length && { files: existing.files }) };
+          const next = { ...b.emailTemplates, [key]: Object.keys(keep).length ? keep : undefined };
           if (!next[key]) delete next[key];
           return { ...b, emailTemplates: next };
         })}

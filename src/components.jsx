@@ -93,6 +93,7 @@ const ALLOWED_TAGS = new Set(["B", "STRONG", "I", "EM", "U", "H1", "H2", "H3", "
 const SAFE_STYLE_PATTERNS = [
   /^color:\s*(#[0-9a-fA-F]{3,8}|rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\))$/,
   /^font-size:\s*\d{1,3}px$/,
+  /^font-family:\s*[A-Za-z0-9 ,'"\-]{3,90}$/,
   /^width:\s*(100|[1-9]?[0-9])%$/,
 ];
 function sanitizeStyle(style) {
@@ -171,6 +172,37 @@ const FontSize = TiptapExtension.create({
     };
   },
 });
+// Same idea as FontSize, for the typeface. Only offered in the email editor,
+// and only email-safe faces (ones every inbox already has).
+const FontFamily = TiptapExtension.create({
+  name: "fontFamily",
+  addOptions() { return { types: ["textStyle"] }; },
+  addGlobalAttributes() {
+    return [{
+      types: this.options.types,
+      attributes: {
+        fontFamily: {
+          default: null,
+          parseHTML: (el) => el.style.fontFamily || null,
+          renderHTML: (attrs) => attrs.fontFamily ? { style: `font-family: ${attrs.fontFamily}` } : {},
+        },
+      },
+    }];
+  },
+  addCommands() {
+    return {
+      setFontFamily: (f) => ({ chain }) => chain().setMark("textStyle", { fontFamily: f }).run(),
+      unsetFontFamily: () => ({ chain }) => chain().setMark("textStyle", { fontFamily: null }).run(),
+    };
+  },
+});
+const FONT_FAMILIES = [
+  { label: "Georgia (classic serif)", key: "georgia", value: "Georgia, 'Times New Roman', serif" },
+  { label: "Arial (clean sans)", key: "arial", value: "Arial, Helvetica, sans-serif" },
+  { label: "Trebuchet (friendly)", key: "trebuchet", value: "'Trebuchet MS', Arial, sans-serif" },
+  { label: "Verdana (wide)", key: "verdana", value: "Verdana, Geneva, sans-serif" },
+  { label: "Courier (typewriter)", key: "courier", value: "'Courier New', Courier, monospace" },
+];
 const FONT_SIZES = [12, 14, 16, 18, 20, 24, 28, 32, 36, 40, 48];
 const IMAGE_WIDTHS = ["30%", "50%", "70%", "100%"];
 // A custom atom node (image + optional caption) instead of the plain Tiptap
@@ -271,7 +303,7 @@ function ImageFigureView({ node, updateAttributes, deleteNode }) {
 // unreliability of that browser API, confirmed by testing it directly.
 // Tiptap edits a real document model with proper transactions instead of
 // raw DOM selection hacks, so combining formats behaves predictably.
-export function RichTextEditor({ value, onChange, minRows = 8, onEditorReady }) {
+export function RichTextEditor({ value, onChange, minRows = 8, onEditorReady, fonts = false }) {
   const wrapRef = useRef(null);
   const imageInputRef = useRef(null);
   const [slashMenu, setSlashMenu] = useState(null);
@@ -280,7 +312,7 @@ export function RichTextEditor({ value, onChange, minRows = 8, onEditorReady }) 
   const [imageUploading, setImageUploading] = useState(false);
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ heading: { levels: [1, 2, 3] } }), TextStyle, Color, FontSize, ImageFigure,
+      StarterKit.configure({ heading: { levels: [1, 2, 3] } }), TextStyle, Color, FontSize, FontFamily, ImageFigure,
       Link.configure({ openOnClick: false, autolink: false, HTMLAttributes: { target: "_blank", rel: "noopener noreferrer" } }),
     ],
     content: value || "",
@@ -400,6 +432,11 @@ export function RichTextEditor({ value, onChange, minRows = 8, onEditorReady }) 
           <input type="color" value={editor.getAttributes("textStyle").color || "#262019"} onChange={(e) => editor.chain().focus().setColor(e.target.value).run()} style={{ width: 16, height: 16, padding: 0, border: "none", background: "none", cursor: "pointer" }} />
         </label>
         {editor.getAttributes("textStyle").color && <button type="button" onClick={() => editor.chain().focus().unsetColor().run()} className={btn} style={btnStyle(false)}>Clear color</button>}
+        {fonts && (() => { const cur = (editor.getAttributes("textStyle").fontFamily || "").toLowerCase(); const active = FONT_FAMILIES.find((f) => cur.includes(f.key === "trebuchet" ? "trebuchet" : f.key))?.value || ""; return (
+          <select value={active} onChange={(e) => e.target.value ? editor.chain().focus().setFontFamily(e.target.value).run() : editor.chain().focus().unsetFontFamily().run()} className={btn} style={{ ...btnStyle(false), padding: "5px 4px", maxWidth: 150 }} title="Font">
+            <option value="">Font: default</option>
+            {FONT_FAMILIES.map((f) => <option key={f.key} value={f.value}>{f.label}</option>)}
+          </select>); })()}
         <div className="flex items-center gap-0.5">
           <button type="button" onClick={() => stepFontSize(-1)} className={btn} style={btnStyle(false)} title="Smaller text">A−</button>
           <select

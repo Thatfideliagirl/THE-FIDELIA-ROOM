@@ -113,6 +113,13 @@ function socialsRow(brand) {
   if (!links.length) return "";
   return `<div style="font-size:14px;line-height:2;">Find me here:<br>${links.map(([l, u]) => `<a href="${escapeHtml(u)}" style="color:${BRAND.accent};font-weight:700;text-decoration:none;">${l}</a>`).join(" &nbsp;·&nbsp; ")}</div>`;
 }
+// Download buttons for any files she attached to this template (e.g. the
+// handbook), added to the bottom of every email that has them.
+function filesBox(files) {
+  const list = (Array.isArray(files) ? files : []).filter((x) => x && typeof x.url === "string" && /^https?:\/\//i.test(x.url));
+  if (!list.length) return "";
+  return `<div style="margin-top:22px;padding-top:18px;border-top:1px solid #F0E7D6;"><div style="font-size:11px;letter-spacing:.08em;color:${BRAND.muted};margin-bottom:10px;">FILES FOR YOU</div>${list.map((x) => `<div style="margin:0 0 8px;"><a href="${escapeHtml(x.url)}" style="display:inline-block;border:1.5px solid ${BRAND.accent};color:${BRAND.accent};text-decoration:none;padding:9px 18px;border-radius:999px;font-size:14px;font-weight:700;">Download: ${escapeHtml(String(x.name || "file").slice(0, 80))}</a></div>`).join("")}</div>`;
+}
 // The structural bits every template of a given kind needs -- never part of
 // the admin's editable text (see emailDefaults.js), so rewriting the
 // message can't delete the one thing that actually shows the access code
@@ -177,12 +184,12 @@ export async function sendTemplatedEmail({ kind, email, name, courseName, access
   const defaults = EMAIL_DEFAULTS[templateKey];
   const subject = custom?.subject ? fillTemplatePlain(custom.subject, vars) : defaults.subject(vars);
   const messageHtml = custom?.body ? fillTemplate(custom.body, vars) : defaults.body(vars);
-  const html = wrap(messageHtml + extra(templateKey, vars));
+  const html = wrap(messageHtml + extra(templateKey, vars) + filesBox(custom?.files));
 
   // She wants a quiet copy of her own when an application comes in, same as
   // the old EmailJS setup used to send her -- a BCC, not a second email, so
   // it never shows the applicant another recipient.
-  const bcc = kind === "welcome" ? [ADMIN_EMAIL] : undefined;
+  const bcc = (templateKey === "welcome" || templateKey === "acceptance" || templateKey === "application-reviewed") && String(to).toLowerCase() !== ADMIN_EMAIL.toLowerCase() ? [ADMIN_EMAIL] : undefined;
 
   try {
     const r = await fetch("https://api.resend.com/emails", {
