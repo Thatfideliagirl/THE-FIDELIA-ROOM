@@ -96,7 +96,7 @@ function escapeHtml(s) {
 // {{token}} in the prose, so it always shows regardless of what she writes
 // around it.
 function paymentBox(price, details) {
-  if (!price && !details) return "";
+  if (!price && !details) return `<div style="border:1.5px dashed #E7DEC9;border-radius:12px;padding:18px;margin:0 0 24px;font-size:14px;line-height:1.6;color:${BRAND.ink};">We'll share the payment details with you shortly. If you need them sooner, just reply to this email.</div>`;
   return `<div style="border:1.5px dashed #E7DEC9;border-radius:12px;padding:18px;margin:0 0 24px;">
     ${price ? `<div style="font-size:11px;letter-spacing:.08em;color:${BRAND.muted};margin-bottom:4px;">TRAINING FEE</div><div style="font-size:20px;font-weight:700;color:${BRAND.accent};margin-bottom:14px;">${escapeHtml(price)}</div>` : ""}
     ${details ? `<div style="font-size:11px;letter-spacing:.08em;color:${BRAND.muted};margin-bottom:4px;">PAYMENT DETAILS</div><div style="font-size:14px;line-height:1.6;color:${BRAND.ink};white-space:pre-wrap;">${escapeHtml(details)}</div>` : ""}

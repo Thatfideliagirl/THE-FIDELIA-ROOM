@@ -536,6 +536,7 @@ export default function App() {
         const saved = await insertApplicant({ ...rest, status: "pending", studentRef: null, authUserId: currentAuthUserId });
         setApplicants((prev) => [...prev, saved]);
         setActiveApplicant(saved); setApplyingAsExisting(null); setPage("inReview");
+        sendWelcomeEmail({ email: rest.email, name: rest.name, courseName: courses.find((c) => c.id === rest.courseId)?.title || "your course" });
         return null;
       }
       if (applyingAsExisting?.isTeamMember) {
@@ -546,12 +547,14 @@ export default function App() {
         const saved = await insertApplicant({ ...rest, status: "pending", studentRef: null, authUserId: currentAuthUserId });
         setApplicants((prev) => [...prev, saved]);
         setActiveApplicant(saved); setApplyingAsExisting(null); setPage("inReview");
+        sendWelcomeEmail({ email: rest.email, name: rest.name, courseName: courses.find((c) => c.id === rest.courseId)?.title || "your course" });
         return null;
       }
       if (applyingAsExisting) {
         const saved = await insertApplicant({ ...rest, status: "pending", studentRef: applyingAsExisting.id });
         setApplicants((prev) => [...prev, saved]);
         setActiveStudent(applyingAsExisting); setPage("studentDash");
+        sendWelcomeEmail({ email: rest.email, name: rest.name, courseName: courses.find((c) => c.id === rest.courseId)?.title || "your course" });
         return null;
       }
       const { error, authUserId, needsConfirmation } = await signUpApplicant({ name: rest.name, email: rest.email, password, courseId: rest.courseId, answers: rest.answers });

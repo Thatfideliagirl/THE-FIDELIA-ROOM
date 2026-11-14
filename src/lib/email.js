@@ -18,22 +18,29 @@ export async function sendFreeResourceThanks({ email, resourceTitle }) {
   } catch { return { ok: false, message: "Couldn't reach the server — check your connection." }; }
 }
 async function send(kind, params) {
-  try {
-    const res = await fetch("/api/send-email", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind, ...params }),
-      // Every caller fires this right after already switching the screen
-      // (to "check your email" or "in review") -- a completely normal
-      // moment for someone to immediately close the tab or switch apps,
-      // especially on mobile. keepalive lets the request finish in the
-      // background even if the page is gone, same as navigator.sendBeacon
-      // is built for.
-      keepalive: true,
-    });
-    if (!res.ok) console.error("Email send failed", res.status, await res.text().catch(() => ""));
-  } catch (e) {
-    console.error("Email send error", e);
+  // One quiet retry: a dropped connection or a momentary server hiccup
+  // shouldn't mean a person never hears from her.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch("/api/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind, ...params }),
+        // Every caller fires this right after already switching the screen
+        // (to "check your email" or "in review") -- a completely normal
+        // moment for someone to immediately close the tab or switch apps,
+        // especially on mobile. keepalive lets the request finish in the
+        // background even if the page is gone, same as navigator.sendBeacon
+        // is built for.
+        keepalive: true,
+      });
+      if (res.ok) return;
+      console.error("Email send failed", res.status, await res.text().catch(() => ""));
+      if (res.status < 500) return; // a refusal (bad input, not configured) won't change on retry
+    } catch (e) {
+      console.error("Email send error", e);
+    }
+    if (attempt === 0) await new Promise((r) => setTimeout(r, 2500));
   }
 }
 
