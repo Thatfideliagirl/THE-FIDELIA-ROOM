@@ -525,6 +525,15 @@ export default function App() {
   // (a real DB error, or a blocked/dropped connection) -- caught here so a
   // failure always resolves the caller's loading state and shows a message,
   // instead of leaving a "Submitting..." button stuck forever.
+  // The "application received" email, sent at most once per person + course in
+  // this browser session (so a double-click or a retry can't email them twice).
+  const welcomeSentRef = useRef(new Set());
+  function sendWelcomeOnce(d) {
+    const key = `${String(d.email || "").toLowerCase()}|${d.courseId}`;
+    if (welcomeSentRef.current.has(key)) return;
+    welcomeSentRef.current.add(key);
+    sendWelcomeEmail({ email: d.email, name: d.name, courseName: courses.find((c) => c.id === d.courseId)?.title || "your course" });
+  }
   async function submitApplication(data) {
     try {
       const { password, ...rest } = data;
@@ -536,7 +545,7 @@ export default function App() {
         const saved = await insertApplicant({ ...rest, status: "pending", studentRef: null, authUserId: currentAuthUserId });
         setApplicants((prev) => [...prev, saved]);
         setActiveApplicant(saved); setApplyingAsExisting(null); setPage("inReview");
-        sendWelcomeEmail({ email: rest.email, name: rest.name, courseName: courses.find((c) => c.id === rest.courseId)?.title || "your course" });
+        sendWelcomeOnce(rest);
         return null;
       }
       if (applyingAsExisting?.isTeamMember) {
@@ -547,14 +556,14 @@ export default function App() {
         const saved = await insertApplicant({ ...rest, status: "pending", studentRef: null, authUserId: currentAuthUserId });
         setApplicants((prev) => [...prev, saved]);
         setActiveApplicant(saved); setApplyingAsExisting(null); setPage("inReview");
-        sendWelcomeEmail({ email: rest.email, name: rest.name, courseName: courses.find((c) => c.id === rest.courseId)?.title || "your course" });
+        sendWelcomeOnce(rest);
         return null;
       }
       if (applyingAsExisting) {
         const saved = await insertApplicant({ ...rest, status: "pending", studentRef: applyingAsExisting.id });
         setApplicants((prev) => [...prev, saved]);
         setActiveStudent(applyingAsExisting); setPage("studentDash");
-        sendWelcomeEmail({ email: rest.email, name: rest.name, courseName: courses.find((c) => c.id === rest.courseId)?.title || "your course" });
+        sendWelcomeOnce(rest);
         return null;
       }
       const { error, authUserId, needsConfirmation } = await signUpApplicant({ name: rest.name, email: rest.email, password, courseId: rest.courseId, answers: rest.answers });
@@ -566,13 +575,13 @@ export default function App() {
         // trigger the moment their email is confirmed (see signUpApplicant).
         setPendingConfirmEmail(rest.email);
         setPage("checkEmail");
-        sendWelcomeEmail({ email: rest.email, name: rest.name, courseName: courses.find((c) => c.id === rest.courseId)?.title || "your course" });
+        sendWelcomeOnce(rest);
         return null;
       }
       const saved = await insertApplicant({ ...rest, status: "pending", studentRef: null, authUserId });
       setApplicants((prev) => [...prev, saved]);
       setActiveApplicant(saved); setApplyingAsExisting(null); setPage("inReview");
-      sendWelcomeEmail({ email: rest.email, name: rest.name, courseName: courses.find((c) => c.id === rest.courseId)?.title || "your course" });
+      sendWelcomeOnce(rest);
       return null;
     } catch (e) {
       // A unique-violation here (code 23505) means a matching pending
@@ -580,7 +589,7 @@ export default function App() {
       // Submit racing itself. That application already went through
       // correctly, so this isn't a real failure worth showing an error
       // for; it just quietly stops here instead of leaving a second copy.
-      if (e?.code === "23505") return null;
+      if (e?.code === "23505") { sendWelcomeOnce(data); return null; }
       console.error("submitApplication failed", e);
       return "Couldn't reach the server — check your connection and try again.";
     }
