@@ -20,7 +20,7 @@ import { prepareImage } from "./lib/imageCompress.js";
 import { uploadFile } from "./lib/storage.js";
 import { fetchFreeResourceEmails, deleteFreeResourceEmail } from "./lib/leads.js";
 import { PhotoCleanupTab } from "./photoCleanup.jsx";
-import { buildSubmissionItems, submissionStatusColor, SubmissionBody, SubmissionBadges } from "./submissions.jsx";
+import { buildSubmissionItems, submissionStatusColor, SubmissionBody, SubmissionBadges, AnswerValue } from "./submissions.jsx";
 
 // One applicant row, shared by the "pending" and "awaiting payment" queues
 // below -- same expand-to-see-answers shape either way, only which action
@@ -238,6 +238,8 @@ export function ModuleEditor({ course, module, setCourses, onBack }) {
   // prompt and (unless the proof is a link) its own marking guide.
   const [questions, setQuestions] = useState(() => normalizeQuestions(module));
   function addCheckQuestion() { setQuestions((qs) => [...qs, { id: "cq" + Date.now(), prompt: "", markingGuide: "" }]); }
+  // Any picture/link question means a person (you) has to look at it -- so the auto-grade option only applies when every question is written.
+  const allWrittenQs = testType !== "written" || questions.every((q) => (q.kind || "written") === "written");
   function updateCheckQuestion(i, patch) { setQuestions((qs) => qs.map((q, idx) => idx !== i ? q : { ...q, ...patch })); }
   function removeCheckQuestion(i) { setQuestions((qs) => qs.filter((_, idx) => idx !== i)); }
   const [quiz, setQuiz] = useState(module.quiz || []);
@@ -263,7 +265,7 @@ export function ModuleEditor({ course, module, setCourses, onBack }) {
   function addVideo() { setVideos((v) => [...v, { id: "v" + Date.now(), label: "", url: "", file: null }]); }
   function updateVideo(i, patch) { setVideos((v) => v.map((item, idx) => idx === i ? { ...item, ...patch } : item)); }
   function removeVideo(i) { setVideos((v) => v.filter((_, idx) => idx !== i)); }
-  function save() { setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, modules: c.modules.map((m) => m.id !== module.id ? m : { ...m, title, brief, notes, summary, videoUrl, slideUrl, slideFile, slideDescription, testType, passPct: Number(passPct), proofType, linkType, questions, quiz, meetings, videoIntro, videos, resourceFiles: resourceFiles.filter((r) => r.file), autoGradeOnly }) })); onBack(); }
+  function save() { setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, modules: c.modules.map((m) => m.id !== module.id ? m : { ...m, title, brief, notes, summary, videoUrl, slideUrl, slideFile, slideDescription, testType, passPct: Number(passPct), proofType, linkType, questions, quiz, meetings, videoIntro, videos, resourceFiles: resourceFiles.filter((r) => r.file), autoGradeOnly: autoGradeOnly && allWrittenQs }) })); onBack(); }
   const [confirmDelete, setConfirmDelete] = useState(false);
   function deleteModuleNow() { setCourses((prev) => prev.map((c) => c.id !== course.id ? c : { ...c, modules: c.modules.filter((m) => m.id !== module.id) })); onBack(); }
   return (
@@ -343,12 +345,19 @@ export function ModuleEditor({ course, module, setCourses, onBack }) {
                 <div key={q.id} className="rounded-xl p-4 flex flex-col gap-3" style={{ background: "#FAF6EC", border: "1px solid #E7DEC9" }}>
                   {questions.length > 1 && <div className="flex items-center justify-between"><div className="f-label text-[11px]" style={{ color: "#71675A" }}>QUESTION {qi + 1}</div><button onClick={() => removeCheckQuestion(qi)}><Trash2 size={14} color="#B04A3A" /></button></div>}
                   <div><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>{testType === "written" ? "The question students will answer" : testType === "milestone" ? "Milestone project brief (what they need to build and submit)" : "What students need to submit"}</div><RichTextEditor value={q.prompt} onChange={(v) => updateCheckQuestion(qi, { prompt: v })} minRows={5} /></div>
-                  {proofType !== "link" && <TextArea label="Marking guide — list the key points a good answer should cover, one per idea (used both for your review and for auto-checking matches)" value={q.markingGuide} onChange={(e) => updateCheckQuestion(qi, { markingGuide: e.target.value })} rows={6} />}
+                  {testType === "written" && (
+                    <>
+                      <SelectF label="How should students answer this one?" value={q.kind || "written"} onChange={(e) => updateCheckQuestion(qi, { kind: e.target.value })} options={[{ value: "written", label: "Type an answer" }, { value: "link", label: "Submit a link" }, { value: "picture", label: "Upload a picture" }]} />
+                      {q.kind === "link" && <SelectF label="What kind of link is this?" value={q.linkType || "other"} onChange={(e) => updateCheckQuestion(qi, { linkType: e.target.value })} options={LINK_TYPES.map((t) => ({ value: t.key, label: t.label }))} />}
+                      {(q.kind === "link" || q.kind === "picture") && <div className="text-[12px]" style={{ color: "#71675A" }}>{q.kind === "picture" ? "Students choose a picture from their phone or computer. It's shrunk automatically and shown to you as a picture." : "No marking guide needed — the link is checked for the right shape."} This one always comes to you for review.</div>}
+                    </>
+                  )}
+                  {proofType !== "link" && (testType !== "written" || !q.kind || q.kind === "written") && <TextArea label="Marking guide — list the key points a good answer should cover, one per idea (used both for your review and for auto-checking matches)" value={q.markingGuide} onChange={(e) => updateCheckQuestion(qi, { markingGuide: e.target.value })} rows={6} />}
                 </div>
               ))}
               <button onClick={addCheckQuestion} className="text-[13px] accent-text flex items-center gap-1.5 self-start" style={{ fontWeight: 700 }}><Plus size={14} /> Add another question</button>
             </div>
-            {proofType !== "link" && (
+            {proofType !== "link" && allWrittenQs && (
               <div className="rounded-lg px-4 py-3 flex flex-col gap-3" style={{ background: "#FAF6EC" }}>
                 <label className="flex items-center gap-2 text-[13px] cursor-pointer" style={{ fontWeight: 600 }}>
                   <input type="checkbox" checked={autoGradeOnly} onChange={(e) => setAutoGradeOnly(e.target.checked)} />
@@ -1066,7 +1075,7 @@ export function StudentDetail({ student, applicant, setStudents, courses, cohort
                 {module && normalizeQuestions(module).map((q, qi) => (
                   <div key={q.id || qi} className="mb-3">
                     {q.prompt && <RichText html={q.prompt} className="rich-content text-[12px] mb-1.5" style={{ color: "#71675A" }} />}
-                    <RichText html={(e.pendingReview.proofs || [e.pendingReview.proof])[qi] || ""} className="rich-content text-[14px] rounded-lg px-3 py-2.5" style={{ background: "#fff", border: "1px solid #E7DEC9", overflowWrap: "anywhere" }} />
+                    <AnswerValue module={module} q={q} value={(e.pendingReview.proofs || [e.pendingReview.proof])[qi]} />
                   </div>
                 ))}
                 <div className="flex items-center gap-2"><button onClick={() => decideReview(e.id, true)} className="btn-primary rounded-lg px-4 py-2 text-[12px]">Approve — unlock next module</button><button onClick={() => decideReview(e.id, false)} className="text-[12px]" style={{ color: "#B04A3A" }}>Send back</button></div>

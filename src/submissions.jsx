@@ -1,5 +1,5 @@
 import React from "react";
-import { deriveSubmissionStatus, normalizeQuestions } from "./lib/data.js";
+import { deriveSubmissionStatus, normalizeQuestions, questionKind } from "./lib/data.js";
 import { RichText } from "./components.jsx";
 
 // Every submission one student has handed in, as plain items: tasks and
@@ -39,6 +39,14 @@ export function buildSubmissionItems(student, tasks, courses) {
   return items.sort((a, b) => b.at - a.at);
 }
 export const submissionStatusColor = (st) => st === "approved" || st === "passed" ? "#2F7D4F" : st === "sent back" || st === "not passed" || st === "waiting on student" ? "#B2572B" : "#71675A";
+// One answer, shown the way it was given: a picture as a picture, a link as a
+// link, written text as text.
+export function AnswerValue({ module, q, value }) {
+  const kind = module ? questionKind(module, q) : "written";
+  if (kind === "picture" && /^https?:\/\//i.test(value || "")) return <a href={value} target="_blank" rel="noreferrer"><img src={value} alt="Uploaded picture" style={{ maxWidth: "100%", maxHeight: 320, borderRadius: 12, border: "1px solid #E7DEC9", display: "block" }} /></a>;
+  if (kind === "link" && /^https?:\/\//i.test((value || "").trim())) return <a href={value.trim()} target="_blank" rel="noreferrer" className="text-[14px] accent-text rounded-lg px-3 py-2.5 block" style={{ background: "#fff", border: "1px solid #E7DEC9", overflowWrap: "anywhere" }}>{value.trim()} ↗</a>;
+  return <RichText html={value || ""} className="rich-content text-[14px] rounded-lg px-3 py-2.5" style={{ background: "#fff", border: "1px solid #E7DEC9", overflowWrap: "anywhere" }} />;
+}
 // The answer itself, shared by the per-student list (as a dropdown) and the
 // full-page view in the Submissions inbox.
 export function SubmissionBody({ it, viewer = "admin" }) {
@@ -46,7 +54,7 @@ export function SubmissionBody({ it, viewer = "admin" }) {
     return it.mod ? <>{normalizeQuestions(it.mod).map((qn, qi) => (
       <div key={qn.id || qi}>
         {qn.prompt && <RichText html={qn.prompt} className="rich-content text-[12px] mb-1.5" style={{ color: "#71675A" }} />}
-        <RichText html={(it.q.proofs || [])[qi] || ""} className="rich-content text-[14px] rounded-lg px-3 py-2.5" style={{ background: "#fff", border: "1px solid #E7DEC9", overflowWrap: "anywhere" }} />
+        <AnswerValue module={it.mod} q={qn} value={(it.q.proofs || [])[qi]} />
       </div>
     ))}{it.q.remark && <div className="text-[13px] rounded-lg px-3 py-2.5" style={{ background: "#FBF3DC", color: "#4A4237", overflowWrap: "anywhere" }}><strong>{viewer === "student" ? "Fidelia's remark" : "Your remark"}:</strong> {it.q.remark}</div>}</> : <div className="text-[13px]" style={{ color: "#A79B84" }}>This module no longer exists, so the questions can't be shown.</div>;
   }

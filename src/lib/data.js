@@ -349,6 +349,14 @@ export function scoreSubmission(text, markingGuide) {
 // module.questions directly means a module saved before this change
 // keeps working exactly as it did: its lone prompt/guide just becomes a
 // one-question list the first time anything reads it.
+// What kind of answer one question takes. A "written" check lets each question
+// choose (type an answer / submit a link / upload a picture); the older link
+// and upload checks decide it once for the whole check.
+export function questionKind(module, q) {
+  if (module.testType === "written") return q?.kind === "link" || q?.kind === "picture" ? q.kind : "written";
+  return (module.testType === "file-upload" || module.testType === "milestone") && module.proofType === "link" ? "link" : "written";
+}
+export function questionLinkTypeKey(module, q) { return module.testType === "written" ? (q?.linkType || "other") : (module.linkType || "other"); }
 export function normalizeQuestions(module) {
   if (module.questions?.length) return module.questions;
   if (module.questionPrompt || module.markingGuide) return [{ id: "legacy", prompt: module.questionPrompt || "", markingGuide: module.markingGuide || "" }];

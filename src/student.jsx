@@ -7,7 +7,7 @@ import {
   UserCircle, FolderPlus, UploadCloud, ClipboardCheck, HelpCircle as HelpIcon,
   Clock, Inbox, Trash2, Eye, Star, Pencil, PlayCircle, Bell, Megaphone, Layers, AtSign, Compass, Home, Repeat, Pause, IdCard as IdCardIcon
 } from "lucide-react";
-import { pairKey, moduleStatus, scoreSubmission, scoreQuestions, normalizeQuestions, AUTO_APPROVE_THRESHOLD, LINK_TYPES, deriveSubmissionStatus, courseEligibility, formatDateTime } from "./lib/data.js";
+import { pairKey, moduleStatus, scoreSubmission, scoreQuestions, normalizeQuestions, questionKind, questionLinkTypeKey, AUTO_APPROVE_THRESHOLD, LINK_TYPES, deriveSubmissionStatus, courseEligibility, formatDateTime } from "./lib/data.js";
 import { renderCertificate, formatIssueDate } from "./lib/certificate.js";
 import { buildSubmissionItems, submissionStatusColor, SubmissionBody, SubmissionBadges } from "./submissions.jsx";
 import { renderIdCard } from "./lib/idcard.js";
@@ -242,10 +242,22 @@ export function LessonView({ course, enrollment, student, updateEnrollment, onBa
 
   function completeModule() { updateEnrollment({ completedModuleIds: [...new Set([...enrollment.completedModuleIds, module.id])] }); setJustPassed(true); }
   function submitQuiz() { let correct = 0; module.quiz.forEach((q, i) => { if (answers[i] === q.correct) correct++; }); const pct = Math.round((correct / module.quiz.length) * 100); setResult(pct); if (pct >= (module.passPct || 70)) completeModule(); }
-  const isLinkProof = (module.testType === "file-upload" || module.testType === "milestone") && module.proofType === "link";
-  const linkType = isLinkProof ? (LINK_TYPES.find((t) => t.key === module.linkType) || LINK_TYPES.find((t) => t.key === "other")) : null;
-  const linkValids = checkQuestions.map((_, i) => isLinkProof && linkType?.test((proofs[i] || "").trim()));
-  const allFilled = checkQuestions.every((_, i) => (proofs[i] || "").trim());
+  // Each question can ask for something different: typed text, a link, or a
+  // picture. Any link/picture question means Fidelia looks at the whole thing.
+  const kinds = checkQuestions.map((q) => questionKind(module, q));
+  const needsReview = kinds.some((k) => k !== "written");
+  const linkTypes = checkQuestions.map((q) => LINK_TYPES.find((t) => t.key === questionLinkTypeKey(module, q)) || LINK_TYPES.find((t) => t.key === "other"));
+  const linkValids = checkQuestions.map((_, i) => kinds[i] === "link" && linkTypes[i]?.test((proofs[i] || "").trim()));
+  const [uploadingIdx, setUploadingIdx] = useState(null); const [uploadErr, setUploadErr] = useState("");
+  async function pickPicture(i, file) {
+    if (!file) return;
+    if (!file.type?.startsWith("image/")) { setUploadErr("Please choose a picture (JPG, PNG…)."); return; }
+    setUploadingIdx(i); setUploadErr("");
+    try { const url = await uploadFile(await compressImage(file, { maxDim: 1600 })); setProofAt(i, url); }
+    catch (e) { console.error("quick check picture upload failed", e); setUploadErr("The picture didn't upload — check your connection and try again."); }
+    finally { setUploadingIdx(null); }
+  }
+  const allFilled = uploadingIdx === null && checkQuestions.every((_, i) => kinds[i] === "link" ? linkValids[i] : (proofs[i] || "").trim());
   // Every quick check attempt is kept as its own record (the answers
   // included). pendingReview is wiped the moment a decision is made, so
   // without this the answers vanished for good once they were marked.
@@ -279,7 +291,7 @@ export function LessonView({ course, enrollment, student, updateEnrollment, onBa
     // there's nothing left to keyword-match against a marking guide, so
     // every link submission just goes straight to review instead of risking
     // an auto-approve on an unrelated keyword overlap with the URL itself.
-    if (isLinkProof) {
+    if (needsReview) {
       updateEnrollment({ pendingReview: { moduleId: module.id, proofs, submittedAt: at }, ...quickCheckLog(at, { outcome: "pending" }) });
       notifyAdminQuickCheckSubmitted({ studentName: student.name, moduleTitle: module.title, courseName: course.title });
       return;
@@ -472,17 +484,24 @@ export function LessonView({ course, enrollment, student, updateEnrollment, onBa
                   <div key={q.id || qi}>
                     {checkQuestions.length > 1 && <div className="f-label text-[11px] mb-1.5" style={{ color: "#A79B84" }}>QUESTION {qi + 1} OF {checkQuestions.length}</div>}
                     {q.prompt && <RichText html={q.prompt} className="rich-content text-[14px] mb-3" style={{ color: "#4A4237" }} />}
-                    {module.testType === "written" ? (
-                      <div><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Your answer</div><RichTextEditor value={proofs[qi] || ""} onChange={(v) => setProofAt(qi, v)} minRows={6} /></div>
-                    ) : isLinkProof ? (
+                    {kinds[qi] === "picture" ? (
+                      <div>
+                        <div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Your picture</div>
+                        {proofs[qi] && <img src={proofs[qi]} alt="Your upload" style={{ maxWidth: "100%", maxHeight: 260, borderRadius: 12, border: "1px solid #E7DEC9", display: "block", marginBottom: 8 }} />}
+                        <label className="btn-soft rounded-lg px-4 py-2.5 text-[13px] inline-flex items-center gap-2 cursor-pointer" style={{ fontWeight: 700 }}>{uploadingIdx === qi ? "Uploading…" : proofs[qi] ? "Replace picture" : "Choose a picture"}<input type="file" accept="image/*" style={{ display: "none" }} disabled={uploadingIdx !== null} onChange={(e) => { pickPicture(qi, e.target.files?.[0]); e.target.value = ""; }} /></label>
+                        {uploadErr && uploadingIdx === null && <div className="text-[12.5px] mt-1.5" style={{ color: "#B04A3A" }}>{uploadErr}</div>}
+                      </div>
+                    ) : kinds[qi] === "link" ? (
                       <div>
                         <div className="flex items-center justify-between mb-1.5">
-                          <span className="f-label text-[11px]" style={{ color: "#71675A" }}>{linkType?.label?.toUpperCase()} LINK</span>
-                          <span className="f-code text-[10px] px-2 py-0.5 rounded-full" style={{ background: !(proofs[qi] || "").trim() ? "#F0E7D6" : linkValids[qi] ? "#E4F3E9" : "#FBEAE7", color: !(proofs[qi] || "").trim() ? "#A79B84" : linkValids[qi] ? "#2F7D4F" : "#B04A3A" }}>{!(proofs[qi] || "").trim() ? "NOT FILLED" : linkValids[qi] ? "✓ LOOKS RIGHT" : `NOT A ${linkType?.label?.toUpperCase()} LINK`}</span>
+                          <span className="f-label text-[11px]" style={{ color: "#71675A" }}>{linkTypes[qi]?.label?.toUpperCase()} LINK</span>
+                          <span className="f-code text-[10px] px-2 py-0.5 rounded-full" style={{ background: !(proofs[qi] || "").trim() ? "#F0E7D6" : linkValids[qi] ? "#E4F3E9" : "#FBEAE7", color: !(proofs[qi] || "").trim() ? "#A79B84" : linkValids[qi] ? "#2F7D4F" : "#B04A3A" }}>{!(proofs[qi] || "").trim() ? "NOT FILLED" : linkValids[qi] ? "✓ LOOKS RIGHT" : `NOT A ${linkTypes[qi]?.label?.toUpperCase()} LINK`}</span>
                         </div>
-                        <input className="input-field rounded-lg px-3.5 py-2.5 text-[14px] w-full" placeholder={linkType?.placeholder} value={proofs[qi] || ""} onChange={(e) => setProofAt(qi, e.target.value)} />
+                        <input className="input-field rounded-lg px-3.5 py-2.5 text-[14px] w-full" placeholder={linkTypes[qi]?.placeholder} value={proofs[qi] || ""} onChange={(e) => setProofAt(qi, e.target.value)} />
                         {linkValids[qi] && <a href={(proofs[qi] || "").trim()} target="_blank" rel="noreferrer" className="text-[12px] accent-text mt-1 inline-flex items-center gap-1" style={{ fontWeight: 700 }}>Preview ↗</a>}
                       </div>
+                    ) : module.testType === "written" ? (
+                      <div><div className="f-label text-[12px] mb-1.5" style={{ color: "#71675A" }}>Your answer</div><RichTextEditor value={proofs[qi] || ""} onChange={(v) => setProofAt(qi, v)} minRows={6} /></div>
                     ) : (
                       <TextArea label="Link to your file" value={proofs[qi] || ""} onChange={(e) => setProofAt(qi, e.target.value)} />
                     )}
@@ -490,7 +509,7 @@ export function LessonView({ course, enrollment, student, updateEnrollment, onBa
                 ))}
               </div>
               {module.autoGradeOnly && result != null && result < (module.passPct || 70) && <div className="text-[14px] mt-3" style={{ color: "#B04A3A", fontWeight: 700 }}>Not quite there yet — revise your answer{checkQuestions.length > 1 ? "s" : ""} and try again to unlock the next module.</div>}
-              <div className="flex items-center gap-3 flex-wrap mt-4"><button onClick={submitForReview} disabled={isLinkProof ? !linkValids.every(Boolean) : !allFilled} className="btn-primary rounded-lg px-6 py-3 text-[14px]">{module.autoGradeOnly ? "Submit answer" : "Submit for review"}</button>{canDraft && <button type="button" onClick={saveDraft} className="btn-soft rounded-lg px-5 py-3 text-[14px]">Save draft</button>}{canDraft && (draftSavedAt || enrollment.quickCheckDrafts?.[module.id]) && <span className="text-[12.5px]" style={{ color: "#71675A" }}>Draft saved ✓ — you can leave and come back to finish.</span>}</div>
+              <div className="flex items-center gap-3 flex-wrap mt-4"><button onClick={submitForReview} disabled={!allFilled} className="btn-primary rounded-lg px-6 py-3 text-[14px]">{module.autoGradeOnly && !needsReview ? "Submit answer" : "Submit for review"}</button>{canDraft && <button type="button" onClick={saveDraft} className="btn-soft rounded-lg px-5 py-3 text-[14px]">Save draft</button>}{canDraft && (draftSavedAt || enrollment.quickCheckDrafts?.[module.id]) && <span className="text-[12.5px]" style={{ color: "#71675A" }}>Draft saved ✓ — you can leave and come back to finish.</span>}</div>
             </>
           )}
         </div>
